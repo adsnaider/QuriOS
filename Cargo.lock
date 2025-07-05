@@ -30,8 +30,20 @@ checksum = "1b8e56985ec62d17e9c1001dc89c88ecd7dc08e47eba5ec7c29c7b5eeecde967"
 name = "kernel"
 version = "0.1.0"
 dependencies = [
+ "limine",
  "log",
  "serial",
+ "sync",
+ "tap",
+]
+
+[[package]]
+name = "limine"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af6d2ee42712e7bd2c787365cd1dab06ef59a61becbf87bec7b32b970bd2594b"
+dependencies = [
+ "bitflags 2.9.1",
 ]
 
 [[package]]
@@ -95,6 +107,12 @@ version = "0.1.0"
 dependencies = [
  "spin",
 ]
+
+[[package]]
+name = "tap"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
 
 [[package]]
 name = "uart_16550"

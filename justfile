@@ -56,14 +56,14 @@ kernel: setup
 build: kernel initrd
 
 limine:
-	{{path_exists("limine/")}} || git clone https://github.com/limine-bootloader/limine.git --branch=v7.x-binary --depth=1
+	{{path_exists("limine/")}} || git clone https://github.com/limine-bootloader/limine.git --branch=v9.x-binary --depth=1
 	make -C limine
 
 iso: limine build
-	just profile={{profile}} arch={{arch}} artifact_dir={{artifact_dir}} iso_generic {{build_dir}}/kernel limine.cfg {{image_path}}
+	just profile={{profile}} arch={{arch}} artifact_dir={{artifact_dir}} iso_generic {{build_dir}}/kernel limine.conf {{image_path}}
 
 test-iso: limine build
-	just profile={{profile}} arch={{arch}} artifact_dir={{artifact_dir}} iso_generic {{build_dir}}/kernel_test limine-test.cfg {{test_image_path}}
+	just profile={{profile}} arch={{arch}} artifact_dir={{artifact_dir}} iso_generic {{build_dir}}/kernel_test limine-test.conf {{test_image_path}}
 
 dbg_dir: setup
 	mkdir -p {{artifact_dir}}/debugger/

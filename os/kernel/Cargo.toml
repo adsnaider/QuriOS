@@ -15,3 +15,7 @@ test = false
 [dependencies]
 log = { workspace = true }
 serial = { workspace = true }
+sync = { workspace = true }
+
+limine = "0.5.0"
+tap = "1.0.1"

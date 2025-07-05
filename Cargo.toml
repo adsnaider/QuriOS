@@ -15,3 +15,6 @@ opt-level = 1
 [profile.release]
 debug = "full"
 incremental = true
+
+[workspace.lints.clippy]
+undocumented_unsafe_blocks = "warn"
