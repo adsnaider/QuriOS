@@ -122,7 +122,7 @@ mod tests {
         });
 
         let value = *cell.get().unwrap();
-        assert!(value >= 0 && value < 10);
+        assert!((0..10).contains(&value));
         std::thread::scope(|s| {
             for _ in 0..10 {
                 s.spawn(move || {

@@ -33,10 +33,12 @@ install-deps:
 
 
 check:
-	cargo check --workspace --target {{target}} --tests
+	cargo check --workspace --target {{target}}
+	cargo check --workspace --tests
 
 clippy:
-	cargo clippy  --workspace --target {{target}} --tests
+	cargo clippy  --workspace --target {{target}}
+	cargo clippy  --workspace --tests
 
 setup:
 	rm -rf {{build_dir}}
@@ -48,7 +50,7 @@ initrd:
 kernel: setup
 	#!/usr/bin/env bash
 	set -euo pipefail
-	BIN=`cargo build --profile {{profile}} --target {{target}} --message-format=json | {{extractor}}`
+	BIN=`cargo build --profile {{profile}} --target {{target}} --bin kmain --message-format=json | {{extractor}}`
 	cp -fs "$BIN" "{{build_dir}}/kernel"
 
 build: kernel initrd
@@ -86,6 +88,9 @@ ktest: test-iso
 		-device isa-debug-exit,iobase=0xf4,iosize=0x04 \
 		-display none \
 		{{qemu_args}}
+
+test:
+	cargo test
 
 clean:
 	rm -rf {{artifact_dir}}
