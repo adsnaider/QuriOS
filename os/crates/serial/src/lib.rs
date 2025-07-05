@@ -1,7 +1,7 @@
 //! Helpers to communicate with the serial port.
 #![no_std]
 
-use log::{LevelFilter, Metadata, Record};
+use log_impl::LOG_LEVEL;
 use sync::{cell::AtomicLazyCell, spin};
 use uart_16550::SerialPort;
 
@@ -10,7 +10,6 @@ pub fn init() {
     log::set_logger(&LOGGER)
         .map(|()| log::set_max_level(*LOG_LEVEL))
         .expect("Couldn't set the serial logger");
-
     log::info!("Logging initialized");
 }
 
@@ -69,37 +68,43 @@ macro_rules! sdbg {
     };
 }
 
+struct Logger;
 /// The global logger.
 static LOGGER: Logger = Logger {};
 
-static LOG_LEVEL: AtomicLazyCell<LevelFilter> = AtomicLazyCell::new(|| {
-    let level = core::option_env!("RUST_LOG").unwrap_or("info");
-    match level {
-        "trace" => LevelFilter::Trace,
-        "debug" => LevelFilter::Debug,
-        "info" => LevelFilter::Info,
-        "warn" => LevelFilter::Warn,
-        "error" => LevelFilter::Error,
-        other => core::panic!("Unknown LOG LEVEL: {other}"),
-    }
-});
+mod log_impl {
+    use log::{LevelFilter, Metadata, Record};
+    use sync::cell::AtomicLazyCell;
 
-struct Logger;
+    use crate::Logger;
 
-impl log::Log for Logger {
-    fn enabled(&self, metadata: &Metadata) -> bool {
-        metadata.level() <= *LOG_LEVEL
-    }
-
-    fn log(&self, record: &Record) {
-        if self.enabled(record.metadata()) {
-            crate::sprint!("[{}]\t", record.level());
-            if let (Some(file), Some(line)) = (record.file(), record.line()) {
-                crate::sprint!("@ {}:{}", file, line);
-            }
-            crate::sprintln!(" : {}", record.args());
+    pub static LOG_LEVEL: AtomicLazyCell<LevelFilter> = AtomicLazyCell::new(|| {
+        let level = core::option_env!("RUST_LOG").unwrap_or("info");
+        match level {
+            "trace" => LevelFilter::Trace,
+            "debug" => LevelFilter::Debug,
+            "info" => LevelFilter::Info,
+            "warn" => LevelFilter::Warn,
+            "error" => LevelFilter::Error,
+            other => core::panic!("Unknown LOG LEVEL: {other}"),
         }
-    }
+    });
 
-    fn flush(&self) {}
+    impl log::Log for Logger {
+        fn enabled(&self, metadata: &Metadata) -> bool {
+            metadata.level() <= *LOG_LEVEL
+        }
+
+        fn log(&self, record: &Record) {
+            if self.enabled(record.metadata()) {
+                crate::sprint!("[{}]\t", record.level());
+                if let (Some(file), Some(line)) = (record.file(), record.line()) {
+                    crate::sprint!("@ {}:{}", file, line);
+                }
+                crate::sprintln!(" : {}", record.args());
+            }
+        }
+
+        fn flush(&self) {}
+    }
 }

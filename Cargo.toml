@@ -5,6 +5,8 @@ resolver = "2"
 [workspace.dependencies]
 serial = { path = "os/crates/serial" }
 sync = { path = "os/crates/sync" }
+uart_16550 = "0.3.0"
+log = "0.4.22"
 
 [profile.dev]
 debug = "full"
