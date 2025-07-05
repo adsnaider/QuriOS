@@ -2,16 +2,12 @@
 #![no_std]
 #![no_main]
 
+use kernel::kinit;
 use serial::sprintln;
 
 #[no_mangle]
 pub extern "C" fn kmain() -> ! {
-    init();
-    todo!();
-}
-
-fn init() {
-    serial::init();
+    kinit();
 }
 
 #[panic_handler]

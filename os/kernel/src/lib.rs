@@ -1,2 +1,6 @@
-#![cfg(not(test))]
 #![no_std]
+
+pub fn kinit() -> ! {
+    serial::init();
+    todo!();
+}
