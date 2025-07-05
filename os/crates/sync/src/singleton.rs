@@ -25,18 +25,18 @@ impl<T> Singleton<T> {
     }
 
     pub fn take(&self) -> Option<T> {
-        match self
-            .taken
-            .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
-        {
-            Ok(_) => Some(unsafe { self.take_value() }),
-            Err(_) => None,
+        if !self.taken.swap(true, Ordering::Relaxed) {
+            // SAFETY: has not been consumed and no reace condition due to atomic swap.
+            Some(unsafe { self.take_value() })
+        } else {
+            None
         }
     }
 
     pub fn into_inner(self) -> Option<T> {
         self.taken
             .into_inner()
+            // SAFETY: We have ownership of the entire singleton and value hasn't been consumed
             .then(|| unsafe { self.value.into_inner().assume_init() })
     }
 
@@ -47,6 +47,7 @@ impl<T> Singleton<T> {
             None
         } else {
             *taken = true;
+            // SAFETY: We have mutable ownership of the entire singleton and value hasn't been consumed
             Some(unsafe { self.take_value() })
         }
     }

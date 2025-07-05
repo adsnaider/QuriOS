@@ -12,7 +12,9 @@ pub struct AtomicOnceCell<T> {
 // scoped thread B, which fills the cell, which is
 // then destroyed by A. That is, destructor observes
 // a sent value.
+// SAFETY: Atomic state guarantees proper borrows
 unsafe impl<T: Send + Sync> Sync for AtomicOnceCell<T> {}
+// SAFETY: Ownership semantics apply
 unsafe impl<T: Send> Send for AtomicOnceCell<T> {}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

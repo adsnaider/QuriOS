@@ -5,9 +5,13 @@ use core::ops::{Deref, DerefMut};
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicU8, Ordering};
 
+// SAFETY: Simple ownership semantics apply here. This is probably overly restrictive without
+// an `into_inner` method anyway.
 unsafe impl<T: Send> Send for AtomicRefCell<T> {}
 // FIXME: Only doing exclusive borrows for now.
 // TODO: Add Send bound on T when non-exclusive borrows
+//  SAFETY: Since AtomicRefCell only provides &mut exclusive borrows,
+// only Send bound is needed
 unsafe impl<T: Send> Sync for AtomicRefCell<T> {}
 
 #[derive(Debug)]
@@ -65,22 +69,20 @@ impl<T> AtomicRefCell<T> {
 
     pub fn borrow(&self) -> Result<Ref<T>, BorrowError> {
         self.state.try_borrow()?;
-        unsafe {
-            Ok(Ref {
-                value: NonNull::new_unchecked(self.data.get()),
-                borrow: BorrowRef(&self.state),
-            })
-        }
+        Ok(Ref {
+            // SAFETY: Unsafe cell will always give a non-null ptr.
+            value: unsafe { NonNull::new_unchecked(self.data.get()) },
+            borrow: BorrowRef(&self.state),
+        })
     }
 
     pub fn borrow_mut(&self) -> Result<RefMut<T>, BorrowError> {
         self.state.try_borrow()?;
-        unsafe {
-            Ok(RefMut {
-                value: NonNull::new_unchecked(self.data.get()),
-                borrow: BorrowRefMut(&self.state),
-            })
-        }
+        Ok(RefMut {
+            // SAFETY: Unsafe cell will always give a non-null ptr.
+            value: unsafe { NonNull::new_unchecked(self.data.get()) },
+            borrow: BorrowRefMut(&self.state),
+        })
     }
 }
 
@@ -108,6 +110,7 @@ impl<T> Deref for Ref<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
+        // SAFETY: We have read access to the data.
         unsafe { &*self.value.as_ptr() }
     }
 }
@@ -133,12 +136,14 @@ impl<T> Deref for RefMut<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
+        // SAFETY: We have read-write access to the data.
         unsafe { &*self.value.as_ptr() }
     }
 }
 
 impl<T> DerefMut for RefMut<'_, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
+        // SAFETY: We have read-write access to the data.
         unsafe { &mut *self.value.as_ptr() }
     }
 }

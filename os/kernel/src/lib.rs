@@ -22,7 +22,7 @@ pub fn kinit() -> ! {
     let mut memory_map = MEMORY_MAP
         .take()
         .expect("Memory map taken pre-intialization");
-    let memory_map = memory_map
+    let _memory_map = memory_map
         .get_response_mut()
         .expect("Missing memory map reponse")
         .entries_mut();
