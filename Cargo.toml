@@ -1,0 +1,15 @@
+[workspace]
+members = ["os/kernel", "os/crates/*"]
+resolver = "2"
+
+[workspace.dependencies]
+serial = { path = "os/crates/serial" }
+sync = { path = "os/crates/sync" }
+
+[profile.dev]
+debug = "full"
+opt-level = 1
+
+[profile.release]
+debug = "full"
+incremental = true
