@@ -26,5 +26,6 @@ pub fn kinit() -> ! {
         .get_response_mut()
         .expect("Missing memory map reponse")
         .entries_mut();
+    let _sys = arch::init();
     todo!();
 }
