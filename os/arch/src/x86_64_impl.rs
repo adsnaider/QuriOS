@@ -3,6 +3,7 @@ use core::arch::asm;
 use x86_64::instructions::interrupts;
 
 mod gdt;
+mod idt;
 mod mem_impl;
 
 use crate::System;
@@ -16,9 +17,10 @@ impl Sys {
         interrupts::disable();
         sce_enable();
         gdt::init();
-        // IDT
-        // Timer will be initialized in userspace...
-        // Sentinel page for interrupt stack overflow
+        idt::init();
+        unsafe {
+            core::ptr::read_volatile(0xffffffff80000000 as *const u8);
+        }
         todo!();
     }
 }
