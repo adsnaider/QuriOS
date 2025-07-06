@@ -43,8 +43,3 @@ pub unsafe trait System {
 }
 
 pub trait SysCtx: Sized {}
-
-pub fn l4_frame() -> mem::Frame {
-    let (frame, _flags) = x86_64::registers::control::Cr3::read();
-    mem::Frame::from_start_address(mem::PhysAddr::new(frame.start_address().as_u64()))
-}

@@ -1,3 +1,5 @@
+mod bump_alloc;
+
 use core::mem::{ManuallyDrop, MaybeUninit};
 use core::sync::atomic::{AtomicU16, Ordering};
 
@@ -53,7 +55,10 @@ impl RetypeTable {
         }
     }
 
-    pub fn new(memory_map: MemoryMap) -> Result<Self, RetypeInitError> {
+    /// # Safety
+    ///
+    /// The memory map must accurately describe the system's memory
+    pub unsafe fn new(memory_map: MemoryMap) -> Result<Self, RetypeInitError> {
         let physical_top = {
             let last = memory_map
                 .iter()
@@ -105,11 +110,15 @@ impl RetypeTable {
         }
         Ok(Self { retype_map })
     }
+}
 
-    pub fn init(memory_map: MemoryMap) -> Result<(), RetypeInitError> {
-        RETYPE_TABLE.set(RetypeTable::new(memory_map)?)?;
-        Ok(())
-    }
+/// # Safety
+///
+/// The memory map must accurately describe the system's memory
+pub unsafe fn init(memory_map: MemoryMap) -> Result<(), RetypeInitError> {
+    // SAFETY: Precondition
+    RETYPE_TABLE.set(unsafe { RetypeTable::new(memory_map) }?)?;
+    Ok(())
 }
 
 #[derive(Debug)]
@@ -151,7 +160,7 @@ pub struct NoRefs;
 pub struct UserFrame(Frame);
 
 #[extend::ext]
-impl Frame {
+pub impl Frame {
     fn memory_limit() -> usize {
         let nframes = RETYPE_TABLE.get().unwrap().retype_map.len();
         nframes * Frame::SIZE as usize
@@ -486,68 +495,4 @@ pub enum State {
     Untyped = 1,
     User = 2,
     Kernel = 3,
-}
-
-mod bump_alloc {
-    use arch::mem::{Frame, PhysAddr};
-    use limine::memory_map::{Entry, EntryType};
-
-    // use crate::arch::paging::{PhysAddr, RawFrame, Frame::SIZE};
-
-    use super::MemoryMap;
-
-    pub struct BumpAllocator {
-        memory_map: MemoryMap,
-        index: usize,
-    }
-
-    #[allow(unused)]
-    impl BumpAllocator {
-        pub fn new(memory_map: MemoryMap) -> Self {
-            Self {
-                memory_map,
-                index: 0,
-            }
-        }
-
-        pub fn alloc_frame(&mut self) -> Option<Frame> {
-            let frame = loop {
-                let entry = self.memory_map.get_mut(self.index)?;
-                assert!(entry.length % Frame::SIZE == 0);
-                if entry.entry_type == EntryType::USABLE && entry.length > 0 {
-                    let start_address = entry.base;
-                    entry.base += Frame::SIZE;
-                    entry.length -= Frame::SIZE;
-                    let start_address = PhysAddr::new(start_address);
-                    break Frame::from_start_address(start_address);
-                }
-                self.index += 1;
-            };
-            Some(frame)
-        }
-
-        pub fn alloc_frames(&mut self, count: usize) -> Option<PhysAddr> {
-            let requested_length = count as u64 * Frame::SIZE;
-            let start_address = loop {
-                let entry = self.memory_map.get_mut(self.index)?;
-                assert!(entry.length % Frame::SIZE == 0);
-                if entry.entry_type == EntryType::USABLE && entry.length >= requested_length {
-                    let start_address = entry.base;
-                    entry.base += requested_length;
-                    entry.length -= requested_length;
-                    break PhysAddr::new(start_address);
-                }
-                self.index += 1;
-            };
-            Some(start_address)
-        }
-
-        pub fn into_memory_map(self) -> &'static mut [&'static mut Entry] {
-            self.memory_map
-        }
-
-        pub fn memory_map(&mut self) -> &mut [&'static mut Entry] {
-            self.memory_map
-        }
-    }
 }

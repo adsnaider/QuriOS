@@ -1,6 +1,7 @@
 #![no_std]
 
 pub mod retyping;
+pub mod thread;
 pub(crate) mod util;
 
 use arch::mem::VirtAddr;
@@ -8,7 +9,6 @@ use limine::{
     request::{HhdmRequest, MemoryMapRequest, ModuleRequest, StackSizeRequest},
     BaseRevision,
 };
-use retyping::RetypeTable;
 use sync::{cell::AtomicLazyCell, singleton::Singleton};
 use tap::TapFallible;
 use tar_no_std::TarArchiveRef;
@@ -45,7 +45,8 @@ pub fn kinit() {
         .get_response_mut()
         .expect("Missing memory map reponse")
         .entries_mut();
-    RetypeTable::init(memory_map).expect("Error initializing retype table")
+    // SAFETY: Memory map can be trusted to be correct
+    unsafe { retyping::init(memory_map).expect("Error initializing retype table") }
 }
 
 /// Initializes the `init` userspace process
