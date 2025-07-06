@@ -3,7 +3,6 @@
 use core::mem::ManuallyDrop;
 use core::ops::Deref;
 use core::ptr::NonNull;
-use core::sync::atomic::{fence, Ordering};
 
 use crate::retyping::{AsUnusedKernelError, FrameExt, KernelFrame};
 use crate::util::{PhysAddrExt as _, VirtAddrExt};
@@ -33,18 +32,24 @@ impl<T> PartialEq for KPtr<T> {
 }
 impl<T> Eq for KPtr<T> {}
 
-unsafe impl<T: Send> Send for KPtr<T> {}
-unsafe impl<T: Sync> Sync for KPtr<T> {}
+// SAFETY: Similar restrictions to Arc<T>
+unsafe impl<T: Send + Sync> Send for KPtr<T> {}
+// SAFETY: Similar restrictions to Arc<T>
+unsafe impl<T: Send + Sync> Sync for KPtr<T> {}
 
 impl<T> KPtr<T> {
     const VALID_SIZE_AND_ALIGN: () = {
         assert!(core::mem::size_of::<T>() <= Page::SIZE);
         assert!(Page::SIZE % core::mem::align_of::<T>() == 0);
     };
+    const TRIVIALLY_DROPPABLE: () = {
+        assert!(!core::mem::needs_drop::<T>());
+    };
 
     #[inline(always)]
     pub fn new(frame: Frame, value: T) -> Result<Self, AsUnusedKernelError> {
         let () = Self::VALID_SIZE_AND_ALIGN;
+        let () = Self::TRIVIALLY_DROPPABLE;
         // SAFETY: Frame is typed as kernel and atomically incremented
         unsafe { Ok(Self::new_unchecked(frame.try_as_unused_kernel()?, value)) }
     }
@@ -61,8 +66,10 @@ impl<T> KPtr<T> {
         let frame = frame.into_raw();
         let pointer = frame.addr().to_virtual().as_mut_ptr();
         let ptr: NonNull<T> = NonNull::new(pointer).unwrap();
-        assert!(ptr.as_ptr() as usize % Page::SIZE == 0);
+        debug_assert!(ptr.as_ptr() as usize % Page::SIZE == 0);
+        // SAFETY: Allocation is well-aligned and sufficiently large for T
         unsafe {
+            let () = Self::VALID_SIZE_AND_ALIGN;
             ptr.as_ptr().write(value);
         }
         Self { inner: ptr }
@@ -84,18 +91,6 @@ impl<T> KPtr<T> {
         Frame::from_start_address(unsafe { VirtAddr::from_ptr(self.inner.as_ptr()).to_physical() })
     }
 
-    pub fn try_into_inner(self) -> Option<T> {
-        // SAFETY: The frame must be typed as kernel since we have a reference
-        // to it.
-        let count = unsafe { KernelFrame::from_raw(self.frame()).drop() };
-        if count == 1 {
-            // last one turns off the lights
-            Some(unsafe { self.inner.as_ptr().read() })
-        } else {
-            None
-        }
-    }
-
     pub fn into_raw(self) -> Frame {
         let this = ManuallyDrop::new(self);
         this.frame()
@@ -104,6 +99,7 @@ impl<T> KPtr<T> {
 
 impl<T> AsRef<T> for KPtr<T> {
     fn as_ref(&self) -> &T {
+        // SAFETY: KPtr provides shared semantics akin to Arc.
         unsafe { self.inner.as_ref() }
     }
 }
@@ -112,12 +108,14 @@ impl<T> Deref for KPtr<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
+        // SAFETY: KPtr provides shared semantics akin to Arc.
         unsafe { self.inner.as_ref() }
     }
 }
 
 impl<T> Clone for KPtr<T> {
     fn clone(&self) -> Self {
+        // SAFETY: Ownership of a KPtr guarantees the frame is properly typed as a kernel
         let frame = unsafe { self.frame().as_kernel_unchecked() };
         // SAFETY: The frame is coming from a KPtr of the same type.
         unsafe { Self::from_frame_unchecked(frame) }
@@ -126,14 +124,8 @@ impl<T> Clone for KPtr<T> {
 
 impl<T> Drop for KPtr<T> {
     fn drop(&mut self) {
-        let count = unsafe { KernelFrame::from_raw(self.frame()).drop() };
-        // last one turns off the lights
-        if count == 1 {
-            fence(Ordering::Acquire);
-            log::trace!("Last ones! Dropping T");
-            unsafe {
-                self.inner.as_ptr().drop_in_place();
-            }
-        }
+        // SAFETY: We constructed the frame with `into_raw`.
+        unsafe { KernelFrame::from_raw(self.frame()).drop() };
+        let () = Self::TRIVIALLY_DROPPABLE;
     }
 }

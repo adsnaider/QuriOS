@@ -35,8 +35,10 @@ pub enum RetypeInitError {
 impl RetypeTable {
     pub fn memory_map_meta() -> RetypeMetadata<impl IntoIterator<Item = Frame>> {
         let mem = RETYPE_TABLE.get().unwrap().retype_map.as_ptr_range();
+        // SAFETY: Memory map regions are mapped to limine's HHDM
         let start =
             Frame::from_start_address(unsafe { VirtAddr::new(mem.start.addr()).to_physical() });
+        // SAFETY: Memory map regions are mapped to limine's HHDM
         let end = Frame::within_frame(unsafe { VirtAddr::new(mem.end.addr()).to_physical() });
         let iter = core::iter::successors(Some(start), move |prev| {
             let next = prev.next();
@@ -440,7 +442,7 @@ impl RetypeEntry {
 
     pub fn increment(&self) -> Result<u16, MaxRefs> {
         self.0
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+            .fetch_update(Ordering::Release, Ordering::Relaxed, |value| {
                 let (_, counter) = Self::value_into(value);
                 if counter == Self::MAX_REF_COUNT {
                     None
@@ -454,7 +456,7 @@ impl RetypeEntry {
 
     pub fn decrement(&self) -> Result<u16, NoRefs> {
         self.0
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+            .fetch_update(Ordering::Release, Ordering::Relaxed, |value| {
                 let (_, counter) = Self::value_into(value);
                 if counter == 0 {
                     None
@@ -472,7 +474,7 @@ impl RetypeEntry {
 
     pub fn get_as_and_increment(&self, wants: State) -> Result<(), (State, u16)> {
         self.0
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+            .fetch_update(Ordering::Release, Ordering::Relaxed, |value| {
                 let (state, count) = serial::sdbg!(Self::value_into(value));
                 if wants == state && count < Self::MAX_REF_COUNT {
                     Some(Self::value_for(state, count + 1))
