@@ -3,7 +3,7 @@ use asm_utils::{pop_scratch, push_scratch};
 
 use core::{arch::naked_asm, marker::PhantomData};
 
-use x86_64::structures::idt::{Entry, EntryOptions, HandlerFunc};
+use x86_64::structures::idt::{Entry, EntryOptions};
 
 pub struct InterruptHandler<I> {
     fun: PhantomData<I>,
@@ -12,6 +12,7 @@ pub struct InterruptHandler<I> {
 pub trait Isr: Sized {
     fn call();
     fn register<F>(entry: &mut Entry<F>, _isr: Self) -> &mut EntryOptions {
+        // SAFETY: TODO
         unsafe { InterruptHandler::<Self>::set_handler(entry) }
     }
 }

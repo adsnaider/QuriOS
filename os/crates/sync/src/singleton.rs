@@ -88,6 +88,7 @@ impl<T> Singleton<T> {
     /// # Safety
     ///
     /// Value must not have been previously taken and there can't be race conditions.
+    #[allow(clippy::mut_from_ref)]
     unsafe fn as_mut_unchecked(&self) -> &mut T {
         (*self.value.get()).assume_init_mut()
     }

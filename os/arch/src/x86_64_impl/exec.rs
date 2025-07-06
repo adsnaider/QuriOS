@@ -31,13 +31,16 @@ impl SyscallCtx {
             );
         }
         Self {
+            // SAFETY: We are currently executing a syscall by precondition
             control_regs: unsafe { Self::current_control() },
+            // SAFETY: We are currently executing a syscall by precondition
             preserved_regs: unsafe { preserved.assume_init() },
         }
     }
 
     pub unsafe fn current_control() -> ControlRegs {
         let (rsp, rflags, rip);
+        // SAFETY: We are currently executing a syscall by precondition
         unsafe {
             let stack_end: *mut u64 = gdt::interrupt_stack_end().as_mut_ptr();
             rsp = *stack_end.sub(2);
@@ -57,6 +60,7 @@ impl SyscallCtx {
     /// Must be currently handling a syscall.
     pub unsafe fn update_flags(flags: u64) {
         let stack_end: *mut u64 = gdt::interrupt_stack_end().as_mut_ptr();
+        // SAFETY: We are currently executing a syscall by precondition
         unsafe {
             *stack_end.sub(3) = flags;
         }
@@ -69,6 +73,7 @@ impl SyscallCtx {
     /// Must be currently handling a syscall.
     pub unsafe fn get_flags() -> u64 {
         let stack_end: *mut u64 = gdt::interrupt_stack_end().as_mut_ptr();
+        // SAFETY: We are currently executing a syscall by precondition
         unsafe { *stack_end.sub(3) }
     }
 }
@@ -140,7 +145,7 @@ impl ExecCtx {
 // SAFETY: Don't change the order of any of these
 #[repr(C)]
 #[derive(Default, Debug, Clone, Copy)]
-struct PreservedRegs {
+pub struct PreservedRegs {
     pub rbx: u64,
     pub rbp: u64, // Off: 10
     pub r12: u64,
@@ -152,7 +157,7 @@ struct PreservedRegs {
 // SAFETY: Don't change the order of any of these
 #[repr(C)]
 #[derive(Default, Debug, Clone, Copy)]
-struct ScratchRegs {
+pub struct ScratchRegs {
     pub rax: u64, // Off: 0
     pub rcx: u64,
     pub rdx: u64,
@@ -167,7 +172,7 @@ struct ScratchRegs {
 // SAFETY: Don't change the order of any of these
 #[repr(C)]
 #[derive(Default, Debug, Clone, Copy)]
-struct ControlRegs {
+pub struct ControlRegs {
     pub rflags: u64, // Off: 15
     pub rsp: u64,
     pub rip: u64,
@@ -175,7 +180,7 @@ struct ControlRegs {
 
 #[repr(C)]
 #[derive(Default, Debug, Clone, Copy)]
-struct Regs {
+pub struct Regs {
     pub scratch: ScratchRegs,
     pub preserved: PreservedRegs,
     pub control: ControlRegs,
