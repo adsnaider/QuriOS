@@ -5,6 +5,7 @@ use sync::cell::AtomicOnceCell;
 #[cfg(target_arch = "x86_64")]
 mod x86_64_impl;
 
+pub mod exec;
 pub mod mem;
 
 static SYSTEM: AtomicOnceCell<ArchSystem> = AtomicOnceCell::new();

@@ -3,6 +3,9 @@ name = "kernel"
 version = "0.1.0"
 edition = "2021"
 
+[lints]
+workspace = true
+
 [lib]
 test = false
 
@@ -23,3 +26,4 @@ limine = "0.5.0"
 tap = "1.0.1"
 tar-no-std = "0.3.4"
 extend = "1.2.0"
+heapless = "0.8.0"

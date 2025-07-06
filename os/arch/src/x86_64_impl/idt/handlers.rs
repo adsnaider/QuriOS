@@ -147,8 +147,7 @@ where
 trait Zst: Sized {
     const ZST: () = const { assert!(core::mem::size_of::<Self>() == 0, "Type is not zero-sized") };
     fn verify_zst() {
-        #[allow(clippy::let_unit_value)]
-        let _ = Self::ZST;
+        let () = Self::ZST;
         debug_assert!(core::mem::size_of::<Self>() == 0);
     }
 }

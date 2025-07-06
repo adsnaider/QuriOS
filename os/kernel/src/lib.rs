@@ -1,5 +1,7 @@
 #![no_std]
 
+pub mod comp;
+pub mod kmem;
 pub mod retyping;
 pub mod thread;
 pub(crate) mod util;

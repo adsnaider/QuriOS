@@ -121,36 +121,38 @@ pub unsafe fn init(memory_map: MemoryMap) -> Result<(), RetypeInitError> {
     Ok(())
 }
 
-#[derive(Debug)]
+#[derive(Debug, Display, Error)]
+#[display("Invalid retype entry is past the end of memory")]
 pub struct OutOfBounds;
 
-impl From<OutOfBounds> for RetypeError {
-    fn from(_value: OutOfBounds) -> Self {
-        RetypeError::OutOfBounds
-    }
-}
-
-impl From<OutOfBounds> for AsTypeError {
-    fn from(_value: OutOfBounds) -> Self {
-        AsTypeError::OutOfBounds
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, From, Display, Error)]
 pub enum RetypeError {
-    InvalidFromState(State),
-    RefsExist(u16),
-    OutOfBounds,
+    #[display("Invalid start state {_0:?}")]
+    InvalidFromState(#[error(not(source))] State),
+    #[display("Couldn't retype due to non-zero references")]
+    RefsExist(#[error(not(source))] u16),
+    OutOfBounds(#[from] OutOfBounds),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Display, From, Error)]
 pub enum AsTypeError {
-    NotExpectedState(State),
-    MaxRefs,
-    OutOfBounds,
+    #[display("Invalid start state {_0:?}")]
+    NotExpectedState(#[error(not(source))] State),
+    MaxRefs(#[from] MaxRefs),
+    OutOfBounds(#[from] OutOfBounds),
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, From, Display, Error)]
+pub enum AsUnusedKernelError {
+    #[display("Invalid start state for kernel: {_0:?}")]
+    NotExpectedState(#[error(not(source))] State),
+    #[display("Kernel frame is already used")]
+    AlreadyInUse,
+    OutOfBounds(#[from] OutOfBounds),
+}
+
+#[derive(Debug, Copy, Clone, Display, Error)]
+#[display("Reached maximum reference count limit")]
 pub struct MaxRefs;
 #[derive(Debug, Copy, Clone)]
 pub struct NoRefs;
@@ -185,7 +187,7 @@ pub impl Frame {
                     AsTypeError::NotExpectedState(state)
                 } else {
                     debug_assert!(value == RetypeEntry::MAX_REF_COUNT);
-                    AsTypeError::MaxRefs
+                    AsTypeError::MaxRefs(MaxRefs)
                 }
             })?;
         Ok(UserFrame(self))
@@ -202,8 +204,24 @@ pub impl Frame {
         frame
     }
 
+    fn try_as_unused_kernel(self) -> Result<KernelFrame, AsUnusedKernelError> {
+        log::trace!("Trying {self:?} as an unused kernel frame");
+        self.retype_entry()?
+            .retype(State::Kernel, State::Kernel, 0, 1)
+            .map_err(|(state, value)| {
+                serial::sdbg!(state, value);
+                if !matches!(state, State::Kernel) {
+                    AsUnusedKernelError::NotExpectedState(state)
+                } else {
+                    debug_assert!(value != 0);
+                    AsUnusedKernelError::AlreadyInUse
+                }
+            })?;
+        Ok(KernelFrame(self))
+    }
+
     fn try_as_kernel(self) -> Result<KernelFrame, AsTypeError> {
-        log::trace!("Turning {self:?} as kernel frame");
+        log::trace!("Trying {self:?} as kernel frame");
         self.retype_entry()?
             .get_as_and_increment(State::Kernel)
             .map_err(|(state, value)| {
@@ -212,7 +230,7 @@ pub impl Frame {
                     AsTypeError::NotExpectedState(state)
                 } else {
                     debug_assert!(value == RetypeEntry::MAX_REF_COUNT);
-                    AsTypeError::MaxRefs
+                    AsTypeError::MaxRefs(MaxRefs)
                 }
             })?;
         Ok(KernelFrame(self))
