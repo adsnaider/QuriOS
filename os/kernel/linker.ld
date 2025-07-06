@@ -2,7 +2,7 @@
 OUTPUT_FORMAT(elf64-x86-64)
 OUTPUT_ARCH(i386:x86-64)
 
-/* We want the symbol _start to be our entry point */
+/* We want the symbol kmain to be our entry point */
 ENTRY(kmain)
 
 /* Define the program headers we want so the bootloader gives us the right */
@@ -23,6 +23,8 @@ SECTIONS
     /* Any address in this region will do, but often 0xffffffff80000000 is chosen as */
     /* that is the beginning of the region. */
     . = 0xffffffff80000000;
+    /* Empty page to act as a guard */
+    . = . + CONSTANT(MAXPAGESIZE);
 
     .interrupt_stack : {
         *(.interrupt_stack)
