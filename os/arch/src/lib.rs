@@ -1,18 +1,50 @@
 #![no_std]
 
+use sync::cell::AtomicOnceCell;
+
 #[cfg(target_arch = "x86_64")]
 mod x86_64_impl;
 
+pub mod mem;
+
+static SYSTEM: AtomicOnceCell<ArchSystem> = AtomicOnceCell::new();
+pub fn system() -> &'static impl System {
+    SYSTEM
+        .get()
+        .expect("System not fully initialized. Did you call `init`?")
+}
+
 cfg_if::cfg_if! {
     if #[cfg(target_arch = "x86_64")] {
-        pub fn init() -> impl System {
-            x86_64_impl::Sys::init()
+        type ArchSystem = x86_64_impl::Sys;
+        pub fn init() {
+            SYSTEM.set(x86_64_impl::Sys::init()).expect("Tried to initialize system twice")
         }
     } else {
         const _: () = const { panic!("Target architecture not supported") };
     }
 }
 
-pub trait System {}
+/// Architecture-agnostic system management
+///
+/// This trait serves to provide the general interface between the kernel
+/// and the architecture-specific code.
+///
+/// # Safety
+///
+/// The implementation must adhere exactly to the documentation
+pub unsafe trait System {
+    /// Returns the context around a syscall
+    ///
+    /// # Safety
+    ///
+    /// Kernel must be currently executing a syscall.
+    unsafe fn syscall_ctx(&self) -> impl SysCtx;
+}
 
-pub mod mem;
+pub trait SysCtx: Sized {}
+
+pub fn l4_frame() -> mem::Frame {
+    let (frame, _flags) = x86_64::registers::control::Cr3::read();
+    mem::Frame::from_start_address(mem::PhysAddr::new(frame.start_address().as_u64()))
+}

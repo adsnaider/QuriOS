@@ -1,7 +1,9 @@
 use core::arch::asm;
 
+use exec::SyscallCtx;
 use x86_64::instructions::interrupts;
 
+mod exec;
 mod gdt;
 mod idt;
 mod mem_impl;
@@ -10,7 +12,13 @@ use crate::System;
 
 pub struct Sys {}
 
-impl System for Sys {}
+// SAFETY: The system trait implementation is aaccurate for x86-64 systems.
+unsafe impl System for Sys {
+    unsafe fn syscall_ctx(&self) -> impl crate::SysCtx {
+        // SAFETY: Precondition
+        unsafe { SyscallCtx::current() }
+    }
+}
 
 impl Sys {
     pub fn init() -> Self {
@@ -18,10 +26,7 @@ impl Sys {
         sce_enable();
         gdt::init();
         idt::init();
-        unsafe {
-            core::ptr::read_volatile(0xffffffff80000000 as *const u8);
-        }
-        todo!();
+        Self {}
     }
 }
 

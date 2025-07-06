@@ -1,72 +1,84 @@
 //! x86-64 execution context.
+#![allow(unused)]
 
-use core::arch::naked_asm;
+use core::{arch::naked_asm, mem::MaybeUninit};
 
-pub trait SaveState: Sized {
-    fn save_state(self, regs: &mut Regs);
+use crate::SysCtx;
+
+use super::gdt;
+
+/// Preserved state from a syscall
+pub struct SyscallCtx {
+    control_regs: ControlRegs,
+    preserved_regs: PreservedRegs,
 }
 
-#[derive(Debug, Copy, Clone, Default)]
-pub struct NoopSaver {}
-impl NoopSaver {
-    pub fn new() -> Self {
-        Self {}
+impl SyscallCtx {
+    /// Reads the syscall context from the stack
+    ///
+    /// # Safety
+    ///
+    /// Must be currently handling a syscall
+    pub unsafe fn current() -> Self {
+        let stack_end: *mut u64 = gdt::interrupt_stack_end().as_mut_ptr();
+        let mut preserved: MaybeUninit<PreservedRegs> = MaybeUninit::uninit();
+        // SAFETY: The precondition guarantees that preserved registers will be pushed to the stack.
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                stack_end.sub(11) as *const PreservedRegs,
+                preserved.as_mut_ptr(),
+                1,
+            );
+        }
+        Self {
+            control_regs: unsafe { Self::current_control() },
+            preserved_regs: unsafe { preserved.assume_init() },
+        }
+    }
+
+    pub unsafe fn current_control() -> ControlRegs {
+        let (rsp, rflags, rip);
+        unsafe {
+            let stack_end: *mut u64 = gdt::interrupt_stack_end().as_mut_ptr();
+            rsp = *stack_end.sub(2);
+            rflags = *stack_end.sub(3);
+            rip = *stack_end.sub(5);
+        }
+        ControlRegs { rflags, rsp, rip }
+    }
+
+    /// Updates the rflags register on this syscall.
+    ///
+    /// Note that this will update the rflags iff the syscall returns normally (i.e. no
+    /// thread dispatching).
+    ///
+    /// # Safety
+    ///
+    /// Must be currently handling a syscall.
+    pub unsafe fn update_flags(flags: u64) {
+        let stack_end: *mut u64 = gdt::interrupt_stack_end().as_mut_ptr();
+        unsafe {
+            *stack_end.sub(3) = flags;
+        }
+    }
+
+    /// Gets the rflags registers (as it was before the syscall).
+    ///
+    /// # Safety
+    ///
+    /// Must be currently handling a syscall.
+    pub unsafe fn get_flags() -> u64 {
+        let stack_end: *mut u64 = gdt::interrupt_stack_end().as_mut_ptr();
+        unsafe { *stack_end.sub(3) }
     }
 }
-impl SaveState for NoopSaver {
-    fn save_state(self, _regs: &mut Regs) {
-        // Purpusely empty
-    }
-}
+
+impl SysCtx for SyscallCtx {}
 
 /// Execution context that can be dispatched.
 #[repr(C)]
 pub struct ExecCtx {
     regs: Regs,
-}
-
-// SAFETY: Don't change the order of any of these
-#[repr(C)]
-#[derive(Default, Debug, Clone, Copy)]
-pub struct PreservedRegs {
-    pub rbx: u64,
-    pub rbp: u64, // Off: 10
-    pub r12: u64,
-    pub r13: u64,
-    pub r14: u64,
-    pub r15: u64,
-}
-
-// SAFETY: Don't change the order of any of these
-#[repr(C)]
-#[derive(Default, Debug, Clone, Copy)]
-pub struct ScratchRegs {
-    pub rax: u64, // Off: 0
-    pub rcx: u64,
-    pub rdx: u64,
-    pub rsi: u64,
-    pub rdi: u64,
-    pub r8: u64, // Off: 5
-    pub r9: u64,
-    pub r10: u64,
-    pub r11: u64,
-}
-
-// SAFETY: Don't change the order of any of these
-#[repr(C)]
-#[derive(Default, Debug, Clone, Copy)]
-pub struct ControlRegs {
-    pub rflags: u64, // Off: 15
-    pub rsp: u64,
-    pub rip: u64,
-}
-
-#[repr(C)]
-#[derive(Default, Debug, Clone, Copy)]
-pub struct Regs {
-    pub scratch: ScratchRegs,
-    pub preserved: PreservedRegs,
-    pub control: ControlRegs,
 }
 
 impl ExecCtx {
@@ -123,4 +135,48 @@ impl ExecCtx {
             )
         }
     }
+}
+
+// SAFETY: Don't change the order of any of these
+#[repr(C)]
+#[derive(Default, Debug, Clone, Copy)]
+struct PreservedRegs {
+    pub rbx: u64,
+    pub rbp: u64, // Off: 10
+    pub r12: u64,
+    pub r13: u64,
+    pub r14: u64,
+    pub r15: u64,
+}
+
+// SAFETY: Don't change the order of any of these
+#[repr(C)]
+#[derive(Default, Debug, Clone, Copy)]
+struct ScratchRegs {
+    pub rax: u64, // Off: 0
+    pub rcx: u64,
+    pub rdx: u64,
+    pub rsi: u64,
+    pub rdi: u64,
+    pub r8: u64, // Off: 5
+    pub r9: u64,
+    pub r10: u64,
+    pub r11: u64,
+}
+
+// SAFETY: Don't change the order of any of these
+#[repr(C)]
+#[derive(Default, Debug, Clone, Copy)]
+struct ControlRegs {
+    pub rflags: u64, // Off: 15
+    pub rsp: u64,
+    pub rip: u64,
+}
+
+#[repr(C)]
+#[derive(Default, Debug, Clone, Copy)]
+struct Regs {
+    pub scratch: ScratchRegs,
+    pub preserved: PreservedRegs,
+    pub control: ControlRegs,
 }

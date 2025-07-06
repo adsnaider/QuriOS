@@ -1,5 +1,8 @@
-use crate::mem::Page;
+use crate::mem::{Frame, Page};
 
 impl Page {
     pub const SIZE: usize = 4096;
+}
+impl Frame {
+    pub const SIZE: u64 = 4096;
 }

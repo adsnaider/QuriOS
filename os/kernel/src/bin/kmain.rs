@@ -2,12 +2,13 @@
 #![no_std]
 #![no_main]
 
-use kernel::kinit;
+use kernel::{kinit, uinit};
 use serial::sprintln;
 
 #[no_mangle]
 pub extern "C" fn kmain() -> ! {
     kinit();
+    uinit();
 }
 
 #[panic_handler]

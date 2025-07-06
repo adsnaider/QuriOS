@@ -85,7 +85,7 @@ static TSS: AtomicLazyCell<TaskStateSegment> = AtomicLazyCell::new(|| {
     tss
 });
 
-pub(super) fn interrupt_stack_end() -> VirtAddr {
+pub(crate) fn interrupt_stack_end() -> VirtAddr {
     #[allow(static_mut_refs)]
     // SAFETY: Although it's a static mut, STACK is only used in this context on this thread.
     let start: VirtAddr = VirtAddr::new(unsafe { INTERRUPT_STACK.as_ptr() as u64 });

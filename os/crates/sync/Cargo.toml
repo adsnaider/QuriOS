@@ -7,4 +7,6 @@ edition = "2021"
 workspace = true
 
 [dependencies]
+derive_more.workspace = true
+
 spin = "0.10.0"

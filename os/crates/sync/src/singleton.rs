@@ -33,6 +33,25 @@ impl<T> Singleton<T> {
         }
     }
 
+    pub fn take_ref(&self) -> Option<&T> {
+        if !self.taken.swap(true, Ordering::Relaxed) {
+            // SAFETY: has not been consumed and no reace condition due to atomic swap.
+            Some(unsafe { self.as_ref_unchecked() })
+        } else {
+            None
+        }
+    }
+
+    #[allow(clippy::mut_from_ref)]
+    pub fn take_ref_mut(&self) -> Option<&mut T> {
+        if !self.taken.swap(true, Ordering::Relaxed) {
+            // SAFETY: has not been consumed and no reace condition due to atomic swap.
+            Some(unsafe { self.as_mut_unchecked() })
+        } else {
+            None
+        }
+    }
+
     pub fn into_inner(self) -> Option<T> {
         self.taken
             .into_inner()
@@ -57,5 +76,19 @@ impl<T> Singleton<T> {
     /// Value must not have been previously taken and there can't be race conditions.
     unsafe fn take_value(&self) -> T {
         core::ptr::replace(self.value.get(), MaybeUninit::uninit()).assume_init()
+    }
+
+    /// # Safety
+    ///
+    /// Value must not have been previously taken and there can't be race conditions.
+    unsafe fn as_ref_unchecked(&self) -> &T {
+        (*self.value.get()).assume_init_ref()
+    }
+
+    /// # Safety
+    ///
+    /// Value must not have been previously taken and there can't be race conditions.
+    unsafe fn as_mut_unchecked(&self) -> &mut T {
+        (*self.value.get()).assume_init_mut()
     }
 }

@@ -75,7 +75,7 @@ emulate: dbg_dir iso
 	@./go.sh 33 qemu-system-x86_64 \
 		-cdrom {{image_path}} \
 		-bios /usr/share/ovmf/OVMF.fd \
-		-chardev stdio,id=char0,logfile=serial.log,signal=off \
+		-chardev stdio,id=char0,logfile={{artifact_dir}}/serial.log,signal=off \
 		-serial chardev:char0 \
 		{{qemu_args}}
 
@@ -83,7 +83,7 @@ ktest: test-iso
 	@./go.sh 33 qemu-system-x86_64 \
 		-cdrom {{test_image_path}} \
 		-bios /usr/share/ovmf/OVMF.fd \
-		-chardev stdio,id=char0,logfile=serial.log,signal=off \
+		-chardev stdio,id=char0,logfile={{artifact_dir}}/serial.log,signal=off \
 		-serial chardev:char0 \
 		-device isa-debug-exit,iobase=0xf4,iosize=0x04 \
 		-display none \

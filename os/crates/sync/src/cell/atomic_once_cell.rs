@@ -2,6 +2,8 @@ use core::cell::UnsafeCell;
 use core::mem::MaybeUninit;
 use core::sync::atomic::{fence, AtomicU8, Ordering};
 
+use derive_more::{Display, Error};
+
 pub struct AtomicOnceCell<T> {
     value: UnsafeCell<MaybeUninit<T>>,
     init: AtomicU8,
@@ -17,9 +19,11 @@ unsafe impl<T: Send + Sync> Sync for AtomicOnceCell<T> {}
 // SAFETY: Ownership semantics apply
 unsafe impl<T: Send> Send for AtomicOnceCell<T> {}
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Display, Error)]
 pub enum OnceError {
+    #[display("Currently initializing")]
     Initializing,
+    #[display("Attempted a second intialization")]
     AlreadyInit,
 }
 

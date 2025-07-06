@@ -1,6 +1,6 @@
 mod handlers;
 
-use handlers::PanicHandler;
+use handlers::{Isr, PanicHandler};
 use sync::cell::AtomicLazyCell;
 use x86_64::{PrivilegeLevel, structures::idt::InterruptDescriptorTable};
 
@@ -19,35 +19,36 @@ fn init_idt() {
     static IDT: AtomicLazyCell<InterruptDescriptorTable> = AtomicLazyCell::new(|| {
         let mut idt = InterruptDescriptorTable::new();
         // Exceptions.
-        PanicHandler::set_handler(&mut idt.breakpoint);
-        PanicHandler::set_handler(&mut idt.general_protection_fault);
-        PanicHandler::set_handler(&mut idt.overflow);
-        PanicHandler::set_handler(&mut idt.divide_error);
-        PanicHandler::set_handler(&mut idt.non_maskable_interrupt);
-        PanicHandler::set_handler(&mut idt.bound_range_exceeded);
-        PanicHandler::set_handler(&mut idt.debug);
-        PanicHandler::set_handler(&mut idt.invalid_opcode);
-        PanicHandler::set_handler(&mut idt.device_not_available);
-        PanicHandler::set_handler(&mut idt.invalid_tss);
-        PanicHandler::set_handler(&mut idt.segment_not_present);
-        PanicHandler::set_handler(&mut idt.stack_segment_fault);
-        PanicHandler::set_handler(&mut idt.x87_floating_point);
-        PanicHandler::set_handler(&mut idt.alignment_check);
-        PanicHandler::set_handler(&mut idt.machine_check);
-        PanicHandler::set_handler(&mut idt.simd_floating_point);
-        PanicHandler::set_handler(&mut idt.virtualization);
-        PanicHandler::set_handler(&mut idt.vmm_communication_exception);
-        PanicHandler::set_handler(&mut idt.security_exception);
-        PanicHandler::set_handler(&mut idt.cp_protection_exception);
-        PanicHandler::set_handler(&mut idt.hv_injection_exception);
+        Isr::register(&mut idt.breakpoint, PanicHandler::<0>);
+        Isr::register(&mut idt.general_protection_fault, PanicHandler::<1>);
+        Isr::register(&mut idt.overflow, PanicHandler::<2>);
+        Isr::register(&mut idt.divide_error, PanicHandler::<3>);
+        Isr::register(&mut idt.non_maskable_interrupt, PanicHandler::<2>);
+        Isr::register(&mut idt.bound_range_exceeded, PanicHandler::<3>);
+        Isr::register(&mut idt.debug, PanicHandler::<4>);
+        Isr::register(&mut idt.invalid_opcode, PanicHandler::<5>);
+        Isr::register(&mut idt.device_not_available, PanicHandler::<6>);
+        Isr::register(&mut idt.invalid_tss, PanicHandler::<7>);
+        Isr::register(&mut idt.segment_not_present, PanicHandler::<8>);
+        Isr::register(&mut idt.stack_segment_fault, PanicHandler::<9>);
+        Isr::register(&mut idt.x87_floating_point, PanicHandler::<10>);
+        Isr::register(&mut idt.alignment_check, PanicHandler::<11>);
+        Isr::register(&mut idt.machine_check, PanicHandler::<12>);
+        Isr::register(&mut idt.simd_floating_point, PanicHandler::<13>);
+        Isr::register(&mut idt.virtualization, PanicHandler::<14>);
+        Isr::register(&mut idt.vmm_communication_exception, PanicHandler::<15>);
+        Isr::register(&mut idt.security_exception, PanicHandler::<16>);
+        Isr::register(&mut idt.cp_protection_exception, PanicHandler::<17>);
+        Isr::register(&mut idt.hv_injection_exception, PanicHandler::<18>);
         // SAFETY: Stack indeces provided are valid and only used for the specific handlers.
         unsafe {
-            PanicHandler::set_handler(&mut idt.double_fault)
+            Isr::register(&mut idt.double_fault, PanicHandler::<18>)
                 .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
-            PanicHandler::set_handler(&mut idt.page_fault)
+            Isr::register(&mut idt.page_fault, PanicHandler::<20>)
                 .set_stack_index(gdt::PAGE_FAULT_IST_INDEX);
         }
-        PanicHandler::set_handler(&mut idt[SYSCALL_INT]).set_privilege_level(PrivilegeLevel::Ring3);
+        Isr::register(&mut idt[SYSCALL_INT], PanicHandler::<21>)
+            .set_privilege_level(PrivilegeLevel::Ring3);
         idt
     });
     IDT.load();

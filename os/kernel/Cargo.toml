@@ -17,6 +17,9 @@ log.workspace = true
 serial.workspace = true
 sync.workspace = true
 arch.workspace = true
+derive_more.workspace = true
 
 limine = "0.5.0"
 tap = "1.0.1"
+tar-no-std = "0.3.4"
+extend = "1.2.0"

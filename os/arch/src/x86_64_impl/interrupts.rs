@@ -2,8 +2,8 @@ use core::arch::asm;
 
 use pic8259::ChainedPics;
 use sync::cell::AtomicLazyCell;
-use x86_64_impl::structures::idt::InterruptDescriptorTable;
 use x86_64_impl::PrivilegeLevel;
+use x86_64_impl::structures::idt::InterruptDescriptorTable;
 
 use crate::arch::x86_64::{self, gdt};
 
