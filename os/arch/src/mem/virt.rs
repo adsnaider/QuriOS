@@ -9,7 +9,7 @@ pub struct Page {
 #[repr(transparent)]
 #[derive(derive_more::Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord)]
 #[debug("VirtAddr({:#X?})", self.0)]
-pub struct VirtAddr(usize);
+pub struct VirtAddr(pub(crate) usize);
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Display, Error)]
 #[display("The address isn't aligned to the page boundary")]

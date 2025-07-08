@@ -1,5 +1,7 @@
 #![no_std]
 
+use exec::ExecState;
+use mem::{Addrspace, Frame, Pmo};
 use sync::cell::AtomicOnceCell;
 
 #[cfg(target_arch = "x86_64")]
@@ -18,8 +20,8 @@ pub fn system() -> &'static impl System {
 cfg_if::cfg_if! {
     if #[cfg(target_arch = "x86_64")] {
         type ArchSystem = x86_64_impl::Sys;
-        pub fn init() {
-            SYSTEM.set(x86_64_impl::Sys::init()).expect("Tried to initialize system twice")
+        pub fn init(pmo: Pmo) {
+            SYSTEM.set(x86_64_impl::Sys::init(pmo)).expect("Tried to initialize system twice")
         }
     } else {
         const _: () = const { panic!("Target architecture not supported") };
@@ -35,12 +37,13 @@ cfg_if::cfg_if! {
 ///
 /// The implementation must adhere exactly to the documentation
 pub unsafe trait System {
-    /// Returns the context around a syscall
-    ///
-    /// # Safety
-    ///
-    /// Kernel must be currently executing a syscall.
-    unsafe fn syscall_ctx(&self) -> impl SysCtx;
+    type SysAddrspace: Addrspace;
+    type SysExec: ExecState;
+
+    /// Returns a valid pointer to the currently active address space
+    fn addrspace(&self) -> Self::SysAddrspace;
 }
 
-pub trait SysCtx: Sized {}
+pub trait KernelObject: Sized {
+    fn into_frame(self) -> Frame;
+}

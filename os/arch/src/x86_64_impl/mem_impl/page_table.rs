@@ -1,128 +1,116 @@
 use core::sync::atomic::{AtomicU64, Ordering};
 
-use x86_64_impl::instructions::tlb;
-use x86_64_impl::registers::control::Cr3;
-pub use x86_64_impl::structures::paging::PageTableFlags;
+use x86_64::{
+    instructions::tlb,
+    registers::control::Cr3,
+    structures::paging::{PageTableFlags, PhysFrame},
+};
 
-use super::{Page, PhysAddr, RawFrame, VirtAddr};
-use crate::bump_allocator::BumpAllocator;
-use crate::kptr::KPtr;
-use crate::retyping::RetypeError;
+use crate::{
+    KernelObject,
+    mem::{
+        Addrspace, Flusher, Frame, FrameAllocator, MapPageError, Page, PageFlags, PhysAddr, Pmo,
+        VirtAddr,
+    },
+};
 
-#[repr(transparent)]
-#[derive(Copy, Clone)]
-pub struct Addrspace<'a>(&'a AnyPageTable);
-
-#[derive(Debug)]
-pub enum MapperError {
-    FrameAllocationError,
-    HugeParentEntry,
-    AlreadyMapped(RawFrame),
+pub struct X64Addrspace {
+    l4_frame: Frame,
+    pmo: Pmo,
 }
 
-#[derive(Debug)]
-pub enum UnmapError {
-    NotMapped,
-    HugeParent,
-}
-
-#[must_use]
-pub struct Flusher {
-    page: Page,
-}
-
-impl Flusher {
-    pub fn new(page: Page) -> Self {
-        Self { page }
-    }
-    pub fn flush(self) {
-        tlb::flush(self.page.base().into())
-    }
-}
-
-impl<'a> Addrspace<'a> {
-    /// Constructs a manipulable Addrspace from the l4 Frame
-    ///
-    /// # Safety
-    ///
-    /// The provided frame must be an l4 frame for some page table addressing.
-    pub unsafe fn from_frame(l4_frame: RawFrame) -> Self {
-        let table = l4_frame.base().to_virtual().as_ptr();
-        Self(unsafe { &*table })
-    }
-
-    pub fn l4_frame(&self) -> RawFrame {
-        RawFrame::from_start_address(unsafe {
-            VirtAddr::from_ptr(self.0 as *const _).to_physical()
-        })
-    }
-
-    /// Makes this address space active.
-    ///
-    /// # Safety
-    ///
-    /// The top half (kernel address space) must be intact (i.e. not change with this).
-    pub unsafe fn make_active(&self) {
-        let frame = self.l4_frame().into();
-        unsafe {
-            let (old, flags) = Cr3::read();
-            if old != frame {
-                Cr3::write(frame, flags);
+impl X64Addrspace {
+    pub unsafe fn new_with_kernel_entries(l4_frame: Frame, pmo: Pmo) -> Self {
+        let current = unsafe { Self::current(pmo) };
+        let mut new_l4 = AnyPageTable::new();
+        for i in 256..512 {
+            let offset = PageTableOffset::new(i).unwrap();
+            unsafe {
+                if let Some((frame, flags)) = current.l4_table().get(offset).get() {
+                    log::debug!("Mapping kernel map: {frame:?}, {flags:?}");
+                    new_l4.map_mut(offset, frame, flags);
+                }
             }
+        }
+        unsafe { core::ptr::write(pmo.phys_to_virt(l4_frame.addr()).as_mut_ptr(), new_l4) };
+        Self { l4_frame, pmo }
+    }
+
+    fn l4_table(&self) -> &AnyPageTable {
+        let addr = self.pmo.phys_to_virt(self.l4_frame.addr()).as_ptr();
+        unsafe { &*addr }
+    }
+
+    /// # Safety
+    ///
+    /// The PMO must be correct
+    pub unsafe fn current(pmo: Pmo) -> Self {
+        let frame = Self::current_raw();
+        Self {
+            pmo,
+            l4_frame: frame,
         }
     }
 
-    pub fn current() -> Self {
-        unsafe { Self::from_frame(AnyPageTable::current_raw()) }
+    pub fn current_raw() -> Frame {
+        let (frame, _flags) = Cr3::read();
+        Frame::from_start_address(PhysAddr::new(frame.start_address().as_u64()))
     }
+}
 
-    /// Constructs a manipulable Addrspace from the top level page table.
-    ///
-    /// # Safety
-    ///
-    /// The provided table must be the root (L4) table.
-    pub unsafe fn from_table(table: &'a AnyPageTable) -> Self {
-        Self(table)
+impl From<Frame> for PhysFrame {
+    fn from(value: Frame) -> Self {
+        unsafe { core::mem::transmute(value) }
     }
+}
 
-    // FIXME: Huge pages
-    /// Recursively finds the mapping for a page to a frame.
-    pub fn get(&self, page: Page) -> Option<(RawFrame, PageTableFlags)> {
-        let mut table = self.0;
-        let idx = page.base().p4_index();
-        let (frame, _) = table.get(idx).get()?;
-
-        table = unsafe { &*frame.base().to_virtual().as_ptr() };
-        let idx = page.base().p3_index();
-        let (frame, _) = table.get(idx).get()?;
-
-        table = unsafe { &*frame.base().to_virtual().as_ptr() };
-        let idx = page.base().p2_index();
-        let (frame, _) = table.get(idx).get()?;
-
-        table = unsafe { &*frame.base().to_virtual().as_ptr() };
-        let idx = page.base().p1_index();
-        let (frame, flags) = table.get(idx).get()?;
-
-        Some((frame, flags))
+impl From<VirtAddr> for x86_64::VirtAddr {
+    fn from(value: VirtAddr) -> Self {
+        unsafe { core::mem::transmute(value) }
     }
+}
 
-    /// Maps a virtual page to a physical frame.
-    ///
-    /// # Safety
-    ///
-    /// Creating virtual memory mappings is a fundamentally unsafe operation as it enables
-    /// aliasing (shared memory).
-    pub unsafe fn map_to(
+impl From<PageFlags> for PageTableFlags {
+    fn from(value: PageFlags) -> Self {
+        let mut flags = PageTableFlags::empty();
+        if !value.readable() {
+            log::debug!("(non)-readable bit is invalid on x86-64");
+        }
+        if value.writeable() {
+            flags |= PageTableFlags::WRITABLE;
+        }
+        if !value.executable() {
+            flags |= PageTableFlags::NO_EXECUTE;
+        }
+        if value.present() {
+            flags |= PageTableFlags::PRESENT;
+        }
+        if value.user_accessible() {
+            flags |= PageTableFlags::USER_ACCESSIBLE;
+        }
+        flags
+    }
+}
+
+impl KernelObject for X64Addrspace {
+    fn into_frame(self) -> Frame {
+        self.l4_frame
+    }
+}
+
+impl Addrspace for X64Addrspace {
+    unsafe fn map_page<A: FrameAllocator>(
         &self,
         page: Page,
-        frame: RawFrame,
-        flags: PageTableFlags,
-        parent_flags: PageTableFlags,
-        frame_allocator: &mut BumpAllocator,
-    ) -> Result<Flusher, MapperError> {
+        frame: Frame,
+        flags: PageFlags,
+        parent_flags: PageFlags,
+        alloc: &mut A,
+    ) -> Result<Flusher<Self>, MapPageError> {
+        let flags = flags.into();
+        let parent_flags: PageTableFlags = parent_flags.into();
         let mut level = Some(PageTableLevel::top());
-        let mut table = self.0;
+        let mut table = self.l4_table();
         let addr = page.base();
         while let Some(current_level) = level {
             level = current_level.lower();
@@ -131,25 +119,23 @@ impl<'a> Addrspace<'a> {
             match entry.get() {
                 Some((frame, flags)) => {
                     if current_level.level() == 1 {
-                        return Err(MapperError::AlreadyMapped(frame));
+                        return Err(MapPageError::AlreadyMapped(frame));
                     }
                     if flags.contains(PageTableFlags::HUGE_PAGE) {
-                        return Err(MapperError::HugeParentEntry);
+                        return Err(MapPageError::HugeParentEntry);
                     }
-                    table = unsafe { &*frame.base().to_virtual().as_ptr() };
+                    table = unsafe { &*self.pmo.phys_to_virt(frame.base()).as_ptr() };
                 }
                 None => {
                     if current_level.is_bottom() {
-                        entry.set(frame, flags);
+                        unsafe { entry.set(frame, flags) };
                     } else {
-                        let frame = frame_allocator
-                            .alloc_kernel_frame()
-                            .ok_or(MapperError::FrameAllocationError)?
-                            .into_raw();
-                        let addr: *mut AnyPageTable = frame.base().to_virtual().as_mut_ptr();
-                        addr.write(AnyPageTable::new());
+                        let frame = alloc.alloc_kernel_frame()?;
+                        let addr: *mut AnyPageTable =
+                            self.pmo.phys_to_virt(frame.base()).as_mut_ptr();
+                        unsafe { addr.write(AnyPageTable::new()) };
                         table = unsafe { &*addr };
-                        entry.set(frame, parent_flags | PageTableFlags::PRESENT);
+                        unsafe { entry.set(frame, parent_flags | PageTableFlags::PRESENT) };
                     }
                 }
             }
@@ -157,40 +143,58 @@ impl<'a> Addrspace<'a> {
         Ok(Flusher::new(page))
     }
 
-    /// Unmaps a virtual page from its physical frame.
-    ///
-    /// # Safety
-    ///
-    /// Creating virtual memory mappings is a fundamentally unsafe operation as it enables
-    /// aliasing (shared memory).
-    pub unsafe fn unmap(
-        &self,
-        page: Page,
-    ) -> Result<(Flusher, RawFrame, PageTableFlags), UnmapError> {
-        let mut level = Some(PageTableLevel::top());
-        let mut table = self.0;
-        let addr = page.base();
-        while let Some(current_level) = level {
-            level = current_level.lower();
-            let offset = addr.page_table_index(current_level);
-            let entry = table.get(offset);
-            if current_level.is_bottom() {
-                return entry
-                    .reset()
-                    .map(|(frame, flags)| (Flusher::new(page), frame, flags))
-                    .ok_or(UnmapError::NotMapped);
-            }
-            let (frame, flags) = entry.get().ok_or(UnmapError::NotMapped)?;
-            if flags.contains(PageTableFlags::HUGE_PAGE) {
-                return Err(UnmapError::HugeParent);
-            }
-            table = unsafe { &*frame.base().to_virtual().as_ptr() };
+    fn flush(page: Page) {
+        tlb::flush(page.base().into());
+    }
+
+    fn activate(&self) {
+        let (frame, flags) = Cr3::read();
+        let this_frame = unsafe {
+            self.pmo
+                .virt_to_phys(VirtAddr::new((self as *const Self).addr()))
+        };
+        let this_frame = Frame::from_start_address(this_frame).into();
+        if frame != this_frame {
+            unsafe { Cr3::write(this_frame, flags) };
         }
-        unreachable!();
+    }
+}
+
+#[extend::ext]
+impl VirtAddr {
+    /// Returns the 9-bit level 1 page table index.
+    #[inline]
+    fn p1_index(self) -> PageTableOffset {
+        PageTableOffset::new_truncate((self.0 >> 12) as u16)
+    }
+
+    /// Returns the 9-bit level 2 page table index.
+    #[inline]
+    fn p2_index(self) -> PageTableOffset {
+        PageTableOffset::new_truncate((self.0 >> 12 >> 9) as u16)
+    }
+
+    /// Returns the 9-bit level 3 page table index.
+    #[inline]
+    fn p3_index(self) -> PageTableOffset {
+        PageTableOffset::new_truncate((self.0 >> 12 >> 9 >> 9) as u16)
+    }
+
+    /// Returns the 9-bit level 4 page table index.
+    #[inline]
+    fn p4_index(self) -> PageTableOffset {
+        PageTableOffset::new_truncate((self.0 >> 12 >> 9 >> 9 >> 9) as u16)
+    }
+
+    /// Returns the 9-bit level page table index.
+    #[inline]
+    fn page_table_index(self, level: PageTableLevel) -> PageTableOffset {
+        PageTableOffset::new_truncate((self.0 >> 12 >> ((level.level() - 1) * 9)) as u16)
     }
 }
 
 #[repr(C, align(4096))]
+#[derive(Debug)]
 pub struct AnyPageTable([PageTableEntry; 512]);
 
 impl Default for AnyPageTable {
@@ -205,48 +209,14 @@ impl AnyPageTable {
         unsafe { core::mem::zeroed() }
     }
 
-    /// Returns the addrspace for this page table, enabling memory manipulations
-    ///
-    /// # Safety
-    ///
-    /// This must be a root-level page table.
-    pub unsafe fn as_addrspace(&self) -> Addrspace<'_> {
-        unsafe { Addrspace::from_table(self) }
-    }
-
-    pub fn current() -> KPtr<Self> {
-        let frame = Self::current_raw();
-        unsafe { KPtr::from_frame_unchecked(frame.try_as_kernel().unwrap()) }
-    }
-
-    pub fn current_raw() -> RawFrame {
-        let (frame, _flags) = Cr3::read();
-        RawFrame::from_start_address(PhysAddr::new(frame.start_address().as_u64()))
-    }
-
-    pub fn new_l4(frame: RawFrame) -> Result<KPtr<Self>, RetypeError> {
-        KPtr::new(frame, AnyPageTable::clone_kernel())
-    }
-
-    pub fn clone_kernel() -> Self {
-        let current = AnyPageTable::current();
-
-        let new = Self::new();
-        for i in 256..512 {
-            let offset = PageTableOffset::new(i).unwrap();
-            unsafe {
-                if let Some((frame, flags)) = current.get(offset).get() {
-                    log::debug!("Mapping kernel map: {frame:?}, {flags:?}");
-                    new.map(offset, frame, flags);
-                }
-            }
-        }
-        new
-    }
-
     pub fn get(&self, offset: PageTableOffset) -> &PageTableEntry {
         // SAFETY: Offset is within [0, 512)
         unsafe { self.0.get_unchecked(offset.0 as usize) }
+    }
+
+    pub fn get_mut(&mut self, offset: PageTableOffset) -> &mut PageTableEntry {
+        // SAFETY: Offset is within [0, 512)
+        unsafe { self.0.get_unchecked_mut(offset.0 as usize) }
     }
 
     /// Atomically sets the frame and attributes on the page table offset provided
@@ -258,10 +228,19 @@ impl AnyPageTable {
     pub unsafe fn map(
         &self,
         offset: PageTableOffset,
-        frame: RawFrame,
+        frame: Frame,
         attributes: PageTableFlags,
-    ) -> Option<(RawFrame, PageTableFlags)> {
+    ) -> Option<(Frame, PageTableFlags)> {
         self.get(offset).set(frame, attributes)
+    }
+
+    pub unsafe fn map_mut(
+        &mut self,
+        offset: PageTableOffset,
+        frame: Frame,
+        attributes: PageTableFlags,
+    ) -> Option<(Frame, PageTableFlags)> {
+        self.get_mut(offset).set_mut(frame, attributes)
     }
 
     /// Atomically sets the frame and attributes on the page table offset provided if none present
@@ -273,9 +252,9 @@ impl AnyPageTable {
     pub unsafe fn try_map(
         &self,
         offset: PageTableOffset,
-        frame: RawFrame,
+        frame: Frame,
         attributes: PageTableFlags,
-    ) -> Result<(), (RawFrame, PageTableFlags)> {
+    ) -> Result<(), (Frame, PageTableFlags)> {
         self.get(offset).try_set(frame, attributes)
     }
 
@@ -285,7 +264,7 @@ impl AnyPageTable {
     ///
     /// This is one of those methods that fundamentally change memory and can cause undefined
     /// behaviour even when the usage is semantically reasonable.
-    pub unsafe fn unmap(&self, offset: PageTableOffset) -> Option<(RawFrame, PageTableFlags)> {
+    pub unsafe fn unmap(&self, offset: PageTableOffset) -> Option<(Frame, PageTableFlags)> {
         self.get(offset).reset()
     }
 
@@ -310,6 +289,7 @@ impl AnyPageTable {
 }
 
 #[repr(transparent)]
+#[derive(Debug)]
 pub struct PageTableEntry(AtomicU64);
 
 impl Default for PageTableEntry {
@@ -326,17 +306,17 @@ impl PageTableEntry {
         Self(AtomicU64::new(0))
     }
 
-    pub fn get(&self) -> Option<(RawFrame, PageTableFlags)> {
+    pub fn get(&self) -> Option<(Frame, PageTableFlags)> {
         let value = self.0.load(Ordering::Relaxed);
         if value == 0 {
             return None;
         }
-        let frame = RawFrame::from_start_address(PhysAddr::new(value & Self::FRAME_MASK));
+        let frame = Frame::from_start_address(PhysAddr::new(value & Self::FRAME_MASK));
         let flags = PageTableFlags::from_bits(value & Self::FLAGS_MASK).unwrap();
         Some((frame, flags))
     }
 
-    pub fn frame(&self) -> Option<RawFrame> {
+    pub fn frame(&self) -> Option<Frame> {
         self.get().map(|x| x.0)
     }
 
@@ -344,7 +324,18 @@ impl PageTableEntry {
         self.get().map(|x| x.1)
     }
 
-    unsafe fn set_bits(&self, bits: u64) -> Option<(RawFrame, PageTableFlags)> {
+    unsafe fn set_bits_mut(&mut self, bits: u64) -> Option<(Frame, PageTableFlags)> {
+        let old = core::mem::replace(self.0.get_mut(), bits);
+
+        if old == 0 {
+            return None;
+        }
+        let addr = old & Self::FRAME_MASK;
+        let attributes = PageTableFlags::from_bits(old & Self::FLAGS_MASK).unwrap();
+        Some((Frame::from_start_address(PhysAddr::new(addr)), attributes))
+    }
+
+    unsafe fn set_bits(&self, bits: u64) -> Option<(Frame, PageTableFlags)> {
         let old = self.0.swap(bits, Ordering::Relaxed);
 
         if old == 0 {
@@ -352,23 +343,17 @@ impl PageTableEntry {
         }
         let addr = old & Self::FRAME_MASK;
         let attributes = PageTableFlags::from_bits(old & Self::FLAGS_MASK).unwrap();
-        Some((
-            RawFrame::from_start_address(PhysAddr::new(addr)),
-            attributes,
-        ))
+        Some((Frame::from_start_address(PhysAddr::new(addr)), attributes))
     }
 
-    unsafe fn try_set_bits(&self, bits: u64) -> Result<(), (RawFrame, PageTableFlags)> {
+    unsafe fn try_set_bits(&self, bits: u64) -> Result<(), (Frame, PageTableFlags)> {
         self.0
             .compare_exchange(0, bits, Ordering::Relaxed, Ordering::Relaxed)
             .map(|_| ())
             .map_err(|old| {
                 let addr = old & Self::FRAME_MASK;
                 let attributes = PageTableFlags::from_bits(old & Self::FLAGS_MASK).unwrap();
-                (
-                    RawFrame::from_start_address(PhysAddr::new(addr)),
-                    attributes,
-                )
+                (Frame::from_start_address(PhysAddr::new(addr)), attributes)
             })
     }
 
@@ -379,9 +364,17 @@ impl PageTableEntry {
     /// This could fundamentally change memory, leading to unsoundness.
     pub unsafe fn set(
         &self,
-        frame: RawFrame,
+        frame: Frame,
         attributes: PageTableFlags,
-    ) -> Option<(RawFrame, PageTableFlags)> {
+    ) -> Option<(Frame, PageTableFlags)> {
+        unsafe { self.set_bits(attributes.bits() | frame.base().as_u64()) }
+    }
+
+    pub unsafe fn set_mut(
+        &mut self,
+        frame: Frame,
+        attributes: PageTableFlags,
+    ) -> Option<(Frame, PageTableFlags)> {
         unsafe { self.set_bits(attributes.bits() | frame.base().as_u64()) }
     }
 
@@ -392,9 +385,9 @@ impl PageTableEntry {
     /// This could fundamentally change memory, leading to unsoundness.
     pub unsafe fn try_set(
         &self,
-        frame: RawFrame,
+        frame: Frame,
         attributes: PageTableFlags,
-    ) -> Result<(), (RawFrame, PageTableFlags)> {
+    ) -> Result<(), (Frame, PageTableFlags)> {
         unsafe { self.try_set_bits(attributes.bits() | frame.base().as_u64()) }
     }
 
@@ -403,7 +396,7 @@ impl PageTableEntry {
     /// # Safety
     ///
     /// This could fundamentally change memory, leading to unsoundness.
-    pub unsafe fn reset(&self) -> Option<(RawFrame, PageTableFlags)> {
+    pub unsafe fn reset(&self) -> Option<(Frame, PageTableFlags)> {
         unsafe { self.set_bits(0) }
     }
 

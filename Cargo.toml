@@ -1,11 +1,20 @@
 [workspace]
-members = ["os/kernel", "os/crates/*", "os/arch"]
+members = [
+  "os/kernel",
+  "os/crates/*",
+  "os/arch",
+  "os/userspace/init",
+  "os/qapi",
+]
 resolver = "2"
 
 [workspace.dependencies]
 arch = { path = "os/arch" }
 serial = { path = "os/crates/serial" }
 sync = { path = "os/crates/sync" }
+entry = { path = "os/crates/entry" }
+loader = { path = "os/crates/loader" }
+qapi = { path = "os/qapi" }
 
 uart_16550 = "0.3.0"
 log = "0.4.22"
@@ -14,6 +23,8 @@ derive_more = { version = "2.0.1", default-features = false, features = [
   "error",
   "from",
   "debug",
+  "deref",
+  "deref_mut",
 ] }
 
 [profile.dev]

@@ -42,7 +42,7 @@ fn init_idt() {
         Isr::register(&mut idt.hv_injection_exception, PanicHandler::<18>);
         // SAFETY: Stack indeces provided are valid and only used for the specific handlers.
         unsafe {
-            DivergingErrCodeIsr::register(&mut idt.double_fault, PanicHandler::<18>)
+            DivergingErrCodeIsr::register(&mut idt.double_fault, PanicHandler::<19>)
                 .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
             ErrCodeIsr::register_page_fault(&mut idt.page_fault, PanicHandler::<20>)
                 .set_stack_index(gdt::PAGE_FAULT_IST_INDEX);

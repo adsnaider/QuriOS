@@ -44,8 +44,15 @@ setup:
 	rm -rf {{build_dir}}
 	mkdir -p {{build_dir}}
 
-initrd:
-	cd {{build_dir}} && tar -H ustar -cf initrd.tar -T /dev/null
+init: setup
+	#!/usr/bin/env bash
+	set -euo pipefail
+	export RUSTFLAGS="-Clink-arg=-no-pie -Crelocation-model=static"
+	BIN=`cargo build -p init --profile {{profile}} --target {{target}} --message-format=json | {{extractor}}`
+	cp "$BIN" "{{build_dir}}/init"
+
+initrd: init
+	cd {{build_dir}} && tar -H ustar -cf initrd.tar init
 
 kernel: setup
 	#!/usr/bin/env bash
@@ -68,8 +75,7 @@ test-iso: limine build
 dbg_dir: setup
 	mkdir -p {{artifact_dir}}/debugger/
 	ln -sf ../{{profile}}/kernel {{artifact_dir}}/debugger
-	ln -sf ../{{profile}}/kernel_test {{artifact_dir}}/debugger
-	ln -sf ../{{profile}}/booter {{artifact_dir}}/debugger
+	ln -sf ../{{profile}}/init {{artifact_dir}}/debugger
 
 emulate: dbg_dir iso
 	@./go.sh 33 qemu-system-x86_64 \

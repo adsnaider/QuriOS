@@ -4,8 +4,8 @@ use core::mem::ManuallyDrop;
 use core::ops::Deref;
 use core::ptr::NonNull;
 
+use crate::pmo::{PhysAddrExt as _, VirtAddrExt};
 use crate::retyping::{AsUnusedKernelError, FrameExt, KernelFrame};
-use crate::util::{PhysAddrExt as _, VirtAddrExt};
 use arch::mem::{Frame, Page, VirtAddr};
 
 /// A "kernel" pointer to any page-aligned resource.
@@ -84,6 +84,12 @@ impl<T> KPtr<T> {
         let ptr = NonNull::new(pointer).unwrap();
         assert!(ptr.as_ptr() as usize % Page::SIZE == 0);
         Self { inner: ptr }
+    }
+
+    pub unsafe fn from_ptr_unchecked(value: NonNull<T>) -> Self {
+        let this = Self { inner: value };
+        this.frame().as_kernel_unchecked().into_raw();
+        this
     }
 
     pub fn frame(&self) -> Frame {

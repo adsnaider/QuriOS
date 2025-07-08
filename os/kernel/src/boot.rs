@@ -1,0 +1,237 @@
+//! Boot process initialization
+
+mod bump_alloc;
+
+use arch::{
+    exec::ExecState,
+    mem::{Addrspace, Frame, FrameAllocError, MapPageError, Page, PageFlags, VirtAddr},
+    KernelObject, System,
+};
+use bump_alloc::{BumpFrameAllocator, OutOfMemory};
+use core::mem::MaybeUninit;
+use core::ops::Range;
+use derive_more::{Display, Error, From};
+use qapi::{
+    init::{BootArgs, EntryFn, RetypeEntry},
+    types::CSlice,
+};
+
+use loader::{ElfError, Loader, LoaderError, MemFlags, Program, SegmentLoadError};
+
+use crate::{
+    kmem::KPtr,
+    pmo::PhysAddrExt as _,
+    retyping::{FrameExt, RetypeTable},
+    UNTYPED_MEMORY_OFFSET,
+};
+
+#[derive(Debug)]
+pub struct Process<S: System> {
+    pub exec: S::SysExec,
+    pub addrspace: KPtr<S::SysAddrspace>,
+}
+
+#[derive(Debug)]
+pub struct BootLoader<'a, A> {
+    address_space: &'a A,
+    fallocator: &'a mut BumpFrameAllocator,
+}
+
+#[derive(Debug, Error, Display, From)]
+pub enum LoadPageError {
+    AllocError(FrameAllocError),
+    MapError(MapPageError),
+    OutOfMemory(OutOfMemory),
+}
+
+#[derive(Debug, Error, Display, From)]
+pub enum LoadError {
+    ElfError(ElfError),
+    ElfSegmentLoadError(SegmentLoadError<LoadPageError>),
+    ElfSourceLoadError(LoaderError<LoadPageError>),
+}
+
+impl<A: Addrspace> BootLoader<'_, A> {
+    fn request_page(
+        &mut self,
+        page: Page,
+        rwx: MemFlags,
+    ) -> Result<&mut [MaybeUninit<u8>], LoadPageError> {
+        let pflags = rwx.into();
+        let frame = self.fallocator.alloc_user_frame()?.into_raw();
+        log::trace!("Mapping {page:?} to {frame:?} with {pflags:?}");
+        assert!(
+            page.base().is_lower_half(),
+            "All kernel memory should remain the same"
+        );
+        // SAFETY: We properly allocated an unused frame and the page will only be used on the loaded process.
+        unsafe {
+            self.address_space
+                .map_page(
+                    page,
+                    frame,
+                    pflags,
+                    // Parent flags are the least restrictive since they will be reused for many pages.
+                    PageFlags::all(),
+                    self.fallocator,
+                )?
+                .ignore();
+        }
+        Ok(unsafe {
+            core::slice::from_raw_parts_mut(frame.base().to_virtual().as_mut_ptr(), Page::SIZE)
+        })
+    }
+
+    fn map_page(
+        &mut self,
+        page: Page,
+        frame: Frame,
+        flags: PageFlags,
+    ) -> Result<(), LoadPageError> {
+        unsafe {
+            self.address_space
+                .map_page(
+                    page,
+                    frame,
+                    flags,
+                    // Parent flags are the least restrictive since they will be reused for many pages.
+                    PageFlags::all(),
+                    self.fallocator,
+                )?
+                .ignore();
+        }
+        Ok(())
+    }
+}
+
+impl<'a, A: Addrspace> Loader for BootLoader<'a, A> {
+    type Error = LoadPageError;
+    fn load_with<F>(
+        &mut self,
+        at: Range<usize>,
+        source: F,
+        rwx: MemFlags,
+    ) -> Result<(), Self::Error>
+    where
+        F: Fn(usize) -> MaybeUninit<u8>,
+    {
+        let mut offset = 0;
+        let start_page = at.start / Page::SIZE;
+        let end_page = at.end.div_ceil(Page::SIZE);
+        for page in start_page..end_page {
+            let page = Page::from_index(page).unwrap();
+            let dest = self.request_page(page, rwx)?;
+
+            let dest_range = ((at.start + offset) % Page::SIZE)..Page::SIZE;
+            let source_range = offset..at.len();
+
+            for (source_off, dest_off) in source_range.zip(dest_range) {
+                dest[dest_off] = source(source_off);
+                offset += 1;
+            }
+        }
+        Ok(())
+    }
+
+    unsafe fn unload(&mut self, _vrange: Range<usize>) {
+        unimplemented!()
+    }
+}
+impl<S: System> Process<S> {
+    pub fn load(
+        sys: &S,
+        program: &[u8],
+        stack_pages: usize,
+        initrd: &[u8],
+    ) -> Result<Self, LoadError> {
+        let mut fallocator = BumpFrameAllocator::new();
+        let untyped_memory_offset = UNTYPED_MEMORY_OFFSET;
+        let untyped_memory_length = Frame::memory_limit();
+        assert!(untyped_memory_offset % Page::SIZE == 0);
+        assert!(untyped_memory_length % Page::SIZE == 0);
+        assert!(untyped_memory_offset + untyped_memory_length < 0xFFFF_8000_0000_0000);
+        let program = Program::new(program)?;
+
+        let addrspace = unsafe {
+            KPtr::from_frame_unchecked(sys.addrspace().into_frame().as_kernel_unchecked())
+        };
+
+        let mut loader = BootLoader {
+            address_space: &*addrspace,
+            fallocator: &mut fallocator,
+        };
+        log::info!("Loading process headers");
+        let process = program.load(&mut loader)?;
+        log::debug!("Entry: {:X}", process.entry());
+
+        let stack_top = untyped_memory_offset;
+        let stack_bottom = untyped_memory_offset
+            .checked_sub(stack_pages * Page::SIZE)
+            .unwrap();
+        log::info!("Setting up stack pages at {:X?}", stack_bottom..stack_top);
+        loader
+            .load_zeroed(stack_bottom..stack_top, MemFlags::READ | MemFlags::WRITE)
+            .unwrap();
+
+        let untyped_pages = untyped_memory_length / Page::SIZE;
+        let untyped_start = Page::from_start_address(VirtAddr::new(untyped_memory_offset)).index();
+        log::info!("Setting up {untyped_pages} untyped pages at {untyped_memory_offset:X?}",);
+        for (frame, page) in (untyped_start..(untyped_start + untyped_pages)).enumerate() {
+            let page = Page::from_index(page).unwrap();
+            let frame = Frame::from_index(frame as u64).unwrap();
+            loader.map_page(page, frame, PageFlags::PRESENT).unwrap();
+        }
+
+        let retype_table_metadata = RetypeTable::memory_map_meta();
+        let memory_map_start = process.top_of_text().div_ceil(Page::SIZE) * Page::SIZE;
+        log::info!("Loading memory map at {:?}", memory_map_start as *const u8);
+        let mut memory_map_count = 0;
+        for frame in retype_table_metadata.frames {
+            let page = Page::from_start_address(VirtAddr::new(
+                memory_map_start + memory_map_count * Page::SIZE,
+            ));
+            log::debug!("Loading memory map at {page:?}");
+            loader
+                .map_page(page, frame, PageFlags::PRESENT | PageFlags::READABLE)
+                .unwrap();
+            memory_map_count += 1;
+        }
+        let memory_map_end = memory_map_start + memory_map_count * Page::SIZE;
+        assert!(memory_map_end % Page::SIZE == 0);
+        // And also pass through the initrd image
+        let initrd_start = memory_map_end;
+        let initrd_end = initrd_start + initrd.len();
+        log::info!("Loading initrd at {:?}", initrd_start as *const u8);
+        loader.load_source(initrd_start..initrd_end, initrd, MemFlags::READ)?;
+
+        let bootargs = BootArgs {
+            initrd: unsafe { CSlice::from_raw_parts(initrd_start as *const u8, initrd.len()) },
+            memory_map: unsafe {
+                CSlice::from_raw_parts(
+                    memory_map_start as *const RetypeEntry,
+                    retype_table_metadata.map.1,
+                )
+            },
+            free_space_start: initrd_end,
+        };
+        let bootargs_start = initrd_end.div_ceil(size_of::<BootArgs>()) * size_of::<BootArgs>();
+        let bootargs_end = bootargs_start + size_of::<BootArgs>();
+        log::info!(
+            "Loading boot arguments at {:?}",
+            bootargs_start as *const u8
+        );
+        loader.load_source(
+            bootargs_start..bootargs_end,
+            bootargs.as_bytes(),
+            MemFlags::READ,
+        )?;
+
+        let boot_fn: EntryFn = unsafe { core::mem::transmute(process.entry()) };
+
+        log::info!("Initialized user process");
+        Ok(Self {
+            addrspace,
+            exec: S::SysExec::for_entry(boot_fn, bootargs),
+        })
+    }
+}

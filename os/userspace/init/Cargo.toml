@@ -1,0 +1,16 @@
+[package]
+name = "init"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+path = "src/main.rs"
+name = "main"
+test = false
+
+[dependencies]
+entry.workspace = true
+qapi.workspace = true
+
+[lints]
+workspace = true

@@ -1,6 +1,4 @@
-use arch::mem::{PhysAddr, VirtAddr};
-
-use crate::PMO;
+use crate::mem::{PhysAddr, VirtAddr};
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
@@ -33,20 +31,5 @@ impl Pmo {
         // as SAFETY: pointer width is 64 bits.
         let paddr = addr.as_ptr::<()>() as u64 - self.base.as_ptr::<()>() as u64;
         PhysAddr::new(paddr)
-    }
-}
-
-#[extend::ext]
-pub impl VirtAddr {
-    unsafe fn to_physical(self) -> PhysAddr {
-        // SAFETY: Precondition
-        unsafe { PMO.virt_to_phys(self) }
-    }
-}
-
-#[extend::ext]
-pub impl PhysAddr {
-    fn to_virtual(self) -> VirtAddr {
-        PMO.phys_to_virt(self)
     }
 }

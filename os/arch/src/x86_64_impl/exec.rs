@@ -1,89 +1,87 @@
 //! x86-64 execution context.
 #![allow(unused)]
 
-use core::{arch::naked_asm, mem::MaybeUninit};
+use core::{arch::naked_asm, marker::PhantomData, mem::MaybeUninit};
 
-use crate::SysCtx;
+use x86_64::structures::idt::InterruptStackFrame;
+
+use crate::exec::ExecState;
 
 use super::gdt;
 
-/// Preserved state from a syscall
-pub struct SyscallCtx {
-    control_regs: ControlRegs,
-    preserved_regs: PreservedRegs,
+pub struct Exception;
+pub struct Interrupt;
+
+#[derive(Debug)]
+pub struct ExceptionCtx<Kind> {
+    stack_top: usize,
+    _kind: PhantomData<Kind>,
 }
 
-impl SyscallCtx {
-    /// Reads the syscall context from the stack
-    ///
-    /// # Safety
-    ///
-    /// Must be currently handling a syscall
-    pub unsafe fn current() -> Self {
-        let stack_end: *mut u64 = gdt::interrupt_stack_end().as_mut_ptr();
-        let mut preserved: MaybeUninit<PreservedRegs> = MaybeUninit::uninit();
-        // SAFETY: The precondition guarantees that preserved registers will be pushed to the stack.
-        unsafe {
-            core::ptr::copy_nonoverlapping(
-                stack_end.sub(11) as *const PreservedRegs,
-                preserved.as_mut_ptr(),
-                1,
-            );
-        }
+impl<Kind> ExceptionCtx<Kind> {
+    pub unsafe fn new(stack_top: usize) -> Self {
         Self {
-            // SAFETY: We are currently executing a syscall by precondition
-            control_regs: unsafe { Self::current_control() },
-            // SAFETY: We are currently executing a syscall by precondition
-            preserved_regs: unsafe { preserved.assume_init() },
+            stack_top,
+            _kind: PhantomData,
         }
     }
 
-    pub unsafe fn current_control() -> ControlRegs {
-        let (rsp, rflags, rip);
-        // SAFETY: We are currently executing a syscall by precondition
-        unsafe {
-            let stack_end: *mut u64 = gdt::interrupt_stack_end().as_mut_ptr();
-            rsp = *stack_end.sub(2);
-            rflags = *stack_end.sub(3);
-            rip = *stack_end.sub(5);
-        }
-        ControlRegs { rflags, rsp, rip }
-    }
-
-    /// Updates the rflags register on this syscall.
-    ///
-    /// Note that this will update the rflags iff the syscall returns normally (i.e. no
-    /// thread dispatching).
-    ///
-    /// # Safety
-    ///
-    /// Must be currently handling a syscall.
-    pub unsafe fn update_flags(flags: u64) {
-        let stack_end: *mut u64 = gdt::interrupt_stack_end().as_mut_ptr();
-        // SAFETY: We are currently executing a syscall by precondition
-        unsafe {
-            *stack_end.sub(3) = flags;
-        }
-    }
-
-    /// Gets the rflags registers (as it was before the syscall).
-    ///
-    /// # Safety
-    ///
-    /// Must be currently handling a syscall.
-    pub unsafe fn get_flags() -> u64 {
-        let stack_end: *mut u64 = gdt::interrupt_stack_end().as_mut_ptr();
-        // SAFETY: We are currently executing a syscall by precondition
-        unsafe { *stack_end.sub(3) }
+    pub fn interrupt_stack_frame(&self) -> InterruptStackFrame {
+        todo!();
     }
 }
 
-impl SysCtx for SyscallCtx {}
+impl ExceptionCtx<Exception> {
+    pub fn preserved_regs(&self) -> PreservedRegs {
+        todo!();
+    }
+
+    pub fn scratch_regs(&self) -> ScratchRegs {
+        todo!();
+    }
+
+    pub fn current_control(&self) -> ControlRegs {
+        todo!();
+    }
+
+    pub fn error_code(&self) -> u64 {
+        todo!();
+    }
+}
+
+impl ExceptionCtx<Interrupt> {
+    pub fn preserved_regs(&self) -> PreservedRegs {
+        todo!();
+    }
+
+    pub fn scratch_regs(&self) -> ScratchRegs {
+        todo!();
+    }
+
+    pub fn current_control(&self) -> ControlRegs {
+        todo!();
+    }
+}
 
 /// Execution context that can be dispatched.
 #[repr(C)]
+#[derive(Debug, Copy, Clone)]
 pub struct ExecCtx {
     regs: Regs,
+}
+
+impl ExecState for ExecCtx {
+    fn save(&self) {
+        todo!()
+    }
+
+    fn dispatch(&self) -> ! {
+        todo!()
+    }
+
+    fn for_entry(entry_fun: qapi::init::EntryFn, args: qapi::init::BootArgs) -> Self {
+        todo!()
+    }
 }
 
 impl ExecCtx {

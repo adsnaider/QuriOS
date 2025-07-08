@@ -8,8 +8,8 @@ use derive_more::{Display, Error, From};
 use limine::memory_map::{Entry, EntryType};
 use sync::cell::{AtomicOnceCell, OnceError};
 
+use crate::pmo::{PhysAddrExt as _, VirtAddrExt as _};
 use crate::retyping::bump_alloc::BumpAllocator;
-use crate::util::{PhysAddrExt as _, VirtAddrExt as _};
 
 pub type MemoryMap = &'static mut [&'static mut Entry];
 static RETYPE_TABLE: AtomicOnceCell<RetypeTable> = AtomicOnceCell::new();
@@ -19,7 +19,9 @@ pub struct RetypeTable {
 }
 
 pub struct RetypeMetadata<I: IntoIterator<Item = Frame>> {
+    /// The actual pointer and length that encompases the retype table.
     pub map: (*const RetypeEntry, usize),
+    /// An iterator over the frames that make up the map.
     pub frames: I,
 }
 
@@ -35,10 +37,10 @@ pub enum RetypeInitError {
 impl RetypeTable {
     pub fn memory_map_meta() -> RetypeMetadata<impl IntoIterator<Item = Frame>> {
         let mem = RETYPE_TABLE.get().unwrap().retype_map.as_ptr_range();
-        // SAFETY: Memory map regions are mapped to limine's HHDM
+        // SAFETY: HHDM was used to construct the retype table originally.
         let start =
             Frame::from_start_address(unsafe { VirtAddr::new(mem.start.addr()).to_physical() });
-        // SAFETY: Memory map regions are mapped to limine's HHDM
+        // SAFETY: HHDM was used to construct the retype table originally.
         let end = Frame::within_frame(unsafe { VirtAddr::new(mem.end.addr()).to_physical() });
         let iter = core::iter::successors(Some(start), move |prev| {
             let next = prev.next();

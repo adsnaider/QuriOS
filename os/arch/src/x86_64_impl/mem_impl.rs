@@ -1,3 +1,5 @@
+pub mod page_table;
+
 use crate::mem::{Frame, Page};
 
 impl Page {

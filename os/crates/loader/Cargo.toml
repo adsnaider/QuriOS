@@ -1,0 +1,17 @@
+[package]
+name = "loader"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bitflags = "2.9.1"
+derive_more.workspace = true
+log.workspace = true
+
+[target.'cfg(target_arch = "x86_64")'.dependencies.goblin]
+version = "0.10.0"
+default-features = false
+features = ["elf64"]
+
+[lints]
+workspace = true

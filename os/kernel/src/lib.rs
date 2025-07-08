@@ -2,11 +2,18 @@
 
 pub mod comp;
 pub mod kmem;
+pub mod pmo;
 pub mod retyping;
 pub mod thread;
-pub(crate) mod util;
 
-use arch::mem::VirtAddr;
+mod boot;
+
+use arch::{
+    exec::ExecState,
+    mem::{Addrspace as _, Pmo, VirtAddr},
+    system,
+};
+use boot::Process;
 use limine::{
     request::{HhdmRequest, MemoryMapRequest, ModuleRequest, StackSizeRequest},
     BaseRevision,
@@ -14,7 +21,6 @@ use limine::{
 use sync::{cell::AtomicLazyCell, singleton::Singleton};
 use tap::TapFallible;
 use tar_no_std::TarArchiveRef;
-use util::Pmo;
 
 static BASE_REVISION: BaseRevision = BaseRevision::new();
 static MEMORY_MAP: Singleton<MemoryMapRequest> = Singleton::new(MemoryMapRequest::new());
@@ -31,6 +37,7 @@ static PMO: AtomicLazyCell<Pmo> = AtomicLazyCell::new(|| {
     unsafe { Pmo::new(VirtAddr::new(pmo as usize)) }
 });
 static MODULES_REQUEST: ModuleRequest = ModuleRequest::new();
+pub const UNTYPED_MEMORY_OFFSET: usize = 0x0000_7000_0000_0000;
 
 pub fn kinit() {
     serial::init();
@@ -38,7 +45,7 @@ pub fn kinit() {
     STACK_SIZE
         .get_response()
         .expect("Limine stack size response missing");
-    arch::init();
+    arch::init(*PMO.get());
 
     let memory_map: &'static mut MemoryMapRequest = MEMORY_MAP
         .take_ref_mut()
@@ -65,7 +72,7 @@ pub fn uinit() -> ! {
     log::info!("Loaded init image");
 
     let archive = TarArchiveRef::new(initrd).expect("Invalid initrd image");
-    let _proc = archive
+    let proc = archive
         .entries()
         .filter_map(|e| {
             e.filename()
@@ -79,5 +86,7 @@ pub fn uinit() -> ! {
         .data();
 
     log::info!("Found init image. Loading userspace process");
-    todo!();
+    let init = Process::load(system(), proc, 10, initrd).expect("Error loading init process");
+    init.addrspace.activate();
+    init.exec.dispatch();
 }
