@@ -1,89 +1,177 @@
 mod asm_utils;
+use core::{arch::naked_asm, convert::Infallible};
+
 use asm_utils::{pop_scratch, push_scratch};
-
-use core::arch::naked_asm;
-
+use sealed::sealed;
 use x86_64::structures::idt::{
     DivergingHandlerFunc, DivergingHandlerFuncWithErrCode, Entry, EntryOptions, HandlerFunc,
-    HandlerFuncWithErrCode, InterruptStackFrame, PageFaultHandlerFunc,
+    HandlerFuncWithErrCode, PageFaultHandlerFunc,
 };
 
-use crate::x86_64_impl::exec::{ExceptionCtx, Interrupt};
+use crate::x86_64_impl::exec::{Exception, ExceptionCtx, Interrupt};
 
-pub trait Isr: Sized {
-    extern "sysv64" fn call(frame: &InterruptStackFrame);
-    fn register_interrupt<F>(entry: &mut Entry<HandlerFunc>, handler: F) -> &mut EntryOptions
+pub trait IsrHandler<Kind, Ret> {
+    extern "sysv64" fn call(_ctx: ExceptionCtx<Kind>) -> Ret {
+        unimplemented!();
+    }
+}
+
+pub unsafe trait Isr: Sized {
+    type Kind;
+    type Ret;
+
+    fn register<H>(&mut self, handler: H) -> &mut EntryOptions
     where
-        F: Fn(ExceptionCtx<Interrupt>) + Zst,
+        H: IsrHandler<Self::Kind, Self::Ret> + Zst;
+}
+
+unsafe impl Isr for Entry<HandlerFunc> {
+    type Kind = Interrupt;
+    type Ret = ();
+
+    fn register<H>(&mut self, _handler: H) -> &mut EntryOptions
+    where
+        H: IsrHandler<Self::Kind, Self::Ret> + Zst,
     {
-        F::verify_zst();
-        // SAFETY: Handler matches the expected handler kind (error code vs not)
-        unsafe { entry.set_handler_addr(x86_64::VirtAddr::from_ptr(isr::<F> as *const ())) }
-    }
-}
-
-pub trait DivergingIsr: Sized {
-    extern "sysv64" fn call(frame: &InterruptStackFrame) -> !;
-    fn register(entry: &mut Entry<DivergingHandlerFunc>, _isr: Self) -> &mut EntryOptions {
-        // SAFETY: Handler matches the expected handler kind (error code vs not)
+        H::verify_zst();
         unsafe {
-            entry.set_handler_addr(x86_64::VirtAddr::from_ptr(
-                diverging_isr::<Self> as *const (),
+            self.set_handler_addr(x86_64::VirtAddr::from_ptr(
+                save_all_and_ret_isr::<H> as *const (),
             ))
         }
     }
 }
 
-pub trait ErrCodeIsr: Sized {
-    extern "sysv64" fn call(frame: &InterruptStackFrame, code: u64);
+unsafe impl Isr for Entry<HandlerFuncWithErrCode> {
+    type Kind = Exception;
+    type Ret = ();
 
-    fn register(entry: &mut Entry<HandlerFuncWithErrCode>, _isr: Self) -> &mut EntryOptions {
-        // SAFETY: Handler matches the expected handler kind (error code vs not)
+    fn register<H>(&mut self, _handler: H) -> &mut EntryOptions
+    where
+        H: IsrHandler<Self::Kind, Self::Ret> + Zst,
+    {
+        H::verify_zst();
         unsafe {
-            entry.set_handler_addr(x86_64::VirtAddr::from_ptr(
-                isr_with_err_code::<Self> as *const (),
-            ))
-        }
-    }
-    fn register_page_fault(
-        entry: &mut Entry<PageFaultHandlerFunc>,
-        _isr: Self,
-    ) -> &mut EntryOptions {
-        // SAFETY: Handler matches the expected handler kind (error code vs not)
-        unsafe {
-            entry.set_handler_addr(x86_64::VirtAddr::from_ptr(
-                isr_with_err_code::<Self> as *const (),
+            self.set_handler_addr(x86_64::VirtAddr::from_ptr(
+                save_all_with_err_code_and_ret_isr::<H> as *const (),
             ))
         }
     }
 }
 
-pub trait DivergingErrCodeIsr: Sized {
-    extern "sysv64" fn call(frame: &InterruptStackFrame, code: u64) -> !;
-    fn register(
-        entry: &mut Entry<DivergingHandlerFuncWithErrCode>,
-        _isr: Self,
-    ) -> &mut EntryOptions {
-        // SAFETY: Handler matches the expected handler kind (error code vs not)
+unsafe impl Isr for Entry<PageFaultHandlerFunc> {
+    type Kind = Exception;
+    type Ret = ();
+
+    fn register<H>(&mut self, _handler: H) -> &mut EntryOptions
+    where
+        H: IsrHandler<Self::Kind, Self::Ret> + Zst,
+    {
+        H::verify_zst();
         unsafe {
-            entry.set_handler_addr(x86_64::VirtAddr::from_ptr(
-                diverging_isr_with_err_code::<Self> as *const (),
+            self.set_handler_addr(x86_64::VirtAddr::from_ptr(
+                save_all_with_err_code_and_ret_isr::<H> as *const (),
             ))
         }
+    }
+}
+
+unsafe impl Isr for Entry<DivergingHandlerFunc> {
+    type Kind = Interrupt;
+    type Ret = Infallible;
+
+    fn register<H>(&mut self, _handler: H) -> &mut EntryOptions
+    where
+        H: IsrHandler<Self::Kind, Self::Ret> + Zst,
+    {
+        H::verify_zst();
+        unsafe {
+            self.set_handler_addr(x86_64::VirtAddr::from_ptr(
+                save_some_and_diverge_isr::<H> as *const (),
+            ))
+        }
+    }
+}
+
+unsafe impl Isr for Entry<DivergingHandlerFuncWithErrCode> {
+    type Kind = Exception;
+    type Ret = Infallible;
+
+    fn register<H>(&mut self, _handler: H) -> &mut EntryOptions
+    where
+        H: IsrHandler<Self::Kind, Self::Ret> + Zst,
+    {
+        H::verify_zst();
+        unsafe {
+            self.set_handler_addr(x86_64::VirtAddr::from_ptr(
+                save_some_with_err_code_and_diverge_isr::<H> as *const (),
+            ))
+        }
+    }
+}
+
+impl<F, Kind, Ret> IsrHandler<Kind, Ret> for F
+where
+    F: Fn(ExceptionCtx<Kind>) -> Ret,
+{
+    extern "sysv64" fn call(_ctx: ExceptionCtx<Kind>) -> Ret {
+        core::unimplemented!();
+    }
+}
+
+pub struct PanicHandler<const ID: usize>;
+impl<const ID: usize, Kind, Ret> IsrHandler<Kind, Ret> for PanicHandler<ID> {
+    extern "sysv64" fn call(ctx: ExceptionCtx<Kind>) -> Ret {
+        let interrupt_stack = ctx.interrupt_stack_frame();
+        panic!("Unhandled exception ({ID}) {interrupt_stack:#?}");
     }
 }
 
 // SAFETY: Not actually extern "C". This is more of a x86_interrupt abi
 #[unsafe(naked)]
-extern "C" fn isr<F: Fn(ExceptionCtx<Interrupt>)>() {
+extern "C" fn save_all_and_ret_isr<F: IsrHandler<Interrupt, ()>>() {
     #[allow(unused_unsafe)]
     // SAFETY: Sticking with ISR calling convention. Preserved registers are pushed on
     // call to sysv64 ABI.
     unsafe {
-        naked_asm!(push_scratch!(), "lea rdi, [rsp + 8*9]", "call {inner}", pop_scratch!(), "iretq", inner = sym I::call);
+        naked_asm!(push_scratch!(), "lea rdi, [rsp + 8*9]", "call {inner}", pop_scratch!(), "iretq", inner = sym F::call);
     }
 }
 
+// SAFETY: Not actually extern "C". This is more of a x86_interrupt abi
+#[unsafe(naked)]
+extern "C" fn save_all_with_err_code_and_ret_isr<F: IsrHandler<Exception, ()>>() {
+    #[allow(unused_unsafe)]
+    // SAFETY: Sticking with ISR calling convention. Preserved registers are pushed on
+    // call to sysv64 ABI.
+    unsafe {
+        naked_asm!(push_scratch!(), "sub rsp, 8", "lea rdi, [rsp + 8*11]", "call {inner}", "add rsp, 8", pop_scratch!(), "iretq", inner = sym F::call);
+    }
+}
+
+// SAFETY: Not actually extern "C". This is more of a x86_interrupt abi
+#[unsafe(naked)]
+extern "C" fn save_some_and_diverge_isr<F: IsrHandler<Interrupt, Infallible>>() {
+    #[allow(unused_unsafe)]
+    // SAFETY: Sticking with ISR calling convention. Preserved registers are pushed on
+    // call to sysv64 ABI.
+    unsafe {
+        naked_asm!("sub rsp, 8", "lea rdi, [rsp + 8]", "call {inner}", "ud2", inner = sym F::call);
+    }
+}
+
+// SAFETY: Not actually extern "C". This is more of a x86_interrupt abi
+#[unsafe(naked)]
+extern "C" fn save_some_with_err_code_and_diverge_isr<F: IsrHandler<Exception, Infallible>>() {
+    #[allow(unused_unsafe)]
+    // SAFETY: Sticking with ISR calling convention. Preserved registers are pushed on
+    // call to sysv64 ABI.
+    unsafe {
+        naked_asm!("lea rdi, [rsp]", "call {inner}", "ud2", inner = sym F::call);
+    }
+}
+
+/*
 #[unsafe(naked)]
 extern "C" fn diverging_isr<I: DivergingIsr>() {
     #[allow(unused_unsafe)]
@@ -156,8 +244,9 @@ where
         }
     }
 }
+*/
 
-trait Zst: Sized {
+pub trait Zst: Sized {
     const ZST: () = const { assert!(core::mem::size_of::<Self>() == 0, "Type is not zero-sized") };
     fn verify_zst() {
         let () = Self::ZST;

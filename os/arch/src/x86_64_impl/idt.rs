@@ -1,8 +1,10 @@
 mod handlers;
 
-use handlers::{DivergingErrCodeIsr, DivergingIsr, ErrCodeIsr, Isr, PanicHandler};
+use handlers::{Isr, PanicHandler};
 use sync::cell::AtomicLazyCell;
-use x86_64::{PrivilegeLevel, structures::idt::InterruptDescriptorTable};
+use x86_64::{
+    PrivilegeLevel, instructions::interrupts::int3, structures::idt::InterruptDescriptorTable,
+};
 
 use crate::x86_64_impl::gdt;
 
@@ -19,35 +21,38 @@ fn init_idt() {
     static IDT: AtomicLazyCell<InterruptDescriptorTable> = AtomicLazyCell::new(|| {
         let mut idt = InterruptDescriptorTable::new();
         // Exceptions.
-        Isr::register(&mut idt.breakpoint, PanicHandler::<0>);
-        ErrCodeIsr::register(&mut idt.general_protection_fault, PanicHandler::<1>);
-        Isr::register(&mut idt.overflow, PanicHandler::<2>);
-        Isr::register(&mut idt.divide_error, PanicHandler::<3>);
-        Isr::register(&mut idt.non_maskable_interrupt, PanicHandler::<2>);
-        Isr::register(&mut idt.bound_range_exceeded, PanicHandler::<3>);
-        Isr::register(&mut idt.debug, PanicHandler::<4>);
-        Isr::register(&mut idt.invalid_opcode, PanicHandler::<5>);
-        Isr::register(&mut idt.device_not_available, PanicHandler::<6>);
-        ErrCodeIsr::register(&mut idt.invalid_tss, PanicHandler::<7>);
-        ErrCodeIsr::register(&mut idt.segment_not_present, PanicHandler::<8>);
-        ErrCodeIsr::register(&mut idt.stack_segment_fault, PanicHandler::<9>);
-        Isr::register(&mut idt.x87_floating_point, PanicHandler::<10>);
-        ErrCodeIsr::register(&mut idt.alignment_check, PanicHandler::<11>);
-        DivergingIsr::register(&mut idt.machine_check, PanicHandler::<12>);
-        Isr::register(&mut idt.simd_floating_point, PanicHandler::<13>);
-        Isr::register(&mut idt.virtualization, PanicHandler::<14>);
-        ErrCodeIsr::register(&mut idt.vmm_communication_exception, PanicHandler::<15>);
-        ErrCodeIsr::register(&mut idt.security_exception, PanicHandler::<16>);
-        ErrCodeIsr::register(&mut idt.cp_protection_exception, PanicHandler::<17>);
-        Isr::register(&mut idt.hv_injection_exception, PanicHandler::<18>);
+        idt.breakpoint.register(PanicHandler::<0>);
+        idt.general_protection_fault.register(PanicHandler::<1>);
+        idt.overflow.register(PanicHandler::<2>);
+        idt.divide_error.register(PanicHandler::<3>);
+        idt.non_maskable_interrupt.register(PanicHandler::<2>);
+        idt.bound_range_exceeded.register(PanicHandler::<3>);
+        idt.debug.register(PanicHandler::<4>);
+        idt.invalid_opcode.register(PanicHandler::<5>);
+        idt.device_not_available.register(PanicHandler::<6>);
+        idt.invalid_tss.register(PanicHandler::<7>);
+        idt.segment_not_present.register(PanicHandler::<8>);
+        idt.stack_segment_fault.register(PanicHandler::<9>);
+        idt.x87_floating_point.register(PanicHandler::<10>);
+        idt.alignment_check.register(PanicHandler::<11>);
+        idt.machine_check.register(PanicHandler::<12>);
+        idt.simd_floating_point.register(PanicHandler::<13>);
+        idt.virtualization.register(PanicHandler::<14>);
+        idt.vmm_communication_exception.register(PanicHandler::<15>);
+        idt.security_exception.register(PanicHandler::<16>);
+        idt.cp_protection_exception.register(PanicHandler::<17>);
+        idt.hv_injection_exception.register(PanicHandler::<18>);
         // SAFETY: Stack indeces provided are valid and only used for the specific handlers.
         unsafe {
-            DivergingErrCodeIsr::register(&mut idt.double_fault, PanicHandler::<19>)
+            idt.double_fault
+                .register(PanicHandler::<19>)
                 .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
-            ErrCodeIsr::register_page_fault(&mut idt.page_fault, PanicHandler::<20>)
+            idt.page_fault
+                .register(PanicHandler::<20>)
                 .set_stack_index(gdt::PAGE_FAULT_IST_INDEX);
         }
-        Isr::register(&mut idt[SYSCALL_INT], PanicHandler::<21>)
+        idt[SYSCALL_INT]
+            .register(PanicHandler::<21>)
             .set_privilege_level(PrivilegeLevel::Ring3);
         idt
     });

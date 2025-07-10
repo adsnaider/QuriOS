@@ -1,9 +1,13 @@
 //! x86-64 execution context.
 #![allow(unused)]
 
-use core::{arch::naked_asm, marker::PhantomData, mem::MaybeUninit};
+use core::{arch::naked_asm, convert::Infallible, marker::PhantomData, mem::MaybeUninit};
 
-use x86_64::structures::idt::InterruptStackFrame;
+use sealed::sealed;
+use x86_64::structures::idt::{
+    DivergingHandlerFunc, DivergingHandlerFuncWithErrCode, Entry, HandlerFunc,
+    HandlerFuncWithErrCode, InterruptStackFrame, PageFaultHandlerFunc,
+};
 
 use crate::exec::ExecState;
 
@@ -13,21 +17,28 @@ pub struct Exception;
 pub struct Interrupt;
 
 #[derive(Debug)]
+#[repr(transparent)]
 pub struct ExceptionCtx<Kind> {
-    stack_top: usize,
+    stack_top: u64,
     _kind: PhantomData<Kind>,
 }
 
 impl<Kind> ExceptionCtx<Kind> {
-    pub unsafe fn new(stack_top: usize) -> Self {
+    /// # Safety
+    ///
+    /// The stack_top must refer to the RSP register after the
+    /// InterruptStackFrame is loaded (but before any error code or registers)
+    pub unsafe fn new(stack_top: u64) -> Self {
         Self {
             stack_top,
             _kind: PhantomData,
         }
     }
 
+    /// Returns the interrupt stack frame for this ISR
     pub fn interrupt_stack_frame(&self) -> InterruptStackFrame {
-        todo!();
+        // SAFETY: We can assume the stack_top is valid as it was created with unsafe code to guarantee that.
+        unsafe { core::ptr::read(self.stack_top as usize as *const InterruptStackFrame) }
     }
 }
 

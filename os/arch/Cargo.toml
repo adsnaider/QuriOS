@@ -11,6 +11,7 @@ extend = "1.2.0"
 loader.workspace = true
 log.workspace = true
 qapi.workspace = true
+sealed.workspace = true
 sync.workspace = true
 
 [lints]
