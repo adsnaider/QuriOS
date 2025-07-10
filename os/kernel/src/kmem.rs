@@ -86,6 +86,9 @@ impl<T> KPtr<T> {
         Self { inner: ptr }
     }
 
+    /// # Safety
+    ///
+    /// Pointer must be a valid kernel struct originally constructed as a KPtr
     pub unsafe fn from_ptr_unchecked(value: NonNull<T>) -> Self {
         let this = Self { inner: value };
         this.frame().as_kernel_unchecked().into_raw();

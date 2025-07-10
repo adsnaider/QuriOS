@@ -50,6 +50,13 @@ impl<T> core::fmt::Debug for CSlice<'_, T> {
 }
 
 impl<'a, T> CSlice<'a, T> {
+    /// Constructs a CSlice from the provided pointer and length
+    ///
+    /// # Safety
+    ///
+    /// The pointer and length must denote a valid slice and the lifetime
+    /// created must be strictly smaller or equal to the lifetime of the underlying
+    /// data
     pub unsafe fn from_raw_parts(ptr: *const T, length: usize) -> Self {
         Self {
             ptr: OrphanPtr::new(ptr),
@@ -59,6 +66,7 @@ impl<'a, T> CSlice<'a, T> {
     }
 
     pub fn from_slice(s: &'a [T]) -> Self {
+        // SAFETY: Slice is valid
         unsafe { Self::from_raw_parts(s.as_ptr(), s.len()) }
     }
 
@@ -70,7 +78,12 @@ impl<'a, T> CSlice<'a, T> {
         self.length
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.length == 0
+    }
+
     pub fn into_slice(self) -> &'a [T] {
+        // SAFETY: CSlice must be valid from precondition at construction
         unsafe { core::slice::from_raw_parts(self.ptr(), self.len()) }
     }
 }

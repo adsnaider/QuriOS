@@ -19,4 +19,5 @@ impl BootArgs {
 }
 
 #[derive(Debug)]
+#[repr(transparent)]
 pub struct RetypeEntry(AtomicU16);

@@ -21,7 +21,8 @@ unsafe impl System for Sys {
     type SysExec = ExecCtx;
 
     fn addrspace(&self) -> Self::SysAddrspace {
-        unsafe { X64Addrspace::current(self.pmo) }
+        // SAFETY: PMO is correct from initialization
+        X64Addrspace::current(self.pmo)
     }
 }
 

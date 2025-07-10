@@ -1,7 +1,7 @@
 use arch::mem::{Frame, FrameAllocError, FrameAllocator, PhysAddr};
 use derive_more::{Display, Error};
 
-use crate::retyping::{AsTypeError, FrameExt as _, KernelFrame, RetypeError, UserFrame};
+use crate::retyping::{AsTypeError, FrameExt, KernelFrame, UserFrame};
 
 #[derive(Debug)]
 pub struct BumpFrameAllocator {
@@ -25,13 +25,8 @@ impl BumpFrameAllocator {
 
     pub fn alloc_user_frame(&mut self) -> Result<UserFrame, OutOfMemory> {
         loop {
-            let frame = self.next_available();
-            self.index += 1;
-            log::trace!("Trying to allocate user frame: {frame:?}");
-            match frame.try_into_user() {
-                Ok(frame) => return Ok(frame),
-                Err(RetypeError::OutOfBounds(_)) => return Err(OutOfMemory),
-                Err(e) => log::trace!("Err: {e:?}"),
+            if let Ok(frame) = self.alloc_untyped_frame()?.try_into_user() {
+                return Ok(frame);
             }
         }
     }
@@ -51,13 +46,8 @@ impl BumpFrameAllocator {
 
     pub fn alloc_kernel_frame(&mut self) -> Result<KernelFrame, OutOfMemory> {
         loop {
-            let frame = self.next_available();
-            self.index += 1;
-            log::trace!("Trying to allocate kernel frame: {frame:?}");
-            match frame.try_into_kernel() {
-                Ok(frame) => return Ok(frame),
-                Err(RetypeError::OutOfBounds(_)) => return Err(OutOfMemory),
-                Err(e) => log::trace!("Err: {e:?}"),
+            if let Ok(frame) = self.alloc_untyped_frame()?.try_into_kernel() {
+                return Ok(frame);
             }
         }
     }

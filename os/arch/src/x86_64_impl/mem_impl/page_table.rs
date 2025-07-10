@@ -1,3 +1,4 @@
+#![allow(unused)]
 use core::sync::atomic::{AtomicU64, Ordering};
 
 use x86_64::{
@@ -20,31 +21,39 @@ pub struct X64Addrspace {
 }
 
 impl X64Addrspace {
+    /// Constructs a new addrspace with all the kernel pages mapped into it
+    ///
+    /// # Safety
+    ///
+    /// The provided l4_frame must be guranteed to not be used outside for anything else.
+    /// It's reasonable to have multiple threads with a reference to the same addrspace but
+    /// the frame must not be reused/recycled until all addrspaces are dropped and the current
+    /// active addrspace is not one of them.
     pub unsafe fn new_with_kernel_entries(l4_frame: Frame, pmo: Pmo) -> Self {
-        let current = unsafe { Self::current(pmo) };
+        let current = Self::current(pmo);
         let mut new_l4 = AnyPageTable::new();
         for i in 256..512 {
             let offset = PageTableOffset::new(i).unwrap();
-            unsafe {
-                if let Some((frame, flags)) = current.l4_table().get(offset).get() {
-                    log::debug!("Mapping kernel map: {frame:?}, {flags:?}");
+            if let Some((frame, flags)) = current.l4_table().get(offset).get() {
+                log::debug!("Mapping kernel map: {frame:?}, {flags:?}");
+                // SAFETY: Mapping kernel pages from the original addrspace is reasonable
+                unsafe {
                     new_l4.map_mut(offset, frame, flags);
                 }
             }
         }
+        // SAFETY: We have exclusive access to the frame as we are initializaing it.
         unsafe { core::ptr::write(pmo.phys_to_virt(l4_frame.addr()).as_mut_ptr(), new_l4) };
         Self { l4_frame, pmo }
     }
 
     fn l4_table(&self) -> &AnyPageTable {
         let addr = self.pmo.phys_to_virt(self.l4_frame.addr()).as_ptr();
+        // SAFETY: As long as this addrspace is valid, the frame is guaranteed to not be freed up.
         unsafe { &*addr }
     }
 
-    /// # Safety
-    ///
-    /// The PMO must be correct
-    pub unsafe fn current(pmo: Pmo) -> Self {
+    pub fn current(pmo: Pmo) -> Self {
         let frame = Self::current_raw();
         Self {
             pmo,
@@ -60,12 +69,14 @@ impl X64Addrspace {
 
 impl From<Frame> for PhysFrame {
     fn from(value: Frame) -> Self {
+        // SAFETY: Transparent representation
         unsafe { core::mem::transmute(value) }
     }
 }
 
 impl From<VirtAddr> for x86_64::VirtAddr {
     fn from(value: VirtAddr) -> Self {
+        // SAFETY: Transparent representation
         unsafe { core::mem::transmute(value) }
     }
 }
@@ -124,17 +135,22 @@ impl Addrspace for X64Addrspace {
                     if flags.contains(PageTableFlags::HUGE_PAGE) {
                         return Err(MapPageError::HugeParentEntry);
                     }
+                    // SAFETY: All mapped entries that contain a frame will have a valid page table frame
                     table = unsafe { &*self.pmo.phys_to_virt(frame.base()).as_ptr() };
                 }
                 None => {
                     if current_level.is_bottom() {
+                        // SAFETY: Function precondition
                         unsafe { entry.set(frame, flags) };
                     } else {
                         let frame = alloc.alloc_kernel_frame()?;
                         let addr: *mut AnyPageTable =
                             self.pmo.phys_to_virt(frame.base()).as_mut_ptr();
+                        // SAFETY: The address is valid and we have ownership (as it was just allocated)
                         unsafe { addr.write(AnyPageTable::new()) };
+                        // SAFETY: addr contains a valid AnyPageTable.
                         table = unsafe { &*addr };
+                        // SAFETY: It's okay to use the unused frrame for a new page table.
                         unsafe { entry.set(frame, parent_flags | PageTableFlags::PRESENT) };
                     }
                 }
@@ -149,12 +165,9 @@ impl Addrspace for X64Addrspace {
 
     fn activate(&self) {
         let (frame, flags) = Cr3::read();
-        let this_frame = unsafe {
-            self.pmo
-                .virt_to_phys(VirtAddr::new((self as *const Self).addr()))
-        };
-        let this_frame = Frame::from_start_address(this_frame).into();
+        let this_frame = self.l4_frame.into();
         if frame != this_frame {
+            // SAFETY: Precondition for creating the Addrspace is that it remains valid.
             unsafe { Cr3::write(this_frame, flags) };
         }
     }
@@ -231,7 +244,8 @@ impl AnyPageTable {
         frame: Frame,
         attributes: PageTableFlags,
     ) -> Option<(Frame, PageTableFlags)> {
-        self.get(offset).set(frame, attributes)
+        // SAFETY: Precondition
+        unsafe { self.get(offset).set(frame, attributes) }
     }
 
     pub unsafe fn map_mut(
@@ -240,7 +254,8 @@ impl AnyPageTable {
         frame: Frame,
         attributes: PageTableFlags,
     ) -> Option<(Frame, PageTableFlags)> {
-        self.get_mut(offset).set_mut(frame, attributes)
+        // SAFETY: Precondition
+        unsafe { self.get_mut(offset).set_mut(frame, attributes) }
     }
 
     /// Atomically sets the frame and attributes on the page table offset provided if none present
@@ -255,7 +270,8 @@ impl AnyPageTable {
         frame: Frame,
         attributes: PageTableFlags,
     ) -> Result<(), (Frame, PageTableFlags)> {
-        self.get(offset).try_set(frame, attributes)
+        // SAFETY: Precondition
+        unsafe { self.get(offset).try_set(frame, attributes) }
     }
 
     /// Atomically unamps the entry (leaving it available for use again).
@@ -265,7 +281,8 @@ impl AnyPageTable {
     /// This is one of those methods that fundamentally change memory and can cause undefined
     /// behaviour even when the usage is semantically reasonable.
     pub unsafe fn unmap(&self, offset: PageTableOffset) -> Option<(Frame, PageTableFlags)> {
-        self.get(offset).reset()
+        // SAFETY: Precondition
+        unsafe { self.get(offset).reset() }
     }
 
     /// Atomically sets the flags on the provided entry.
@@ -284,7 +301,8 @@ impl AnyPageTable {
         offset: PageTableOffset,
         attributes: PageTableFlags,
     ) -> PageTableFlags {
-        self.get(offset).set_flags(attributes)
+        // SAFETY: Precondition
+        unsafe { self.get(offset).set_flags(attributes) }
     }
 }
 
@@ -367,6 +385,7 @@ impl PageTableEntry {
         frame: Frame,
         attributes: PageTableFlags,
     ) -> Option<(Frame, PageTableFlags)> {
+        // SAFETY: Precondition
         unsafe { self.set_bits(attributes.bits() | frame.base().as_u64()) }
     }
 
@@ -375,6 +394,7 @@ impl PageTableEntry {
         frame: Frame,
         attributes: PageTableFlags,
     ) -> Option<(Frame, PageTableFlags)> {
+        // SAFETY: Precondition
         unsafe { self.set_bits(attributes.bits() | frame.base().as_u64()) }
     }
 
@@ -388,6 +408,7 @@ impl PageTableEntry {
         frame: Frame,
         attributes: PageTableFlags,
     ) -> Result<(), (Frame, PageTableFlags)> {
+        // SAFETY: Precondition
         unsafe { self.try_set_bits(attributes.bits() | frame.base().as_u64()) }
     }
 
@@ -397,6 +418,7 @@ impl PageTableEntry {
     ///
     /// This could fundamentally change memory, leading to unsoundness.
     pub unsafe fn reset(&self) -> Option<(Frame, PageTableFlags)> {
+        // SAFETY: Precondition
         unsafe { self.set_bits(0) }
     }
 

@@ -3,6 +3,8 @@
 
 use core::{arch::naked_asm, convert::Infallible, marker::PhantomData, mem::MaybeUninit};
 
+use derive_more::Debug;
+
 use sealed::sealed;
 use x86_64::structures::idt::{
     DivergingHandlerFunc, DivergingHandlerFuncWithErrCode, Entry, HandlerFunc,
@@ -16,8 +18,9 @@ use super::gdt;
 pub struct Exception;
 pub struct Interrupt;
 
-#[derive(Debug)]
 #[repr(transparent)]
+#[derive(Debug)]
+#[debug("{:?}", self.interrupt_stack_frame())]
 pub struct ExceptionCtx<Kind> {
     stack_top: u64,
     _kind: PhantomData<Kind>,

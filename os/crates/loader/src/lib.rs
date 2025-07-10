@@ -67,10 +67,13 @@ impl<'a> Program<'a> {
                 return Err(ElfError::InvalidOffsets);
             }
 
-            unsafe {
-                let phdr_start: *const ProgramHeader = program.as_ptr().add(phoff).cast();
-                ProgramHeader::from_raw_parts(phdr_start, entries)
-            }
+            let phdr_start: *const ProgramHeader = program
+                .get(phoff..)
+                .ok_or(ElfError::InvalidOffsets)?
+                .as_ptr()
+                .cast();
+            // SAFETY: Verified pointers and offsets
+            unsafe { ProgramHeader::from_raw_parts(phdr_start, entries) }
         };
         Ok(Self {
             program,

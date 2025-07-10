@@ -2,9 +2,7 @@ mod handlers;
 
 use handlers::{Isr, PanicHandler};
 use sync::cell::AtomicLazyCell;
-use x86_64::{
-    PrivilegeLevel, instructions::interrupts::int3, structures::idt::InterruptDescriptorTable,
-};
+use x86_64::{PrivilegeLevel, structures::idt::InterruptDescriptorTable};
 
 use crate::x86_64_impl::gdt;
 
@@ -57,4 +55,5 @@ fn init_idt() {
         idt
     });
     IDT.load();
+    x86_64::instructions::interrupts::int3()
 }

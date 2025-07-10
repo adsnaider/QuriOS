@@ -20,6 +20,7 @@ pub fn system() -> &'static impl System {
 cfg_if::cfg_if! {
     if #[cfg(target_arch = "x86_64")] {
         type ArchSystem = x86_64_impl::Sys;
+        /// Initializes the architecture-specific subsystem.
         pub fn init(pmo: Pmo) {
             SYSTEM.set(x86_64_impl::Sys::init(pmo)).expect("Tried to initialize system twice")
         }

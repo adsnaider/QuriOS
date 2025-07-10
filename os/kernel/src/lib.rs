@@ -45,6 +45,7 @@ pub fn kinit() {
     STACK_SIZE
         .get_response()
         .expect("Limine stack size response missing");
+    // SAFETY: PMO is correct from limine
     arch::init(*PMO.get());
 
     let memory_map: &'static mut MemoryMapRequest = MEMORY_MAP

@@ -7,6 +7,7 @@ use qapi::init::BootArgs;
 
 #[entry]
 fn main(_args: &'static BootArgs) -> ! {
+    // SAFETY: Oh well... Just for testing page faults.
     unsafe {
         core::ptr::read_volatile(0xDEADBEEF as *const u8);
     }
