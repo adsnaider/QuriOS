@@ -9,10 +9,10 @@ ENTRY(kmain)
 /* MMU permissions */
 PHDRS
 {
+    interrupt_stack PT_LOAD FLAGS((1 << 1) | (1<< 2)) /* Write + Read */;
     text    PT_LOAD    FLAGS((1 << 0) | (1 << 2)) ; /* Execute + Read */
     rodata  PT_LOAD    FLAGS((1 << 2)) ;            /* Read only */
     data    PT_LOAD    FLAGS((1 << 1) | (1 << 2)) ; /* Write + Read */
-    interrupt_stack PT_LOAD FLAGS((1 << 1) | (1<< 2)) ;
     dynamic PT_DYNAMIC FLAGS((1 << 1) | (1 << 2)) ; /* Dynamic PHDR for relocations */
 }
 
@@ -24,32 +24,27 @@ SECTIONS
     /* that is the beginning of the region. */
     . = 0xffffffff80000000;
     /* Empty page to act as a guard */
-    . = . + CONSTANT(MAXPAGESIZE);
+    . += CONSTANT(MAXPAGESIZE);
 
     .interrupt_stack : {
         *(.interrupt_stack)
     } :interrupt_stack
 
-    .text : {
+    .text : ALIGN(CONSTANT(MAXPAGESIZE)){
         *(.text .text.*)
     } :text
 
-    /* Move to the next memory page for .rodata */
-    . += CONSTANT(MAXPAGESIZE);
 
-    .rodata : {
+    .rodata : ALIGN(CONSTANT(MAXPAGESIZE)) {
         *(.rodata .rodata.*)
     } :rodata
 
-    /* Move to the next memory page for .data */
-    . += CONSTANT(MAXPAGESIZE);
-
-    .data : {
+    .data : ALIGN(CONSTANT(MAXPAGESIZE)) {
         *(.data .data.*)
     } :data
 
     /* Dynamic section for relocations, both in its own PHDR and inside data PHDR */
-    .dynamic : {
+    .dynamic : ALIGN(CONSTANT(MAXPAGESIZE)) {
         *(.dynamic)
     } :data :dynamic
 
@@ -58,7 +53,7 @@ SECTIONS
     /* unnecessary zeros will be written to the binary. */
     /* If you need, for example, .init_array and .fini_array, those should be placed */
     /* above this. */
-    .bss : {
+    .bss : ALIGN(CONSTANT(MAXPAGESIZE)) {
         *(.bss .bss.*)
         *(COMMON)
     } :data

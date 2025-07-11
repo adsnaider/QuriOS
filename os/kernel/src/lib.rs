@@ -1,9 +1,10 @@
 #![no_std]
 
-pub mod comp;
+pub mod caps;
 pub mod kmem;
 pub mod pmo;
 pub mod retyping;
+pub mod syscall;
 pub mod thread;
 
 mod boot;
@@ -19,6 +20,7 @@ use limine::{
     BaseRevision,
 };
 use sync::{cell::AtomicLazyCell, singleton::Singleton};
+use syscall::syscall_handler;
 use tap::TapFallible;
 use tar_no_std::TarArchiveRef;
 
@@ -46,7 +48,7 @@ pub fn kinit() {
         .get_response()
         .expect("Limine stack size response missing");
     // SAFETY: PMO is correct from limine
-    arch::init(*PMO.get());
+    arch::init(*PMO.get(), syscall_handler);
 
     let memory_map: &'static mut MemoryMapRequest = MEMORY_MAP
         .take_ref_mut()

@@ -2,6 +2,7 @@
 
 use exec::ExecState;
 use mem::{Addrspace, Frame, Pmo};
+use qapi::syscall::{SyscallArgs, SyscallArgsInit};
 use sync::cell::AtomicOnceCell;
 
 #[cfg(target_arch = "x86_64")]
@@ -10,6 +11,15 @@ mod x86_64_impl;
 pub mod exec;
 pub mod mem;
 
+cfg_if::cfg_if! {
+    if #[cfg(target_arch = "x86_64")] {
+        type ArchSystem = x86_64_impl::Sys;
+    } else {
+        const _: () = const { panic!("Target architecture not supported") };
+    }
+}
+
+type SyscallHandler<S> = fn(SyscallArgs<SyscallArgsInit>, S) -> usize;
 static SYSTEM: AtomicOnceCell<ArchSystem> = AtomicOnceCell::new();
 pub fn system() -> &'static impl System {
     SYSTEM
@@ -17,16 +27,11 @@ pub fn system() -> &'static impl System {
         .expect("System not fully initialized. Did you call `init`?")
 }
 
-cfg_if::cfg_if! {
-    if #[cfg(target_arch = "x86_64")] {
-        type ArchSystem = x86_64_impl::Sys;
-        /// Initializes the architecture-specific subsystem.
-        pub fn init(pmo: Pmo) {
-            SYSTEM.set(x86_64_impl::Sys::init(pmo)).expect("Tried to initialize system twice")
-        }
-    } else {
-        const _: () = const { panic!("Target architecture not supported") };
-    }
+/// Initializes the architecture-specific subsystem.
+pub fn init(pmo: Pmo, syscall_handler: SyscallHandler<<ArchSystem as System>::SyscallCtx>) {
+    SYSTEM
+        .set(ArchSystem::init(pmo, syscall_handler))
+        .expect("Tried to initialize system twice")
 }
 
 /// Architecture-agnostic system management
@@ -37,14 +42,20 @@ cfg_if::cfg_if! {
 /// # Safety
 ///
 /// The implementation must adhere exactly to the documentation
-pub unsafe trait System {
-    type SysAddrspace: Addrspace;
-    type SysExec: ExecState;
+pub unsafe trait System: Sized {
+    type Addrspace: Addrspace;
+    type ExecState: ExecState;
+    type SyscallCtx: SyscallCtx;
+
+    /// Initializes the architecture-specific subsystem
+    fn init(pmo: Pmo, syscall_handler: SyscallHandler<Self::SyscallCtx>) -> Self;
 
     /// Returns a valid pointer to the currently active address space
-    fn addrspace(&self) -> Self::SysAddrspace;
+    fn addrspace(&self) -> Self::Addrspace;
 }
 
 pub trait KernelObject: Sized {
     fn into_frame(self) -> Frame;
 }
+
+pub trait SyscallCtx: core::fmt::Debug {}

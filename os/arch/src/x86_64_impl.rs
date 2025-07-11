@@ -1,6 +1,6 @@
 use core::arch::asm;
 
-use exec::ExecCtx;
+use exec::{ExceptionCtx, ExecCtx, Interrupt};
 use mem_impl::page_table::X64Addrspace;
 use x86_64::instructions::interrupts;
 
@@ -9,30 +9,33 @@ mod gdt;
 mod idt;
 mod mem_impl;
 
-use crate::{System, mem::Pmo};
+use crate::{SyscallHandler, System, mem::Pmo};
 
 pub struct Sys {
     pmo: Pmo,
+    syscall_handler: SyscallHandler<<Self as System>::SyscallCtx>,
 }
 
 // SAFETY: The system trait implementation is aaccurate for x86-64 systems.
 unsafe impl System for Sys {
-    type SysAddrspace = X64Addrspace;
-    type SysExec = ExecCtx;
+    type Addrspace = X64Addrspace;
+    type ExecState = ExecCtx;
+    type SyscallCtx = ExceptionCtx<Interrupt>;
 
-    fn addrspace(&self) -> Self::SysAddrspace {
+    fn addrspace(&self) -> Self::Addrspace {
         // SAFETY: PMO is correct from initialization
         X64Addrspace::current(self.pmo)
     }
-}
 
-impl Sys {
-    pub fn init(pmo: Pmo) -> Self {
+    fn init(pmo: Pmo, syscall_handler: SyscallHandler<Self::SyscallCtx>) -> Self {
         interrupts::disable();
         sce_enable();
         gdt::init();
         idt::init();
-        Self { pmo }
+        Self {
+            pmo,
+            syscall_handler,
+        }
     }
 }
 

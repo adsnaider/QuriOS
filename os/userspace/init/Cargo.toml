@@ -11,7 +11,7 @@ test = false
 [dependencies]
 entry.workspace = true
 log.workspace = true
-qapi.workspace = true
+qapi = { workspace = true, features = ["userspace"] }
 serial.workspace = true
 
 [lints]

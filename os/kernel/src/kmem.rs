@@ -4,8 +4,10 @@ use core::mem::ManuallyDrop;
 use core::ops::Deref;
 use core::ptr::NonNull;
 
-use crate::pmo::{PhysAddrExt as _, VirtAddrExt};
-use crate::retyping::{AsUnusedKernelError, FrameExt, KernelFrame};
+use crate::{
+    pmo::{PhysAddrExt as _, VirtAddrExt as _},
+    retyping::{AsUnusedKernelError, FrameExt, KernelFrame},
+};
 use arch::mem::{Frame, Page, VirtAddr};
 
 /// A "kernel" pointer to any page-aligned resource.

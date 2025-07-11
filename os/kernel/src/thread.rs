@@ -1,21 +1,24 @@
 use arch::{exec::ExecState, mem::Addrspace};
 
-use crate::{comp::Component, kmem::KPtr};
+use crate::{caps::Resources, kmem::KPtr};
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct Thread<E, A> {
     exec_state: E,
-    comp: Component<A>,
+    resources: Resources<E, A>,
 }
 
 impl<E, A> Thread<E, A> {
-    pub fn new(exec_state: E, comp: Component<A>) -> Self {
-        Self { exec_state, comp }
+    pub fn new(exec_state: E, comp: Resources<E, A>) -> Self {
+        Self {
+            exec_state,
+            resources: comp,
+        }
     }
 
-    pub fn active_comp(&self) -> &Component<A> {
-        &self.comp
+    pub fn active_comp(&self) -> &Resources<E, A> {
+        &self.resources
     }
 
     pub fn current() -> Option<KPtr<Self>> {
@@ -35,7 +38,7 @@ impl<E, A> Thread<E, A> {
         // simple as it's a completely synchronous call-response. However, thread
         // dispatching is somewhat weird because we exit the kernel early on the
         // dispatch and never return back to the caller in a traditional sense (i.e.
-        // dispatch return !). The way we come back is by having another dispatch
+        // dispatch returns !). The way we come back is by having another dispatch
         // call back into the original thread. Note, we have a singular kernel
         // execution stack, so once we leave here, the stack will be mangled and
         // can't come back to the kernel to return to the normal flow of execution.
@@ -55,7 +58,7 @@ impl<E, A> Thread<E, A> {
             }
         }
         log::info!("Set the active thread");
-        this.active_comp().active_addrspace();
+        this.active_comp().addrspace().activate();
         let exec_state = this.exec_state.clone();
         drop(this);
         exec_state.dispatch();

@@ -146,7 +146,7 @@ impl<const ID: usize, Ret> IsrHandler<Interrupt, Ret> for PanicHandler<ID> {
 impl<const ID: usize, Ret> IsrHandler<Exception, Ret> for PanicHandler<ID> {
     extern "sysv64" fn call(ctx: ExceptionCtx<Exception>) -> Ret {
         let code = ctx.error_code();
-        panic!("Unhandled interrupt ({ID}) - Error code: {code:X}\n{ctx:#?}")
+        panic!("Unhandled interrupt ({ID}) - Error code: {code:#X}\n{ctx:#?}")
     }
 }
 

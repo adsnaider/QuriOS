@@ -15,7 +15,7 @@ use x86_64::{
     },
 };
 
-use crate::exec::ExecState;
+use crate::{SyscallCtx, exec::ExecState};
 
 use super::gdt;
 
@@ -29,6 +29,8 @@ pub struct ExceptionCtx<Kind> {
     stack_top: u64,
     _kind: PhantomData<Kind>,
 }
+
+impl SyscallCtx for ExceptionCtx<Interrupt> {}
 
 impl<Kind> ExceptionCtx<Kind> {
     /// # Safety
@@ -83,7 +85,7 @@ impl ExceptionCtx<Interrupt> {
 }
 
 /// Execution context that can be dispatched.
-#[repr(C)]
+#[repr(transparent)]
 #[derive(Debug, Copy, Clone)]
 pub struct ExecCtx {
     regs: Regs,
@@ -103,7 +105,9 @@ impl ExecState for ExecCtx {
         regs.scratch.rdi = arg0 as u64;
         regs.control.rip = entry_fun as *const () as u64;
         regs.control.rsp = stack_top as u64;
-        regs.control.rflags = RFlags::INTERRUPT_FLAG.bits();
+        // TODO: Maybe don't give access to all hardware here but it's good for debugging.
+        regs.control.rflags =
+            (RFlags::INTERRUPT_FLAG | RFlags::IOPL_HIGH | RFlags::IOPL_LOW).bits();
         Self { regs }
     }
 }
@@ -167,18 +171,6 @@ impl ExecCtx {
 // SAFETY: Don't change the order of any of these
 #[repr(C)]
 #[derive(Default, Debug, Clone, Copy)]
-pub struct PreservedRegs {
-    pub rbx: u64,
-    pub rbp: u64, // Off: 10
-    pub r12: u64,
-    pub r13: u64,
-    pub r14: u64,
-    pub r15: u64,
-}
-
-// SAFETY: Don't change the order of any of these
-#[repr(C)]
-#[derive(Default, Debug, Clone, Copy)]
 pub struct ScratchRegs {
     pub rax: u64, // Off: 0
     pub rcx: u64,
@@ -189,6 +181,18 @@ pub struct ScratchRegs {
     pub r9: u64,
     pub r10: u64,
     pub r11: u64,
+}
+
+// SAFETY: Don't change the order of any of these
+#[repr(C)]
+#[derive(Default, Debug, Clone, Copy)]
+pub struct PreservedRegs {
+    pub rbx: u64,
+    pub rbp: u64, // Off: 10
+    pub r12: u64,
+    pub r13: u64,
+    pub r14: u64,
+    pub r15: u64,
 }
 
 // SAFETY: Don't change the order of any of these

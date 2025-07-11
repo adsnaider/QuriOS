@@ -11,9 +11,6 @@ use x86_64::structures::tss::TaskStateSegment;
 
 use crate::mem::Page;
 
-// use crate::arch::paging::page_table::Addrspace;
-// use crate::arch::paging::{FRAME_SIZE, PAGE_SIZE, Page};
-
 /// The TSS stack table index to be used for the Double Fault exception.
 pub const DOUBLE_FAULT_IST_INDEX: u16 = 0;
 /// The TSS stack table index to be used for the Page Fault exception.
@@ -43,9 +40,8 @@ impl OverAlignedU8 {
     }
 }
 
-const INTERRUPT_STACK_SIZE: usize = Page::SIZE * 32;
+const INTERRUPT_STACK_SIZE: usize = Page::SIZE * 4;
 
-#[used]
 #[unsafe(link_section = ".interrupt_stack")]
 static mut INTERRUPT_STACK: [OverAlignedU8; INTERRUPT_STACK_SIZE] = OverAlignedU8::uninit_array();
 // FIXME: This needs to be per-core.

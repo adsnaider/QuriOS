@@ -3,8 +3,13 @@ name = "qapi"
 version = "0.1.0"
 edition = "2024"
 
-[dependencies]
-zerocopy.workspace = true
-
 [lints]
 workspace = true
+
+[features]
+userspace = []
+
+[dependencies]
+derive_more.workspace = true
+zerocopy.workspace = true
+

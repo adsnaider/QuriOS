@@ -1,4 +1,5 @@
 add-symbol-file .build/debugger/kernel
+add-symbol-file .build/debugger/init
 layout split
 set trace-commands on
 set logging file .build/gdb.txt

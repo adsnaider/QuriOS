@@ -1,17 +1,25 @@
 mod handlers;
 
+use core::arch::naked_asm;
+
 use handlers::{Isr, PanicHandler};
+use qapi::syscall::SyscallArgs;
 use sync::cell::AtomicLazyCell;
 use x86_64::{
-    PrivilegeLevel,
+    PrivilegeLevel, VirtAddr,
     registers::control::Cr2,
     structures::idt::{InterruptDescriptorTable, PageFaultErrorCode},
 };
 
-use crate::x86_64_impl::{
-    exec::{Exception, ExceptionCtx},
-    gdt,
+use crate::{
+    SYSTEM,
+    x86_64_impl::{
+        exec::{Exception, ExceptionCtx},
+        gdt,
+    },
 };
+
+use super::exec::Interrupt;
 
 const SYSCALL_INT: u8 = 0x80;
 
@@ -56,9 +64,12 @@ fn init_idt() {
                 .register(page_fault_handler)
                 .set_stack_index(gdt::PAGE_FAULT_IST_INDEX);
         }
-        idt[SYSCALL_INT]
-            .register(PanicHandler::<21>)
-            .set_privilege_level(PrivilegeLevel::Ring3);
+        // SAFETY: The address provided will match the syscall ABI
+        unsafe {
+            idt[SYSCALL_INT]
+                .set_handler_addr(VirtAddr::from_ptr(syscall_int as *const ()))
+                .set_privilege_level(PrivilegeLevel::Ring3)
+        };
         idt
     });
     IDT.load();
@@ -69,4 +80,37 @@ fn page_fault_handler(ctx: ExceptionCtx<Exception>) {
     let code = PageFaultErrorCode::from_bits(ctx.error_code()).unwrap();
     let addr = Cr2::read().unwrap().as_ptr::<()>() as usize;
     panic!("PAGE FAULT @ {addr:#X} - ({code:?}) {ctx:#?}");
+}
+
+#[unsafe(naked)]
+extern "C" fn syscall_int(cap: usize, a: usize, b: usize, c: usize, d: usize, e: usize) {
+    extern "C" fn inner(
+        cap: usize,
+        a: usize,
+        b: usize,
+        c: usize,
+        d: usize,
+        e: usize,
+        ctx: ExceptionCtx<Interrupt>,
+    ) -> usize {
+        // SAFETY: It would be impossible to get to this interrupt handler
+        // without having first initialized the IDT with arch::init
+        (unsafe { SYSTEM.get_unchecked() }.syscall_handler)(
+            SyscallArgs::new(cap, [a, b, c, d, e]),
+            ctx,
+        )
+    }
+    // SAFETY: Userspace expects syscall interrupt to behave like a C calling convention syscall which
+    // will work so long as userspace doesn't need to pass arguments on the stack.
+    // Since we filled all the register-args, we need to add the exception context on the stack.
+    #[allow(unused_unsafe)]
+    unsafe {
+        naked_asm!(
+            "push rsp",
+            "call {inner}",
+            "add rsp, 8",
+            "iretq",
+            inner = sym inner,
+        )
+    }
 }

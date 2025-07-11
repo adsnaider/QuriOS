@@ -27,8 +27,8 @@ use crate::{
 
 #[derive(Debug)]
 pub struct Process<S: System> {
-    pub exec: S::SysExec,
-    pub addrspace: S::SysAddrspace,
+    pub exec: S::ExecState,
+    pub addrspace: S::Addrspace,
 }
 
 #[derive(Debug)]
@@ -255,7 +255,7 @@ impl<S: System> Process<S> {
         log::info!("Initialized user process");
         Ok(Self {
             addrspace,
-            exec: S::SysExec::for_entry(
+            exec: S::ExecState::for_entry(
                 boot_fn,
                 stack_top as *const (),
                 bootargs_start as *const BootArgs,
