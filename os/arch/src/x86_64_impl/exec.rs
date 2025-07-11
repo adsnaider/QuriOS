@@ -5,10 +5,14 @@ use core::{arch::naked_asm, convert::Infallible, marker::PhantomData, mem::Maybe
 
 use derive_more::Debug;
 
+use qapi::init::{BootArgs, EntryFn};
 use sealed::sealed;
-use x86_64::structures::idt::{
-    DivergingHandlerFunc, DivergingHandlerFuncWithErrCode, Entry, HandlerFunc,
-    HandlerFuncWithErrCode, InterruptStackFrame, PageFaultHandlerFunc,
+use x86_64::{
+    registers::rflags::RFlags,
+    structures::idt::{
+        DivergingHandlerFunc, DivergingHandlerFuncWithErrCode, Entry, HandlerFunc,
+        HandlerFuncWithErrCode, InterruptStackFrame, PageFaultHandlerFunc,
+    },
 };
 
 use crate::exec::ExecState;
@@ -59,7 +63,8 @@ impl ExceptionCtx<Exception> {
     }
 
     pub fn error_code(&self) -> u64 {
-        todo!();
+        // SAFETY: Stack must contain error code below the interrupt stack frame
+        unsafe { core::ptr::read((self.stack_top - 8) as *const u64) }
     }
 }
 
@@ -90,11 +95,16 @@ impl ExecState for ExecCtx {
     }
 
     fn dispatch(&self) -> ! {
-        todo!()
+        self.dispatch_raw();
     }
 
-    fn for_entry(entry_fun: qapi::init::EntryFn, args: qapi::init::BootArgs) -> Self {
-        todo!()
+    fn for_entry(entry_fun: EntryFn, stack_top: *const (), arg0: *const BootArgs) -> Self {
+        let mut regs = Regs::default();
+        regs.scratch.rdi = arg0 as u64;
+        regs.control.rip = entry_fun as *const () as u64;
+        regs.control.rsp = stack_top as u64;
+        regs.control.rflags = RFlags::INTERRUPT_FLAG.bits();
+        Self { regs }
     }
 }
 
@@ -112,7 +122,7 @@ impl ExecCtx {
     }
 
     #[unsafe(naked)]
-    pub extern "sysv64" fn dispatch(&self) -> ! {
+    extern "sysv64" fn dispatch_raw(&self) -> ! {
         // SAFETY: We are only jumping to userspace, guaranteeing address space separation, so it doesn't matter
         // what we are actually jumping to.
         #[allow(unused_unsafe)]

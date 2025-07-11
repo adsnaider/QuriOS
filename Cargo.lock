@@ -14,6 +14,7 @@ dependencies = [
  "log",
  "qapi",
  "sealed",
+ "serial",
  "sync",
  "x86_64",
 ]
@@ -147,6 +148,7 @@ dependencies = [
  "sync",
  "tap",
  "tar-no-std",
+ "zerocopy",
 ]
 
 [[package]]

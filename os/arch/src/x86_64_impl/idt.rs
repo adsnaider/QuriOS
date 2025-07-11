@@ -2,9 +2,16 @@ mod handlers;
 
 use handlers::{Isr, PanicHandler};
 use sync::cell::AtomicLazyCell;
-use x86_64::{PrivilegeLevel, structures::idt::InterruptDescriptorTable};
+use x86_64::{
+    PrivilegeLevel,
+    registers::control::Cr2,
+    structures::idt::{InterruptDescriptorTable, PageFaultErrorCode},
+};
 
-use crate::x86_64_impl::gdt;
+use crate::x86_64_impl::{
+    exec::{Exception, ExceptionCtx},
+    gdt,
+};
 
 const SYSCALL_INT: u8 = 0x80;
 
@@ -46,7 +53,7 @@ fn init_idt() {
                 .register(PanicHandler::<19>)
                 .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
             idt.page_fault
-                .register(PanicHandler::<20>)
+                .register(page_fault_handler)
                 .set_stack_index(gdt::PAGE_FAULT_IST_INDEX);
         }
         idt[SYSCALL_INT]
@@ -55,5 +62,11 @@ fn init_idt() {
         idt
     });
     IDT.load();
-    x86_64::instructions::interrupts::int3()
+}
+
+#[inline(always)]
+fn page_fault_handler(ctx: ExceptionCtx<Exception>) {
+    let code = PageFaultErrorCode::from_bits(ctx.error_code()).unwrap();
+    let addr = Cr2::read().unwrap().as_ptr::<()>() as usize;
+    panic!("PAGE FAULT @ {addr:#X} - ({code:?}) {ctx:#?}");
 }

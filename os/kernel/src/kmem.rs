@@ -77,7 +77,7 @@ impl<T> KPtr<T> {
 
     /// # Safety
     ///
-    /// The frame must only be used by KPtr<T>
+    /// The frame must only be used by `KPtr<T>`
     pub unsafe fn from_frame_unchecked(frame: KernelFrame) -> Self {
         let frame = frame.into_raw();
         let pointer = frame.addr().to_virtual().as_mut_ptr();

@@ -11,8 +11,8 @@ target := arch + "-unknown-none"
 
 artifact_dir := ".build"
 build_dir := artifact_dir / profile
-image_path := build_dir / "harmony.iso"
-test_image_path := build_dir / "harmony-test.iso"
+image_path := build_dir / "qurios.iso"
+test_image_path := build_dir / "qurios-test.iso"
 
 [private]
 extractor := "jq -r '.filenames | last' | tail -2 | head -1"

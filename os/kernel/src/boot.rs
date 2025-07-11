@@ -5,7 +5,7 @@ mod bump_alloc;
 use arch::{
     exec::ExecState,
     mem::{Addrspace, Frame, FrameAllocError, MapPageError, Page, PageFlags, VirtAddr},
-    KernelObject, System,
+    System,
 };
 use bump_alloc::{BumpFrameAllocator, OutOfMemory};
 use core::mem::MaybeUninit;
@@ -15,11 +15,11 @@ use qapi::{
     init::{BootArgs, EntryFn, RetypeEntry},
     types::CSlice,
 };
+use zerocopy::IntoBytes as _;
 
 use loader::{ElfError, Loader, LoaderError, MemFlags, Program, SegmentLoadError};
 
 use crate::{
-    kmem::KPtr,
     pmo::PhysAddrExt as _,
     retyping::{FrameExt, RetypeTable},
     UNTYPED_MEMORY_OFFSET,
@@ -28,7 +28,7 @@ use crate::{
 #[derive(Debug)]
 pub struct Process<S: System> {
     pub exec: S::SysExec,
-    pub addrspace: KPtr<S::SysAddrspace>,
+    pub addrspace: S::SysAddrspace,
 }
 
 #[derive(Debug)]
@@ -59,25 +59,30 @@ impl<A: Addrspace> InitLoader<'_, A> {
         rwx: MemFlags,
     ) -> Result<&mut [MaybeUninit<u8>], LoadPageError> {
         let pflags = rwx.into();
-        let frame = self.fallocator.alloc_user_frame()?.into_raw();
+        let frame = self.fallocator.alloc_user_frame()?;
         log::trace!("Mapping {page:?} to {frame:?} with {pflags:?}");
         assert!(
             page.base().is_lower_half(),
             "All kernel memory should remain the same"
         );
         // SAFETY: We properly allocated an unused frame and the page will only be used on the loaded process.
-        unsafe {
-            self.address_space
-                .map_page(
-                    page,
-                    frame,
-                    pflags,
-                    // Parent flags are the least restrictive since they will be reused for many pages.
-                    PageFlags::all(),
-                    self.fallocator,
-                )?
-                .ignore();
-        }
+        let frame = unsafe {
+            match self.address_space.map_page(
+                page,
+                frame.raw(),
+                pflags,
+                // Parent flags are the least restrictive since they will be reused for many pages.
+                PageFlags::all(),
+                self.fallocator,
+            ) {
+                Ok(f) => {
+                    f.flush();
+                    frame.into_raw()
+                }
+                Err(MapPageError::AlreadyMapped(f)) => f,
+                Err(e) => return Err(e.into()),
+            }
+        };
         // SAFETY: The frame was newly allocated for userspace
         Ok(unsafe {
             core::slice::from_raw_parts_mut(frame.base().to_virtual().as_mut_ptr(), Page::SIZE)
@@ -159,12 +164,10 @@ impl<S: System> Process<S> {
         let program = Program::new(program)?;
 
         // SAFETY: The addrespace is accounted for at retype init with index 1.
-        let addrspace = unsafe {
-            KPtr::from_frame_unchecked(sys.addrspace().into_frame().as_kernel_unchecked())
-        };
+        let addrspace = sys.addrspace();
 
         let mut loader = InitLoader {
-            address_space: &*addrspace,
+            address_space: &addrspace,
             fallocator: &mut fallocator,
         };
         log::info!("Loading process headers");
@@ -198,7 +201,7 @@ impl<S: System> Process<S> {
             let page = Page::from_start_address(VirtAddr::new(
                 memory_map_start + memory_map_count * Page::SIZE,
             ));
-            log::debug!("Loading memory map at {page:?}");
+            log::trace!("Loading memory map at {page:?}");
             // SAFETY: Userspace will only  be given read access to the memory map
             unsafe {
                 loader
@@ -219,18 +222,19 @@ impl<S: System> Process<S> {
         log::info!("Loading initrd at {:?}", initrd_start as *const u8);
         loader.load_source(initrd_start..initrd_end, initrd, MemFlags::READ)?;
 
-        let bootargs = BootArgs {
-            // SAFETY: We loaded the initrd to this memory location
-            initrd: unsafe { CSlice::from_raw_parts(initrd_start as *const u8, initrd.len()) },
+        let bootargs = BootArgs::new(
             // SAFETY: We loaded the memory map entries to this memory location
-            memory_map: unsafe {
+            unsafe {
                 CSlice::from_raw_parts(
                     memory_map_start as *const RetypeEntry,
                     retype_table_metadata.map.1,
                 )
             },
-            free_space_start: initrd_end,
-        };
+            // SAFETY: We loaded the initrd to this memory location
+            unsafe { CSlice::from_raw_parts(initrd_start as *const u8, initrd.len()) },
+            initrd_end,
+        );
+
         let bootargs_start = initrd_end.div_ceil(size_of::<BootArgs>()) * size_of::<BootArgs>();
         let bootargs_end = bootargs_start + size_of::<BootArgs>();
         log::info!(
@@ -251,7 +255,11 @@ impl<S: System> Process<S> {
         log::info!("Initialized user process");
         Ok(Self {
             addrspace,
-            exec: S::SysExec::for_entry(boot_fn, bootargs),
+            exec: S::SysExec::for_entry(
+                boot_fn,
+                stack_top as *const (),
+                bootargs_start as *const BootArgs,
+            ),
         })
     }
 }

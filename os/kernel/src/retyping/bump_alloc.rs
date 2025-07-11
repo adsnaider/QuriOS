@@ -35,6 +35,7 @@ impl BumpAllocator {
 
     pub fn alloc_frames(&mut self, count: usize) -> Option<PhysAddr> {
         let requested_length = count as u64 * Frame::SIZE;
+        log::debug!("Looking for {requested_length} bytes");
         let start_address = loop {
             let entry = self.memory_map.get_mut(self.index)?;
             assert!(entry.length % Frame::SIZE == 0);
@@ -46,6 +47,7 @@ impl BumpAllocator {
             }
             self.index += 1;
         };
+        log::debug!("Found viable entry at {start_address:?}");
         Some(start_address)
     }
 

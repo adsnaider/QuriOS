@@ -85,7 +85,7 @@ impl From<PageFlags> for PageTableFlags {
     fn from(value: PageFlags) -> Self {
         let mut flags = PageTableFlags::empty();
         if !value.readable() {
-            log::debug!("(non)-readable bit is invalid on x86-64");
+            log::trace!("(non)-readable bit is invalid on x86-64");
         }
         if value.writeable() {
             flags |= PageTableFlags::WRITABLE;

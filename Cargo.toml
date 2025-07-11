@@ -16,6 +16,7 @@ entry = { path = "os/crates/entry" }
 loader = { path = "os/crates/loader" }
 qapi = { path = "os/qapi" }
 
+zerocopy = { version = "0.8.26", features = ["derive"] }
 uart_16550 = "0.3.0"
 log = "0.4.22"
 derive_more = { version = "2.0.1", default-features = false, features = [

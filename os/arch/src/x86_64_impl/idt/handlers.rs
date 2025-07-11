@@ -139,7 +139,7 @@ where
 pub struct PanicHandler<const ID: usize>;
 impl<const ID: usize, Kind, Ret> IsrHandler<Kind, Ret> for PanicHandler<ID> {
     extern "sysv64" fn call(ctx: ExceptionCtx<Kind>) -> Ret {
-        panic!("Unhandled exception ({ID}) {ctx:?}")
+        panic!("Unhandled exception ({ID}) {ctx:#?}")
     }
 }
 

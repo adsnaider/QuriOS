@@ -1,6 +1,9 @@
 use core::marker::PhantomData;
 
+use zerocopy::{Immutable, IntoBytes, KnownLayout};
+
 #[repr(transparent)]
+#[derive(IntoBytes, KnownLayout, Immutable)]
 pub struct OrphanPtr<T> {
     addr: usize,
     _phantom: PhantomData<*const T>,
@@ -15,6 +18,7 @@ impl<T> OrphanPtr<T> {
 }
 
 #[repr(C)]
+#[derive(KnownLayout, Immutable)]
 pub struct CSlice<'a, T> {
     ptr: OrphanPtr<T>,
     length: usize,

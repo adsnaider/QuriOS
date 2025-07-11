@@ -12,6 +12,7 @@ loader.workspace = true
 log.workspace = true
 qapi.workspace = true
 sealed.workspace = true
+serial.workspace = true
 sync.workspace = true
 
 [lints]

@@ -63,22 +63,25 @@ impl RetypeTable {
     ///
     /// The memory map must accurately describe the system's memory
     pub unsafe fn new(memory_map: MemoryMap) -> Result<Self, RetypeInitError> {
-        let physical_top = {
+        let active_memory_top = {
             let last = memory_map
                 .iter()
-                .last()
+                .rev()
+                .find(|entry| entry.entry_type != EntryType::RESERVED)
                 .ok_or(RetypeInitError::MemoryMapEmpty)?;
             last.base + last.length
         };
-        assert!(physical_top % Frame::SIZE == 0);
-        let number_frames = (physical_top / Frame::SIZE) as usize;
+        log::debug!("Initializing the retype table");
+        assert!(active_memory_top % Frame::SIZE == 0);
+        let number_frames = (active_memory_top / Frame::SIZE) as usize;
         let mut allocator = BumpAllocator::new(memory_map);
 
         let retype_map_frames = {
             let retype_map_size = core::mem::size_of::<RetypeEntry>() * number_frames;
             assert!(retype_map_size > 0);
-            (retype_map_size - 1) / Page::SIZE + 1
+            retype_map_size.div_ceil(Page::SIZE)
         };
+        log::debug!("Frames required: {retype_map_frames}");
         let retype_map: &mut [MaybeUninit<RetypeEntry>] = {
             let start_physical_address = allocator
                 .alloc_frames(retype_map_frames)
@@ -213,7 +216,6 @@ pub impl Frame {
         self.retype_entry()?
             .retype(State::Kernel, State::Kernel, 0, 1)
             .map_err(|(state, value)| {
-                serial::sdbg!(state, value);
                 if !matches!(state, State::Kernel) {
                     AsUnusedKernelError::NotExpectedState(state)
                 } else {
@@ -229,7 +231,6 @@ pub impl Frame {
         self.retype_entry()?
             .get_as_and_increment(State::Kernel)
             .map_err(|(state, value)| {
-                serial::sdbg!(state, value);
                 if !matches!(state, State::Kernel) {
                     AsTypeError::NotExpectedState(state)
                 } else {
@@ -307,7 +308,7 @@ impl UserFrame {
         unsafe { self.0.retype_entry().unwrap_unchecked() }
     }
 
-    pub fn frame(&self) -> Frame {
+    pub fn raw(&self) -> Frame {
         self.0
     }
 
@@ -326,7 +327,7 @@ impl UserFrame {
 
     pub fn try_clone(&self) -> Option<Self> {
         self.0.retype_entry().unwrap().increment().ok()?;
-        Some(Self(self.frame()))
+        Some(Self(self.raw()))
     }
 
     pub fn drop(self) -> u16 {
@@ -347,7 +348,7 @@ impl KernelFrame {
         unsafe { self.0.retype_entry().unwrap_unchecked() }
     }
 
-    pub fn frame(&self) -> Frame {
+    pub fn raw(&self) -> Frame {
         self.0
     }
 
@@ -366,7 +367,7 @@ impl KernelFrame {
 
     pub fn try_clone(&self) -> Option<Self> {
         self.0.retype_entry().unwrap().increment().ok()?;
-        Some(Self(self.frame()))
+        Some(Self(self.raw()))
     }
 
     pub fn drop(self) -> u16 {
@@ -477,7 +478,7 @@ impl RetypeEntry {
     pub fn get_as_and_increment(&self, wants: State) -> Result<(), (State, u16)> {
         self.0
             .fetch_update(Ordering::Release, Ordering::Relaxed, |value| {
-                let (state, count) = serial::sdbg!(Self::value_into(value));
+                let (state, count) = Self::value_into(value);
                 if wants == state && count < Self::MAX_REF_COUNT {
                     Some(Self::value_for(state, count + 1))
                 } else {

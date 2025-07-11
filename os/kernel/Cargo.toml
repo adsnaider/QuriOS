@@ -29,3 +29,4 @@ tar-no-std = "0.3.4"
 extend = "1.2.0"
 heapless = "0.8.0"
 qapi.workspace = true
+zerocopy.workspace = true
