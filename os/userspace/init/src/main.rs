@@ -4,17 +4,17 @@
 
 use entry::entry;
 use qapi::init::BootArgs;
+use serial::sprintln;
 
 #[entry]
 fn main(_args: &'static BootArgs) -> ! {
-    // SAFETY: Oh well... Just for testing page faults.
-    unsafe {
-        core::ptr::read_volatile(0xDEADFEE as *const u8);
-    }
+    serial::init();
+    log::info!("Landed on userspace init");
     todo!();
 }
 
 #[panic_handler]
-fn panic(_info: &core::panic::PanicInfo) -> ! {
+fn panic(info: &core::panic::PanicInfo) -> ! {
+    sprintln!("{}", info);
     loop {}
 }

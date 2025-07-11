@@ -10,7 +10,9 @@ test = false
 
 [dependencies]
 entry.workspace = true
+log.workspace = true
 qapi.workspace = true
+serial.workspace = true
 
 [lints]
 workspace = true

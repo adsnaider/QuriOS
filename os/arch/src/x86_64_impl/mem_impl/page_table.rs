@@ -167,8 +167,11 @@ impl Addrspace for X64Addrspace {
         let (frame, flags) = Cr3::read();
         let this_frame = self.l4_frame.into();
         if frame != this_frame {
+            log::debug!("Switching addrspace from {frame:?} to {this_frame:?}");
             // SAFETY: Precondition for creating the Addrspace is that it remains valid.
             unsafe { Cr3::write(this_frame, flags) };
+        } else {
+            log::debug!("Skipping addrspace swap since it's unchanged")
         }
     }
 }
