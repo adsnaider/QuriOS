@@ -9,10 +9,8 @@ pub type EntryFn = extern "C" fn(args: &'static BootArgs) -> !;
 #[repr(C)]
 #[derive(Debug, IntoBytes, KnownLayout, Immutable)]
 pub struct BootArgs {
-    pub memory_map_ptr: usize,
-    pub memory_map_length: usize,
-    pub initrd_ptr: usize,
-    pub initrd_length: usize,
+    pub memory_map: CSlice<'static, RetypeEntry>,
+    pub initrd: CSlice<'static, u8>,
     pub free_space_start: usize,
 }
 
@@ -23,10 +21,8 @@ impl BootArgs {
         free_space_start: usize,
     ) -> Self {
         Self {
-            memory_map_ptr: memory_map.ptr() as usize,
-            memory_map_length: memory_map.len(),
-            initrd_ptr: initrd.ptr() as usize,
-            initrd_length: initrd.len(),
+            memory_map,
+            initrd,
             free_space_start,
         }
     }

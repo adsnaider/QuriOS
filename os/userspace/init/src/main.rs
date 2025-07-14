@@ -14,7 +14,7 @@ fn main(_args: &'static BootArgs) -> ! {
     serial::init();
     log::info!("Landed on userspace init");
     let result = syscall(SyscallArgs::uninit(1));
-    log::info!("Syscall result: {result}");
+    log::info!("Syscall result: {result:?}");
     todo!();
 }
 

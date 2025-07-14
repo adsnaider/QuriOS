@@ -13,6 +13,7 @@ use crate::{
         Addrspace, Flusher, Frame, FrameAllocator, MapPageError, Page, PageFlags, PhysAddr, Pmo,
         VirtAddr,
     },
+    x86_64_impl::X64Sys,
 };
 
 #[derive(Debug)]
@@ -105,8 +106,17 @@ impl From<PageFlags> for PageTableFlags {
 }
 
 impl KernelObject for X64Addrspace {
+    type System = X64Sys;
+
     fn into_frame(self) -> Frame {
         self.l4_frame
+    }
+
+    unsafe fn from_frame(sys: &X64Sys, frame: Frame) -> Self {
+        Self {
+            l4_frame: frame,
+            pmo: sys.pmo,
+        }
     }
 }
 

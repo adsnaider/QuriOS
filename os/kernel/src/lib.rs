@@ -8,15 +8,19 @@ pub mod syscall;
 pub mod thread;
 
 pub(crate) mod core_local;
+pub(crate) mod hint;
 
 mod boot;
 
+use core::mem::ManuallyDrop;
+
 use arch::{
-    exec::ExecState,
-    mem::{Addrspace as _, Pmo, VirtAddr},
-    system,
+    mem::{Pmo, VirtAddr},
+    system, ArchSystem,
 };
-use boot::Process;
+use boot::{bump_alloc::BumpFrameAllocator, Process};
+use caps::Resources;
+use kmem::KPtr;
 use limine::{
     request::{HhdmRequest, MemoryMapRequest, ModuleRequest, StackSizeRequest},
     BaseRevision,
@@ -25,6 +29,7 @@ use sync::{cell::AtomicLazyCell, singleton::Singleton};
 use syscall::syscall_handler;
 use tap::TapFallible;
 use tar_no_std::TarArchiveRef;
+use thread::Thread;
 
 static BASE_REVISION: BaseRevision = BaseRevision::new();
 static MEMORY_MAP: Singleton<MemoryMapRequest> = Singleton::new(MemoryMapRequest::new());
@@ -91,7 +96,15 @@ pub fn uinit() -> ! {
         .data();
 
     log::info!("Found init image. Loading userspace process");
-    let init = Process::load(system(), proc, 10, initrd).expect("Error loading init process");
-    init.addrspace.activate();
-    init.exec.dispatch();
+    let mut fallocator = BumpFrameAllocator::new();
+    let init = Process::<ArchSystem>::load(system(), proc, 10, initrd, &mut fallocator)
+        .expect("Error loading init process");
+    let resources = Resources::new(init.addrspace);
+    let thread = Thread::new(init.exec, resources);
+    let thread_frame = fallocator
+        .alloc_kernel_frame()
+        .expect("Out of memory error during initialization");
+    // SAFETY: The kernel frame is unused
+    let thread = unsafe { KPtr::new_unchecked(thread_frame, ManuallyDrop::new(thread)) };
+    Thread::dispatch(thread)
 }

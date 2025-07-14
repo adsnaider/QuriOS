@@ -25,6 +25,17 @@ pub struct CSlice<'a, T> {
     _cont: PhantomData<&'a [T]>,
 }
 
+// SAFETY: IntoBytes is reasonable in this case since the data is just a pointer
+// and length with repr(C). The resulting type has no padding and there's no
+// interior mutability
+unsafe impl<'a, T> IntoBytes for CSlice<'a, T> {
+    fn only_derive_is_allowed_to_implement_this_trait()
+    where
+        Self: Sized,
+    {
+    }
+}
+
 impl<T> Copy for CSlice<'static, T> {}
 impl<T> Clone for CSlice<'static, T> {
     fn clone(&self) -> Self {

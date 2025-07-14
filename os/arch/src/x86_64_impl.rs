@@ -11,13 +11,13 @@ mod mem_impl;
 
 use crate::{SyscallHandler, System, mem::Pmo};
 
-pub struct Sys {
+pub struct X64Sys {
     pmo: Pmo,
     syscall_handler: SyscallHandler<Self>,
 }
 
 // SAFETY: The system trait implementation is aaccurate for x86-64 systems.
-unsafe impl System for Sys {
+unsafe impl System for X64Sys {
     type Addrspace = X64Addrspace;
     type ExecState = ExecCtx;
     type SyscallCtx = ExceptionCtx<Interrupt>;

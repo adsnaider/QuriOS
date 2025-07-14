@@ -4,6 +4,8 @@ use derive_more::Debug;
 
 #[cfg(feature = "userspace")]
 pub mod ulib {
+    use crate::caps::{CapError, CapResult, PositiveIsize};
+
     use super::SyscallArgs;
     use core::{arch::naked_asm, mem::MaybeUninit};
 
@@ -15,7 +17,7 @@ pub mod ulib {
         c: MaybeUninit<usize>,
         d: MaybeUninit<usize>,
         e: MaybeUninit<usize>,
-    ) -> usize {
+    ) -> isize {
         // SAFETY: syscall expects arguments as an extern "C" call
         #[allow(unused_unsafe)]
         unsafe {
@@ -24,15 +26,15 @@ pub mod ulib {
     }
 
     #[inline(always)]
-    pub fn syscall<S>(args: SyscallArgs<S>) -> usize {
-        syscall_raw(
+    pub fn syscall<S>(args: SyscallArgs<S>) -> Result<PositiveIsize, CapError> {
+        CapResult::from_isize(syscall_raw(
             args.cap,
             args.args[0],
             args.args[1],
             args.args[2],
             args.args[3],
             args.args[4],
-        )
+        ))
     }
 }
 

@@ -1,6 +1,6 @@
 //! Boot process initialization
 
-mod bump_alloc;
+pub(crate) mod bump_alloc;
 
 use arch::{
     exec::ExecState,
@@ -154,8 +154,8 @@ impl<S: System> Process<S> {
         program: &[u8],
         stack_pages: usize,
         initrd: &[u8],
+        fallocator: &mut BumpFrameAllocator,
     ) -> Result<Self, LoadError> {
-        let mut fallocator = BumpFrameAllocator::new();
         let untyped_memory_offset = UNTYPED_MEMORY_OFFSET;
         let untyped_memory_length = Frame::memory_limit();
         assert!(untyped_memory_offset % Page::SIZE == 0);
@@ -168,7 +168,7 @@ impl<S: System> Process<S> {
 
         let mut loader = InitLoader {
             address_space: &addrspace,
-            fallocator: &mut fallocator,
+            fallocator,
         };
         log::info!("Loading process headers");
         let process = program.load(&mut loader)?;

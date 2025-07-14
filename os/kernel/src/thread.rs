@@ -1,4 +1,4 @@
-use core::cell::RefCell;
+use core::{cell::RefCell, ops::Deref};
 
 use arch::{exec::ExecState, mem::Addrspace, ArchSystem, System};
 
@@ -11,12 +11,13 @@ pub struct Thread<S: System> {
     resources: Resources<S>,
 }
 
+// TODO: There may be a better way to do this by allowing the syscall handler to take the thread out, and pushing it back before dispatching
 static CURRENT_THREAD: CoreLocal<RefCell<Option<KPtr<Thread<ArchSystem>>>>> =
     CoreLocal::new(RefCell::new(None));
 
 impl Thread<ArchSystem> {
-    pub fn current() -> Option<KPtr<Self>> {
-        CURRENT_THREAD.borrow().clone()
+    pub fn current() -> impl Deref<Target = Option<KPtr<Self>>> {
+        CURRENT_THREAD.borrow()
     }
 
     fn replace_current(new: KPtr<Self>) -> Option<KPtr<Self>> {
@@ -41,18 +42,17 @@ impl Thread<ArchSystem> {
         // 2. rflags register needs to be valid (interrupts enabled, ring 3 execution, etc.)
         // 3. stack register needs to be whatever it was before syscall
         // 4. All callee-saved registers need to be set back (done in userspace)
+        this.active_comp().addrspace().activate();
+        // TODO: Remove lint allow once type alias impl trait works and ArchSystem uses it.
+        #[allow(clippy::clone_on_copy)]
+        let exec_state = this.exec_state.clone();
         {
-            let previous = Self::replace_current(this.clone());
+            let previous = Self::replace_current(this);
             if let Some(previous) = &previous {
                 previous.exec_state.save();
             }
         }
         log::info!("Set the active thread");
-        this.active_comp().addrspace().activate();
-        // TODO: Remove lint allow once type alias impl trait works and ArchSystem uses it.
-        #[allow(clippy::clone_on_copy)]
-        let exec_state = this.exec_state.clone();
-        drop(this);
         exec_state.dispatch();
     }
 }

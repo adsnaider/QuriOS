@@ -3,6 +3,7 @@ use qapi::{
     caps::{CapError, CapIndex, PositiveIsize},
     syscall::{SyscallArgs, SyscallArgsInit},
 };
+use tap::Tap;
 
 use crate::thread::Thread;
 
@@ -13,9 +14,15 @@ pub fn syscall_handler(
     let cap = CapIndex::try_from(args.cap())?;
     let args = args.args();
     log::info!("Handling syscall: {cap} with args {args:?} {ctx:#?}");
-    let _comp = Thread::<ArchSystem>::current()
-        .unwrap()
-        .active_comp()
-        .cap(cap);
-    Ok(10.try_into().unwrap())
+    let current = Thread::current();
+    // SAFETY: We should always have a thread set on syscall handling
+    let cap = unsafe {
+        current
+            .as_ref()
+            .tap(|t| debug_assert!(t.is_some()))
+            .unwrap_unchecked()
+            .active_comp()
+            .cap(cap)
+    };
+    cap.exercise(args)
 }

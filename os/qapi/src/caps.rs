@@ -1,8 +1,9 @@
-use derive_more::{Display, Error, From, Into};
-use tap::Tap as _;
+use derive_more::{Display, Error, Into, TryFrom};
 
 #[derive(Debug)]
+#[repr(u8)]
 pub enum CapabilityKind {
+    Empty = 0,
     Thread,
     TranscientPageTable,
     RootPageTable,
@@ -28,16 +29,27 @@ impl CapIndex {
     }
 }
 
-#[derive(Debug, Copy, Clone, From, Display, Error)]
+#[derive(Debug, Copy, Clone, Display, Error, TryFrom)]
+#[try_from(repr)]
 #[repr(isize)]
 pub enum CapError {
+    #[display("Unknown capability error, possibly due to an invalid syscall response")]
+    Unknown = -1,
     #[display("Capability index is out of range of maximum allowed")]
-    CapIndexOutOfRange = -1,
+    CapIndexOutOfRange = -2,
+    #[display("Capability index points to an empty capability slot")]
+    CapSlotIsEmpty = -3,
+}
+
+impl CapError {
+    pub fn from_isize(value: isize) -> Self {
+        Self::try_from(value).unwrap_or(CapError::Unknown)
+    }
 }
 
 impl From<CapError> for isize {
     fn from(value: CapError) -> Self {
-        (value as isize).tap(|v| debug_assert!(*v < 0))
+        value as isize
     }
 }
 
@@ -63,6 +75,7 @@ pub struct PositiveIsizeUnderflow;
 
 pub trait CapResult {
     fn into_isize(self) -> isize;
+    fn from_isize(value: isize) -> Self;
 }
 
 impl CapResult for Result<PositiveIsize, CapError> {
@@ -70,6 +83,13 @@ impl CapResult for Result<PositiveIsize, CapError> {
         match self {
             Ok(ok) => ok.into(),
             Err(e) => isize::from(e),
+        }
+    }
+
+    fn from_isize(value: isize) -> Self {
+        match value.try_into() {
+            Ok(pos) => Ok(pos),
+            Err(_) => Err(CapError::from_isize(value)),
         }
     }
 }

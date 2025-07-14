@@ -1,18 +1,23 @@
-use core::marker::PhantomData;
+use core::mem::MaybeUninit;
 
 use arch::System;
-use qapi::caps::{CapIndex, CapabilityKind};
+use qapi::caps::{CapError, CapIndex, CapabilityKind, PositiveIsize};
 
-use crate::{retyping::KernelFrame, thread::Thread};
+use crate::retyping::KernelFrame;
 
 #[derive(Debug)]
 pub struct Resources<S: System> {
     addrspace: S::Addrspace,
     capabilities: [Capability; 16],
-    _thread_cap: PhantomData<Thread<S>>,
 }
 
 impl<S: System> Resources<S> {
+    pub const fn new(addrspace: S::Addrspace) -> Self {
+        Self {
+            addrspace,
+            capabilities: [const { Capability::empty() }; 16],
+        }
+    }
     pub fn addrspace(&self) -> &S::Addrspace {
         &self.addrspace
     }
@@ -24,12 +29,25 @@ impl<S: System> Resources<S> {
 
 #[derive(Debug)]
 pub struct Capability {
-    pub resource: KernelFrame,
+    pub resource: MaybeUninit<KernelFrame>,
     pub kind: CapabilityKind,
 }
 
 impl Capability {
-    pub fn exercise(&self) -> usize {
-        todo!();
+    pub const fn empty() -> Self {
+        Self {
+            kind: CapabilityKind::Empty,
+            resource: MaybeUninit::uninit(),
+        }
+    }
+
+    pub fn exercise(&self, _args: &[usize; 5]) -> Result<PositiveIsize, CapError> {
+        match self.kind {
+            CapabilityKind::Empty => Err(CapError::CapSlotIsEmpty),
+            CapabilityKind::Thread => todo!(),
+            CapabilityKind::TranscientPageTable => todo!(),
+            CapabilityKind::RootPageTable => todo!(),
+            CapabilityKind::CapTable => todo!(),
+        }
     }
 }
