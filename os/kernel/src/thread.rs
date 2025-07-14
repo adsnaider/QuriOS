@@ -1,6 +1,8 @@
-use arch::{exec::ExecState, mem::Addrspace, System};
+use core::cell::RefCell;
 
-use crate::{caps::Resources, kmem::KPtr};
+use arch::{exec::ExecState, mem::Addrspace, ArchSystem, System};
+
+use crate::{caps::Resources, core_local::CoreLocal, kmem::KPtr};
 
 #[repr(C)]
 #[derive(Debug)]
@@ -9,24 +11,16 @@ pub struct Thread<S: System> {
     resources: Resources<S>,
 }
 
-impl<S: System> Thread<S> {
-    pub fn new(exec_state: S::ExecState, comp: Resources<S>) -> Self {
-        Self {
-            exec_state,
-            resources: comp,
-        }
+static CURRENT_THREAD: CoreLocal<RefCell<Option<KPtr<Thread<ArchSystem>>>>> =
+    CoreLocal::new(RefCell::new(None));
+
+impl Thread<ArchSystem> {
+    pub fn current() -> Option<KPtr<Self>> {
+        CURRENT_THREAD.borrow().clone()
     }
 
-    pub fn active_comp(&self) -> &Resources<S> {
-        &self.resources
-    }
-
-    pub fn current() -> KPtr<Self> {
-        todo!();
-    }
-
-    fn replace_current(_new: KPtr<Self>) -> Option<KPtr<Self>> {
-        todo!();
+    fn replace_current(new: KPtr<Self>) -> Option<KPtr<Self>> {
+        CURRENT_THREAD.replace(Some(new))
     }
 
     pub fn dispatch(this: KPtr<Self>) -> ! {
@@ -55,8 +49,23 @@ impl<S: System> Thread<S> {
         }
         log::info!("Set the active thread");
         this.active_comp().addrspace().activate();
+        // TODO: Remove lint allow once type alias impl trait works and ArchSystem uses it.
+        #[allow(clippy::clone_on_copy)]
         let exec_state = this.exec_state.clone();
         drop(this);
         exec_state.dispatch();
+    }
+}
+
+impl<S: System> Thread<S> {
+    pub fn new(exec_state: S::ExecState, comp: Resources<S>) -> Self {
+        Self {
+            exec_state,
+            resources: comp,
+        }
+    }
+
+    pub fn active_comp(&self) -> &Resources<S> {
+        &self.resources
     }
 }

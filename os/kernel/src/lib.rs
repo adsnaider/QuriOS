@@ -7,12 +7,14 @@ pub mod retyping;
 pub mod syscall;
 pub mod thread;
 
+pub(crate) mod core_local;
+
 mod boot;
 
 use arch::{
     exec::ExecState,
     mem::{Addrspace as _, Pmo, VirtAddr},
-    system, ArchSystem,
+    system,
 };
 use boot::Process;
 use limine::{
@@ -48,7 +50,7 @@ pub fn kinit() {
         .get_response()
         .expect("Limine stack size response missing");
     // SAFETY: PMO is correct from limine
-    arch::init(*PMO.get(), syscall_handler::<ArchSystem>);
+    arch::init(*PMO.get(), syscall_handler);
 
     let memory_map: &'static mut MemoryMapRequest = MEMORY_MAP
         .take_ref_mut()
