@@ -2,7 +2,10 @@
 
 use exec::ExecState;
 use mem::{Addrspace, Frame, Pmo};
-use qapi::syscall::{SyscallArgs, SyscallArgsInit};
+use qapi::{
+    caps::{CapError, PositiveIsize},
+    syscall::{SyscallArgs, SyscallArgsInit},
+};
 use sync::cell::AtomicOnceCell;
 
 #[cfg(target_arch = "x86_64")]
@@ -13,13 +16,15 @@ pub mod mem;
 
 cfg_if::cfg_if! {
     if #[cfg(target_arch = "x86_64")] {
-        type ArchSystem = x86_64_impl::Sys;
+        pub type ArchSystem = x86_64_impl::Sys;
     } else {
         const _: () = const { panic!("Target architecture not supported") };
     }
 }
 
-type SyscallHandler<S> = fn(SyscallArgs<SyscallArgsInit>, S) -> usize;
+type SyscallHandler<S> =
+    fn(SyscallArgs<SyscallArgsInit>, <S as System>::SyscallCtx) -> Result<PositiveIsize, CapError>;
+
 static SYSTEM: AtomicOnceCell<ArchSystem> = AtomicOnceCell::new();
 pub fn system() -> &'static impl System {
     SYSTEM
@@ -28,7 +33,7 @@ pub fn system() -> &'static impl System {
 }
 
 /// Initializes the architecture-specific subsystem.
-pub fn init(pmo: Pmo, syscall_handler: SyscallHandler<<ArchSystem as System>::SyscallCtx>) {
+pub fn init(pmo: Pmo, syscall_handler: SyscallHandler<ArchSystem>) {
     SYSTEM
         .set(ArchSystem::init(pmo, syscall_handler))
         .expect("Tried to initialize system twice")
@@ -48,7 +53,7 @@ pub unsafe trait System: Sized {
     type SyscallCtx: SyscallCtx;
 
     /// Initializes the architecture-specific subsystem
-    fn init(pmo: Pmo, syscall_handler: SyscallHandler<Self::SyscallCtx>) -> Self;
+    fn init(pmo: Pmo, syscall_handler: SyscallHandler<Self>) -> Self;
 
     /// Returns a valid pointer to the currently active address space
     fn addrspace(&self) -> Self::Addrspace;

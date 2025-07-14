@@ -13,7 +13,7 @@ use crate::{SyscallHandler, System, mem::Pmo};
 
 pub struct Sys {
     pmo: Pmo,
-    syscall_handler: SyscallHandler<<Self as System>::SyscallCtx>,
+    syscall_handler: SyscallHandler<Self>,
 }
 
 // SAFETY: The system trait implementation is aaccurate for x86-64 systems.
@@ -27,7 +27,7 @@ unsafe impl System for Sys {
         X64Addrspace::current(self.pmo)
     }
 
-    fn init(pmo: Pmo, syscall_handler: SyscallHandler<Self::SyscallCtx>) -> Self {
+    fn init(pmo: Pmo, syscall_handler: SyscallHandler<Self>) -> Self {
         interrupts::disable();
         sce_enable();
         gdt::init();

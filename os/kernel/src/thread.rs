@@ -1,27 +1,27 @@
-use arch::{exec::ExecState, mem::Addrspace};
+use arch::{exec::ExecState, mem::Addrspace, System};
 
 use crate::{caps::Resources, kmem::KPtr};
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct Thread<E, A> {
-    exec_state: E,
-    resources: Resources<E, A>,
+pub struct Thread<S: System> {
+    exec_state: S::ExecState,
+    resources: Resources<S>,
 }
 
-impl<E, A> Thread<E, A> {
-    pub fn new(exec_state: E, comp: Resources<E, A>) -> Self {
+impl<S: System> Thread<S> {
+    pub fn new(exec_state: S::ExecState, comp: Resources<S>) -> Self {
         Self {
             exec_state,
             resources: comp,
         }
     }
 
-    pub fn active_comp(&self) -> &Resources<E, A> {
+    pub fn active_comp(&self) -> &Resources<S> {
         &self.resources
     }
 
-    pub fn current() -> Option<KPtr<Self>> {
+    pub fn current() -> KPtr<Self> {
         todo!();
     }
 
@@ -29,11 +29,7 @@ impl<E, A> Thread<E, A> {
         todo!();
     }
 
-    pub fn dispatch(this: KPtr<Self>) -> !
-    where
-        E: ExecState,
-        A: Addrspace,
-    {
+    pub fn dispatch(this: KPtr<Self>) -> ! {
         // Our kernel is non-preemptive which makes every other case really
         // simple as it's a completely synchronous call-response. However, thread
         // dispatching is somewhat weird because we exit the kernel early on the

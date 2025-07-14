@@ -11,5 +11,6 @@ userspace = []
 
 [dependencies]
 derive_more.workspace = true
+tap.workspace = true
 zerocopy.workspace = true
 

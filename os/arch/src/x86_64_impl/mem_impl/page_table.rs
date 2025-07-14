@@ -15,6 +15,7 @@ use crate::{
     },
 };
 
+#[derive(Debug)]
 pub struct X64Addrspace {
     l4_frame: Frame,
     pmo: Pmo,

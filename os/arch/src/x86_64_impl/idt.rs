@@ -3,6 +3,7 @@ mod handlers;
 use core::arch::naked_asm;
 
 use handlers::{Isr, PanicHandler};
+use qapi::caps::CapResult as _;
 use qapi::syscall::SyscallArgs;
 use sync::cell::AtomicLazyCell;
 use x86_64::{
@@ -83,7 +84,7 @@ fn page_fault_handler(ctx: ExceptionCtx<Exception>) {
 }
 
 #[unsafe(naked)]
-extern "C" fn syscall_int(cap: usize, a: usize, b: usize, c: usize, d: usize, e: usize) {
+extern "C" fn syscall_int(cap: usize, a: usize, b: usize, c: usize, d: usize, e: usize) -> isize {
     extern "C" fn inner(
         cap: usize,
         a: usize,
@@ -92,13 +93,14 @@ extern "C" fn syscall_int(cap: usize, a: usize, b: usize, c: usize, d: usize, e:
         d: usize,
         e: usize,
         ctx: ExceptionCtx<Interrupt>,
-    ) -> usize {
+    ) -> isize {
         // SAFETY: It would be impossible to get to this interrupt handler
         // without having first initialized the IDT with arch::init
         (unsafe { SYSTEM.get_unchecked() }.syscall_handler)(
             SyscallArgs::new(cap, [a, b, c, d, e]),
             ctx,
         )
+        .into_isize()
     }
     // SAFETY: Userspace expects syscall interrupt to behave like a C calling convention syscall which
     // will work so long as userspace doesn't need to pass arguments on the stack.

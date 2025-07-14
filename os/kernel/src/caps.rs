@@ -1,25 +1,24 @@
 use core::marker::PhantomData;
 
-use qapi::caps::CapabilityKind;
+use arch::System;
+use qapi::caps::{CapIndex, CapabilityKind};
 
 use crate::{retyping::KernelFrame, thread::Thread};
 
 #[derive(Debug)]
-pub struct Resources<E, A> {
-    addrspace: A,
+pub struct Resources<S: System> {
+    addrspace: S::Addrspace,
     capabilities: [Capability; 16],
-    _thread_cap: PhantomData<Thread<E, A>>,
+    _thread_cap: PhantomData<Thread<S>>,
 }
 
-pub struct CapIndex(u32);
-
-impl<E, A> Resources<E, A> {
-    pub fn addrspace(&self) -> &A {
+impl<S: System> Resources<S> {
+    pub fn addrspace(&self) -> &S::Addrspace {
         &self.addrspace
     }
 
     pub fn cap(&self, index: CapIndex) -> &Capability {
-        &self.capabilities[index.0 as usize]
+        &self.capabilities[index.value() as usize]
     }
 }
 
@@ -27,4 +26,10 @@ impl<E, A> Resources<E, A> {
 pub struct Capability {
     pub resource: KernelFrame,
     pub kind: CapabilityKind,
+}
+
+impl Capability {
+    pub fn exercise(&self) -> usize {
+        todo!();
+    }
 }

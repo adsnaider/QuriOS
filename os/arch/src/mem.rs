@@ -33,7 +33,7 @@ pub enum MapPageError {
     AlreadyMapped(#[error(not(source))] Frame),
 }
 
-pub trait Addrspace: KernelObject {
+pub trait Addrspace: KernelObject + core::fmt::Debug {
     /// Maps a page to the given frame for the provided addrspace.
     ///
     /// # Safety
