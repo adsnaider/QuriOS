@@ -1,6 +1,6 @@
 use derive_more::{Display, Error, Into, TryFrom};
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u8)]
 pub enum CapabilityKind {
     Empty = 0,
@@ -37,8 +37,8 @@ pub enum CapError {
     Unknown = -1,
     #[display("Capability index is out of range of maximum allowed")]
     CapIndexOutOfRange = -2,
-    #[display("Capability index points to an empty capability slot")]
-    CapSlotIsEmpty = -3,
+    #[display("Capability index does not point to an active capability")]
+    CapNotFound = -3,
 }
 
 impl CapError {

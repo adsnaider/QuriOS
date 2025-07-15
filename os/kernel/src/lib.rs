@@ -19,7 +19,7 @@ use arch::{
     system, ArchSystem,
 };
 use boot::{bump_alloc::BumpFrameAllocator, Process};
-use caps::Resources;
+use caps::{CapTable, Resources};
 use kmem::KPtr;
 use limine::{
     request::{HhdmRequest, MemoryMapRequest, ModuleRequest, StackSizeRequest},
@@ -99,7 +99,14 @@ pub fn uinit() -> ! {
     let mut fallocator = BumpFrameAllocator::new();
     let init = Process::<ArchSystem>::load(system(), proc, 10, initrd, &mut fallocator)
         .expect("Error loading init process");
-    let resources = Resources::new(init.addrspace);
+
+    let frame = fallocator
+        .alloc_kernel_frame()
+        .expect("Out of memory error during initialization");
+    let cap_table = CapTable::default();
+    // SAFETY: The kernel frame is unused
+    let cap_table = unsafe { KPtr::new_unchecked(frame, ManuallyDrop::new(cap_table)) };
+    let resources = Resources::new(init.addrspace, cap_table);
     let thread = Thread::new(init.exec, resources);
     let thread_frame = fallocator
         .alloc_kernel_frame()

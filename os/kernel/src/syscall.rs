@@ -23,6 +23,7 @@ pub fn syscall_handler(
             .unwrap_unchecked()
             .active_comp()
             .cap(cap)
-    };
+    }
+    .ok_or(CapError::CapNotFound)?;
     cap.exercise(args)
 }

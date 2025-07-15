@@ -14,6 +14,7 @@ serial = { path = "os/crates/serial" }
 sync = { path = "os/crates/sync" }
 entry = { path = "os/crates/entry" }
 loader = { path = "os/crates/loader" }
+trie = { path = "os/crates/trie" }
 qapi = { path = "os/qapi" }
 
 zerocopy = { version = "0.8.26", features = ["derive"] }

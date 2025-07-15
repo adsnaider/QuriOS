@@ -30,3 +30,4 @@ extend = "1.2.0"
 heapless = "0.8.0"
 qapi.workspace = true
 zerocopy.workspace = true
+trie.workspace = true
