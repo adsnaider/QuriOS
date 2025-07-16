@@ -1,6 +1,7 @@
 use core::{cell::RefCell, ops::Deref};
 
-use arch::{exec::ExecState, mem::Addrspace, ArchSystem, System};
+use arch::{exec::ExecState, mem::Addrspace, ArchSystem, CapabilityResource, System};
+use qapi::caps::{CapError, CapabilityKind, PositiveIsize};
 
 use crate::{caps::Resources, core_local::CoreLocal, kmem::KPtr};
 

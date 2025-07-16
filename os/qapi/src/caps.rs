@@ -8,6 +8,8 @@ pub enum CapabilityKind {
     TranscientPageTable,
     RootPageTable,
     CapTable,
+    SyncCall,
+    Retype,
 }
 
 #[derive(Debug, Display)]

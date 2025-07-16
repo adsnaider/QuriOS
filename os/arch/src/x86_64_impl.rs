@@ -1,7 +1,7 @@
 use core::arch::asm;
 
 use exec::{ExceptionCtx, ExecCtx, Interrupt};
-use mem_impl::page_table::X64Addrspace;
+use mem_impl::page_table::{AnyPageTable, X64Addrspace};
 use x86_64::instructions::interrupts;
 
 mod exec;
@@ -11,6 +11,7 @@ mod mem_impl;
 
 use crate::{SyscallHandler, System, mem::Pmo};
 
+#[derive(Debug)]
 pub struct X64Sys {
     pmo: Pmo,
     syscall_handler: SyscallHandler<Self>,
@@ -21,6 +22,7 @@ unsafe impl System for X64Sys {
     type Addrspace = X64Addrspace;
     type ExecState = ExecCtx;
     type SyscallCtx = ExceptionCtx<Interrupt>;
+    type PageTable = AnyPageTable;
 
     fn addrspace(&self) -> Self::Addrspace {
         // SAFETY: PMO is correct from initialization

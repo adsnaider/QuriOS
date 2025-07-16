@@ -1,8 +1,9 @@
 //! Kernel-owned memory utilities
 
-use core::mem::ManuallyDrop;
 use core::ops::Deref;
 use core::ptr::NonNull;
+use core::sync::atomic::Ordering;
+use core::{mem::ManuallyDrop, sync::atomic::fence};
 
 use crate::{
     pmo::{PhysAddrExt as _, VirtAddrExt as _},
@@ -13,13 +14,13 @@ use trie::Ptr;
 
 /// A "kernel" pointer to any page-aligned resource.
 ///
-/// A kernel pointer is a pointer type that may only point to a kernel object
-/// that takes up an entire page. This is because kernel pointers use the
-/// memroy retyping capabilities which use reference counts on an entire
-/// page.
+/// A kernel pointer is an atomically reference-counted pointer that use
+/// entire frames for storing their data. For this reason, each kernel
+/// object is required to have a size smaller than the frame size
+/// and an alignment compatible with the start of a frame.
 #[repr(transparent)]
 pub struct KPtr<T> {
-    inner: NonNull<ManuallyDrop<T>>,
+    inner: NonNull<T>,
 }
 
 impl<T> core::fmt::Debug for KPtr<T> {
@@ -45,15 +46,9 @@ impl<T> KPtr<T> {
         assert!(core::mem::size_of::<T>() <= Page::SIZE);
         assert!(Page::SIZE % core::mem::align_of::<T>() == 0);
     };
-    const TRIVIALLY_DROPPABLE: () = {
-        // TODO: Make this work
-        // assert!(!core::mem::needs_drop::<T>());
-    };
 
     #[inline(always)]
-    pub fn new(frame: Frame, value: ManuallyDrop<T>) -> Result<Self, AsUnusedKernelError> {
-        let () = Self::VALID_SIZE_AND_ALIGN;
-        let () = Self::TRIVIALLY_DROPPABLE;
+    pub fn new(frame: Frame, value: T) -> Result<Self, AsUnusedKernelError> {
         // SAFETY: Frame is typed as kernel and atomically incremented
         unsafe { Ok(Self::new_unchecked(frame.try_as_unused_kernel()?, value)) }
     }
@@ -66,10 +61,10 @@ impl<T> KPtr<T> {
     /// the frame is retyped into a kernel frame as opposed to using a pre-allocated
     /// kernel frame
     #[inline(always)]
-    pub unsafe fn new_unchecked(frame: KernelFrame, value: ManuallyDrop<T>) -> Self {
+    pub unsafe fn new_unchecked(frame: KernelFrame, value: T) -> Self {
         let frame = frame.into_raw();
         let pointer = frame.addr().to_virtual().as_mut_ptr();
-        let ptr: NonNull<ManuallyDrop<T>> = NonNull::new(pointer).unwrap();
+        let ptr: NonNull<T> = NonNull::new(pointer).unwrap();
         debug_assert!(ptr.as_ptr() as usize % Page::SIZE == 0);
         // SAFETY: Allocation is well-aligned and sufficiently large for T
         unsafe {
@@ -83,6 +78,7 @@ impl<T> KPtr<T> {
     ///
     /// The frame must only be used by `KPtr<T>`
     pub unsafe fn from_frame_unchecked(frame: KernelFrame) -> Self {
+        let () = Self::VALID_SIZE_AND_ALIGN;
         let frame = frame.into_raw();
         let pointer = frame.addr().to_virtual().as_mut_ptr();
         let ptr = NonNull::new(pointer).unwrap();
@@ -90,10 +86,13 @@ impl<T> KPtr<T> {
         Self { inner: ptr }
     }
 
+    // TODO: Remove this function
+    #[allow(dead_code)]
     /// # Safety
     ///
     /// Pointer must be a valid kernel struct originally constructed as a KPtr
-    pub unsafe fn from_ptr_unchecked(value: NonNull<ManuallyDrop<T>>) -> Self {
+    unsafe fn from_ptr_unchecked(value: NonNull<T>) -> Self {
+        let () = Self::VALID_SIZE_AND_ALIGN;
         let this = Self { inner: value };
         this.frame().as_kernel_unchecked().into_raw();
         this
@@ -138,8 +137,15 @@ impl<T> Clone for KPtr<T> {
 impl<T> Drop for KPtr<T> {
     fn drop(&mut self) {
         // SAFETY: We constructed the frame with `into_raw`.
-        unsafe { KernelFrame::from_raw(self.frame()).drop() };
-        let () = Self::TRIVIALLY_DROPPABLE;
+        let count = unsafe { KernelFrame::from_raw(self.frame()).drop() };
+        if count == 1 && core::mem::needs_drop::<T>() {
+            // Last ones turn off the lights
+            fence(Ordering::Acquire);
+            // SAFETY: We are the last standing reference, so no other ptrs can ever be constructed here.
+            unsafe {
+                self.inner.as_ptr().drop_in_place();
+            }
+        }
     }
 }
 

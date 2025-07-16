@@ -11,8 +11,6 @@ pub use phys::{Frame, PhysAddr};
 pub use pmo::Pmo;
 pub use virt::{Page, VirtAddr};
 
-use crate::KernelObject;
-
 #[derive(Debug, Error, Display)]
 pub enum FrameAllocError {
     #[display("No more frames in the system")]
@@ -33,7 +31,7 @@ pub enum MapPageError {
     AlreadyMapped(#[error(not(source))] Frame),
 }
 
-pub trait Addrspace: KernelObject + core::fmt::Debug {
+pub trait Addrspace: Sized {
     /// Maps a page to the given frame for the provided addrspace.
     ///
     /// # Safety
@@ -55,6 +53,10 @@ pub trait Addrspace: KernelObject + core::fmt::Debug {
     fn flush(page: Page);
 
     fn activate(&self);
+
+    fn into_frame(self) -> Frame;
+
+    fn from_frame(pmo: &Pmo, frame: Frame) -> Self;
 }
 
 #[must_use]

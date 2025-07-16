@@ -31,3 +31,4 @@ heapless = "0.8.0"
 qapi.workspace = true
 zerocopy.workspace = true
 trie.workspace = true
+derive-where = "1.5.0"

@@ -4,6 +4,7 @@ pub mod caps;
 pub mod kmem;
 pub mod pmo;
 pub mod retyping;
+pub mod sync_call;
 pub mod syscall;
 pub mod thread;
 
@@ -11,8 +12,6 @@ pub(crate) mod core_local;
 pub(crate) mod hint;
 
 mod boot;
-
-use core::mem::ManuallyDrop;
 
 use arch::{
     mem::{Pmo, VirtAddr},
@@ -105,13 +104,13 @@ pub fn uinit() -> ! {
         .expect("Out of memory error during initialization");
     let cap_table = CapTable::default();
     // SAFETY: The kernel frame is unused
-    let cap_table = unsafe { KPtr::new_unchecked(frame, ManuallyDrop::new(cap_table)) };
+    let cap_table = unsafe { KPtr::new_unchecked(frame, cap_table) };
     let resources = Resources::new(init.addrspace, cap_table);
     let thread = Thread::new(init.exec, resources);
     let thread_frame = fallocator
         .alloc_kernel_frame()
         .expect("Out of memory error during initialization");
     // SAFETY: The kernel frame is unused
-    let thread = unsafe { KPtr::new_unchecked(thread_frame, ManuallyDrop::new(thread)) };
+    let thread = unsafe { KPtr::new_unchecked(thread_frame, thread) };
     Thread::dispatch(thread)
 }

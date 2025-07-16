@@ -1,6 +1,7 @@
 #![allow(unused)]
 use core::sync::atomic::{AtomicU64, Ordering};
 
+use qapi::caps::{CapError, CapabilityKind, PositiveIsize};
 use x86_64::{
     instructions::tlb,
     registers::control::Cr3,
@@ -8,7 +9,7 @@ use x86_64::{
 };
 
 use crate::{
-    KernelObject,
+    CapabilityResource,
     mem::{
         Addrspace, Flusher, Frame, FrameAllocator, MapPageError, Page, PageFlags, PhysAddr, Pmo,
         VirtAddr,
@@ -105,21 +106,6 @@ impl From<PageFlags> for PageTableFlags {
     }
 }
 
-impl KernelObject for X64Addrspace {
-    type System = X64Sys;
-
-    fn into_frame(self) -> Frame {
-        self.l4_frame
-    }
-
-    unsafe fn from_frame(sys: &X64Sys, frame: Frame) -> Self {
-        Self {
-            l4_frame: frame,
-            pmo: sys.pmo,
-        }
-    }
-}
-
 impl Addrspace for X64Addrspace {
     unsafe fn map_page<A: FrameAllocator>(
         &self,
@@ -185,6 +171,17 @@ impl Addrspace for X64Addrspace {
             log::debug!("Skipping addrspace swap since it's unchanged")
         }
     }
+
+    fn into_frame(self) -> Frame {
+        self.l4_frame
+    }
+
+    fn from_frame(pmo: &Pmo, frame: Frame) -> Self {
+        Self {
+            pmo: *pmo,
+            l4_frame: frame,
+        }
+    }
 }
 
 #[extend::ext]
@@ -227,6 +224,12 @@ pub struct AnyPageTable([PageTableEntry; 512]);
 impl Default for AnyPageTable {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl CapabilityResource for AnyPageTable {
+    fn exercise(&self, args: &[usize; 5], kind: CapabilityKind) -> Result<PositiveIsize, CapError> {
+        todo!()
     }
 }
 

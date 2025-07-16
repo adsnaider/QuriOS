@@ -1,9 +1,11 @@
 #![no_std]
 
+use core::fmt::Debug;
+
 use exec::ExecState;
 use mem::{Addrspace, Frame, Pmo};
 use qapi::{
-    caps::{CapError, PositiveIsize},
+    caps::{CapError, CapabilityKind, PositiveIsize},
     syscall::{SyscallArgs, SyscallArgsInit},
 };
 use sync::cell::AtomicOnceCell;
@@ -48,9 +50,10 @@ pub fn init(pmo: Pmo, syscall_handler: SyscallHandler<ArchSystem>) {
 ///
 /// The implementation must adhere exactly to the documentation
 pub unsafe trait System: Sized {
-    type Addrspace: Addrspace;
-    type ExecState: ExecState;
-    type SyscallCtx: SyscallCtx;
+    type Addrspace: Addrspace + Debug;
+    type PageTable: Debug + Default + CapabilityResource;
+    type ExecState: ExecState + Clone;
+    type SyscallCtx: SyscallCtx + Debug;
 
     /// Initializes the architecture-specific subsystem
     fn init(pmo: Pmo, syscall_handler: SyscallHandler<Self>) -> Self;
@@ -59,21 +62,8 @@ pub unsafe trait System: Sized {
     fn addrspace(&self) -> Self::Addrspace;
 }
 
-pub trait KernelObject: Sized {
-    type System: System;
+pub trait SyscallCtx {}
 
-    /// Transforms this object into a raw frame (but maintains any form of
-    /// refernce counting)
-    fn into_frame(self) -> Frame;
-
-    /// Turns the frame into the kernel object (maintaining any form of reference
-    /// counting)
-    ///
-    /// # Safety
-    ///
-    /// The frame must have been created with `into_frame` and frame must still contain
-    /// the original object (though possibly mutated).
-    unsafe fn from_frame(sys: &Self::System, frame: Frame) -> Self;
+pub trait CapabilityResource {
+    fn exercise(&self, args: &[usize; 5], kind: CapabilityKind) -> Result<PositiveIsize, CapError>;
 }
-
-pub trait SyscallCtx: core::fmt::Debug {}
