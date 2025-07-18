@@ -1,6 +1,6 @@
 use arch::{ArchSystem, System};
 use qapi::{
-    caps::{CapError, CapIndex, PositiveIsize},
+    caps::{CapError, CapId, PositiveIsize},
     syscall::{SyscallArgs, SyscallArgsInit},
 };
 use tap::Tap;
@@ -11,7 +11,7 @@ pub fn syscall_handler(
     args: SyscallArgs<SyscallArgsInit>,
     ctx: <ArchSystem as System>::SyscallCtx,
 ) -> Result<PositiveIsize, CapError> {
-    let cap = CapIndex::try_from(args.cap())?;
+    let cap = args.cap()?;
     let args = args.args();
     log::info!("Handling syscall: {cap} with args {args:?} {ctx:#?}");
     let current = Thread::current();

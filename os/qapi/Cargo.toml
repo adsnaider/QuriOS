@@ -13,5 +13,6 @@ userspace = []
 derive_more.workspace = true
 log.workspace = true
 tap.workspace = true
+trie.workspace = true
 zerocopy.workspace = true
 

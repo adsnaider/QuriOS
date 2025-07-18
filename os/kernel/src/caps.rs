@@ -4,9 +4,9 @@ use arch::{
     mem::{Addrspace, Page},
     CapabilityResource, System,
 };
-use derive_more::{Deref, DerefMut};
+use derive_more::Deref;
 use derive_where::derive_where;
-use qapi::caps::{CapError, CapIndex, CapabilityKind, PositiveIsize};
+use qapi::caps::{CapError, CapId, CapabilityKind, PositiveIsize, NUM_SLOTS, SLOT_SIZE};
 use trie::{Ptr as _, Slot, TrieEntry};
 
 use crate::{
@@ -17,13 +17,11 @@ use crate::{
     PMO,
 };
 
-const SLOT_SIZE: usize = 64;
-const NUM_SLOTS: usize = Page::SIZE / SLOT_SIZE;
-
 /// A page-wide trie node for the capability tables.
 pub type CapTable<S> = TrieEntry<NUM_SLOTS, CapSlot<S>>;
 
 #[derive(Debug)]
+#[repr(align(128))]
 pub struct CapSlot<S: System> {
     pub child: Option<KPtr<CapTable<S>>>,
     pub capability: Capability<S>,
@@ -31,6 +29,10 @@ pub struct CapSlot<S: System> {
 
 impl<S: System> Default for CapSlot<S> {
     fn default() -> Self {
+        const {
+            assert!(CapTable::<S>::slot_size() == SLOT_SIZE);
+            assert!(core::mem::size_of::<CapTable<S>>() == Page::SIZE);
+        }
         Self {
             child: None,
             capability: Default::default(),
@@ -62,6 +64,7 @@ pub struct RefBound<'a, T> {
 
 impl<S: System> Resources<S> {
     pub fn new(addrspace: S::Addrspace, capabilities: KPtr<CapTable<S>>) -> Self {
+        // SAFETY: Addrspace frame is already a kenrel frame by construction and holds a PageTable type.
         let page_table =
             unsafe { KPtr::from_frame_unchecked(addrspace.into_frame().as_kernel_unchecked()) };
         Self {
@@ -79,7 +82,7 @@ impl<S: System> Resources<S> {
         }
     }
 
-    pub fn cap(&self, index: CapIndex) -> Option<impl Deref<Target = Capability<S>>> {
+    pub fn cap(&self, index: CapId) -> Option<impl Deref<Target = Capability<S>>> {
         let slot = CapTable::get(self.capabilities.clone(), index.value()).unwrap()?;
         Some(slot.map(|s| &s.capability))
     }
@@ -91,7 +94,7 @@ pub enum Capability<S: System> {
     Empty,
     Thread(KPtr<Thread<S>>),
     TranscientPageTable(KPtr<S::PageTable>),
-    RootPageTable(KPtr<S::PageTable>),
+    Addrspace(KPtr<S::PageTable>),
     CapTable(KPtr<CapTable<S>>),
     SyncCall(SyncCall<S>),
     SyncRet(SyncRet),
@@ -108,7 +111,7 @@ impl<S: System> Capability<S> {
             Self::Empty => Err(CapError::CapNotFound),
             Self::Thread(t) => t.exercise(args, CapabilityKind::Thread),
             Self::TranscientPageTable(p) => p.exercise(args, CapabilityKind::TranscientPageTable),
-            Self::RootPageTable(p) => p.exercise(args, CapabilityKind::RootPageTable),
+            Self::Addrspace(p) => p.exercise(args, CapabilityKind::RootPageTable),
             Self::CapTable(c) => exercise_cap_table(c, args, CapabilityKind::CapTable),
             Self::SyncCall(s) => s.exercise(args, CapabilityKind::SyncCall),
             Self::SyncRet(s) => s.exercise(args, CapabilityKind::SyncCall),

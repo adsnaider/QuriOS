@@ -9,11 +9,22 @@ pub struct OrphanPtr<T> {
     _phantom: PhantomData<*const T>,
 }
 impl<T> OrphanPtr<T> {
-    fn new(ptr: *const T) -> Self {
+    pub fn new(ptr: *const T) -> Self {
         Self {
             addr: ptr.addr(),
             _phantom: PhantomData,
         }
+    }
+
+    pub fn from_addr(addr: usize) -> Self {
+        Self {
+            addr,
+            _phantom: PhantomData,
+        }
+    }
+
+    pub fn addr(&self) -> usize {
+        self.addr
     }
 }
 

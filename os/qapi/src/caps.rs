@@ -1,4 +1,14 @@
 use derive_more::{Display, Error, Into, TryFrom};
+use trie::TrieIndexError;
+
+pub mod cap_table;
+pub mod page_table;
+
+#[cfg(target_arch = "x86_64")]
+pub const PAGE_SIZE: usize = 4096;
+pub const SLOT_SIZE: usize = 128;
+
+pub const NUM_SLOTS: usize = PAGE_SIZE / SLOT_SIZE;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u8)]
@@ -12,10 +22,10 @@ pub enum CapabilityKind {
     Retype,
 }
 
-#[derive(Debug, Display)]
-pub struct CapIndex(u32);
+#[derive(Debug, Display, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CapId(u32);
 
-impl TryFrom<usize> for CapIndex {
+impl TryFrom<usize> for CapId {
     type Error = CapError;
 
     fn try_from(value: usize) -> Result<Self, Self::Error> {
@@ -25,7 +35,13 @@ impl TryFrom<usize> for CapIndex {
     }
 }
 
-impl CapIndex {
+impl From<CapId> for usize {
+    fn from(value: CapId) -> Self {
+        value.0.try_into().unwrap()
+    }
+}
+
+impl CapId {
     pub const fn value(&self) -> u32 {
         self.0
     }
@@ -41,6 +57,8 @@ pub enum CapError {
     CapIndexOutOfRange = -2,
     #[display("Capability index does not point to an active capability")]
     CapNotFound = -3,
+    #[display("Invalid syscall argument wasn't typed properly")]
+    InvalidArg = -4,
 }
 
 impl CapError {
@@ -93,5 +111,11 @@ impl CapResult for Result<PositiveIsize, CapError> {
             Ok(pos) => Ok(pos),
             Err(_) => Err(CapError::from_isize(value)),
         }
+    }
+}
+
+impl From<TrieIndexError> for CapError {
+    fn from(_: TrieIndexError) -> Self {
+        Self::CapIndexOutOfRange
     }
 }

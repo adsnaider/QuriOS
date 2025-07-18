@@ -12,6 +12,7 @@ pub struct TrieEntry<const COUNT: usize, S: Slot<COUNT>> {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(transparent)]
 pub struct SlotId<const COUNT: usize>(usize);
 
 impl<const COUNT: usize> SlotId<COUNT> {
