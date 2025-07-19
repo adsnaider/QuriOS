@@ -7,7 +7,7 @@ use qapi::{
 use syscall_token::SyscallToken;
 use tap::Tap;
 
-use crate::{core_local::CoreLocalData, thread::Thread};
+use crate::core_local::CoreLocalData;
 
 pub mod syscall_token {
     use ghost_cell::GhostToken;
@@ -15,6 +15,12 @@ pub mod syscall_token {
     pub struct SyscallToken<'syscall>(GhostToken<'syscall>);
 
     impl<'a> SyscallToken<'a> {
+        /// Constructs a new SyscallToken.
+        ///
+        /// # Safety
+        ///
+        /// This may only be done once per-core per syscall/interrupt/exception handler.
+        /// Essentially, this token must only exist once (temporally).
         pub const unsafe fn new(token: GhostToken<'a>) -> Self {
             Self(token)
         }

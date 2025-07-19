@@ -89,6 +89,7 @@ fn page_fault_handler(mut ctx: ExceptionCtx<Exception>) {
     match isr_stack.code_segment.rpl() {
         PrivilegeLevel::Ring0 => match addr.memory_segment() {
             MemorySegment::User => {
+                // SAFETY: NOT SAFE - TODO CoreLocal
                 if unsafe { USER_BUFFER_SAFE_READ } {
                     isr_stack.instruction_pointer =
                         VirtAddrImpl::new(user_buffer_read_page_fault_call_gate as usize as u64);

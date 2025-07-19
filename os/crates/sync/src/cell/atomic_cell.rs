@@ -36,6 +36,7 @@ impl<T> AtomicCell<T> {
     #[inline(always)]
     fn spin_lock<U, F: FnOnce(&mut T) -> U>(&self, fun: F) -> U {
         self.lock();
+        // SAFETY: Spin lock guarantees single access to mutual exclusion zone.
         let out = fun(unsafe { &mut *self.value.get() });
         self.unlock();
         out

@@ -9,7 +9,6 @@ use qapi::{
     },
     init::{BootArgs, BootCaps},
 };
-use serial::sprintln;
 
 #[entry]
 fn main(_args: &'static BootArgs) -> ! {
@@ -34,11 +33,14 @@ fn main(_args: &'static BootArgs) -> ! {
 
 fn thread2() -> ! {
     log::info!("Landed on userspace init");
+    #[allow(clippy::empty_loop)]
     loop {}
 }
 
+#[cfg(target_os = "none")]
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
+    use serial::sprintln;
     sprintln!("{}", info);
     loop {}
 }

@@ -130,12 +130,21 @@ impl From<loader::MemFlags> for PageFlags {
 
 pub(crate) static mut USER_BUFFER_SAFE_READ: bool = false;
 
+/// Copies data from a user buffer into the kernel buffer and catches an page fault exceptions returning false when such occurs.
+///
+/// # Safety
+///
+/// Aside from the page fault, this function doesn't perform any aditional checks regarding pointer validity (canonical, user-space only,
+/// size, etc.). These constraints are left to higher-level abstractions to check.
 #[unsafe(naked)]
 pub unsafe extern "C" fn user_buffer_read(
     kernel_buffer: *mut u8,
     user_buffer: *const u8,
     length: usize,
 ) -> bool {
+    // Compiled a simple optimized rust function that performs the copy and translated it into inline assembly
+    // SAFETY: This function requires no stack usage or internal calls as the page fault will direclty unwind
+    // into `user_buffer_read_page_fault_call_gate`.
     naked_asm!(
         "        mov     rax, qword ptr [rip + {trap_flag}@GOTPCREL] ",
         "        mov     byte ptr [rax], 1 ",
