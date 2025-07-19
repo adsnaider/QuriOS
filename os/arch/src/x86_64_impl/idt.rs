@@ -3,15 +3,18 @@ mod handlers;
 use core::arch::naked_asm;
 
 use handlers::{Isr, PanicHandler};
-use qapi::caps::CapResult as _;
 use qapi::syscall::SyscallArgs;
+use qapi::{caps::CapResult as _, syscall::SyscallOp};
 use sync::cell::AtomicLazyCell;
 use x86_64::{
-    PrivilegeLevel, VirtAddr,
+    PrivilegeLevel, VirtAddr as VirtAddrImpl,
     registers::control::Cr2,
     structures::idt::{InterruptDescriptorTable, PageFaultErrorCode},
 };
 
+use crate::mem::{
+    MemorySegment, USER_BUFFER_SAFE_READ, VirtAddr, user_buffer_read_page_fault_call_gate,
+};
 use crate::{
     SYSTEM,
     x86_64_impl::{
@@ -68,7 +71,7 @@ fn init_idt() {
         // SAFETY: The address provided will match the syscall ABI
         unsafe {
             idt[SYSCALL_INT]
-                .set_handler_addr(VirtAddr::from_ptr(syscall_int as *const ()))
+                .set_handler_addr(VirtAddrImpl::from_ptr(syscall_int as *const ()))
                 .set_privilege_level(PrivilegeLevel::Ring3)
         };
         idt
@@ -77,27 +80,58 @@ fn init_idt() {
 }
 
 #[inline(always)]
-fn page_fault_handler(ctx: ExceptionCtx<Exception>) {
+fn page_fault_handler(mut ctx: ExceptionCtx<Exception>) {
     let code = PageFaultErrorCode::from_bits(ctx.error_code()).unwrap();
     let addr = Cr2::read().unwrap().as_ptr::<()>() as usize;
-    panic!("PAGE FAULT @ {addr:#X} - ({code:?}) {ctx:#?}");
+    let addr = VirtAddr::new(addr);
+    // SAFETY: Only safe handling of the RIP for fix-up logic in case of userspace pointer reads
+    let isr_stack = unsafe { ctx.interrupt_stack_frame_mut() };
+    match isr_stack.code_segment.rpl() {
+        PrivilegeLevel::Ring0 => match addr.memory_segment() {
+            MemorySegment::User => {
+                if unsafe { USER_BUFFER_SAFE_READ } {
+                    isr_stack.instruction_pointer =
+                        VirtAddrImpl::new(user_buffer_read_page_fault_call_gate as usize as u64);
+                } else {
+                    panic!(
+                        "PAGE FAULT (attempted user read without safeguard) @ {addr:#X?} - ({code:?}) {ctx:#?}"
+                    );
+                }
+                // Trying to safely read user pointer
+            }
+            MemorySegment::Kernel | MemorySegment::Untyped => {
+                panic!("PAGE FAULT @ {addr:#X?} - ({code:?}) {ctx:#?}");
+            }
+        },
+        PrivilegeLevel::Ring1 => unreachable!(),
+        PrivilegeLevel::Ring2 => unreachable!(),
+        PrivilegeLevel::Ring3 => panic!("PAGE FAULT @ {addr:#X?} - ({code:?}) {ctx:#?}"),
+    }
 }
 
 #[unsafe(naked)]
-extern "C" fn syscall_int(cap: usize, a: usize, b: usize, c: usize, d: usize, e: usize) -> isize {
+extern "C" fn syscall_int(
+    cap: usize,
+    op: SyscallOp,
+    b: usize,
+    c: usize,
+    d: usize,
+    e: usize,
+) -> isize {
     extern "C" fn inner(
         cap: usize,
+        op: SyscallOp,
         a: usize,
         b: usize,
         c: usize,
         d: usize,
-        e: usize,
         ctx: ExceptionCtx<Interrupt>,
     ) -> isize {
         // SAFETY: It would be impossible to get to this interrupt handler
         // without having first initialized the IDT with arch::init
         (unsafe { SYSTEM.get_unchecked() }.syscall_handler)(
-            SyscallArgs::new(cap, [a, b, c, d, e]),
+            cap,
+            SyscallArgs::new(op, [a, b, c, d]),
             ctx,
         )
         .into_isize()
@@ -105,14 +139,11 @@ extern "C" fn syscall_int(cap: usize, a: usize, b: usize, c: usize, d: usize, e:
     // SAFETY: Userspace expects syscall interrupt to behave like a C calling convention syscall which
     // will work so long as userspace doesn't need to pass arguments on the stack.
     // Since we filled all the register-args, we need to add the exception context on the stack.
-    #[allow(unused_unsafe)]
-    unsafe {
-        naked_asm!(
-            "push rsp",
-            "call {inner}",
-            "add rsp, 8",
-            "iretq",
-            inner = sym inner,
-        )
-    }
+    naked_asm!(
+        "push rsp",
+        "call {inner}",
+        "add rsp, 8",
+        "iretq",
+        inner = sym inner,
+    )
 }

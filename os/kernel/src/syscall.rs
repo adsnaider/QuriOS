@@ -1,6 +1,6 @@
 use arch::{ArchSystem, System};
 use qapi::{
-    caps::{CapError, CapId, PositiveIsize},
+    caps::{CapError, PositiveIsize},
     syscall::{SyscallArgs, SyscallArgsInit},
 };
 use tap::Tap;
@@ -8,11 +8,11 @@ use tap::Tap;
 use crate::thread::Thread;
 
 pub fn syscall_handler(
+    cap: usize,
     args: SyscallArgs<SyscallArgsInit>,
     ctx: <ArchSystem as System>::SyscallCtx,
 ) -> Result<PositiveIsize, CapError> {
-    let cap = args.cap()?;
-    let args = args.args();
+    let cap = cap.try_into()?;
     log::info!("Handling syscall: {cap} with args {args:?} {ctx:#?}");
     let current = Thread::current();
     // SAFETY: We should always have a thread set on syscall handling

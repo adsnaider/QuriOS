@@ -1,15 +1,25 @@
-use core::{convert::Infallible, marker::PhantomData, ops::Deref};
+use core::{convert::Infallible, marker::PhantomData, mem::MaybeUninit, ops::Deref, ptr::NonNull};
 
 use arch::{
-    mem::{Addrspace, Page},
-    CapabilityResource, System,
+    mem::{user_buffer_read, Addrspace, Page, VirtAddr},
+    system, ArchSystem, CapabilityResource, System,
 };
-use derive_more::Deref;
+use derive_more::{Deref, DerefMut};
 use derive_where::derive_where;
-use qapi::caps::{CapError, CapId, CapabilityKind, PositiveIsize, NUM_SLOTS, SLOT_SIZE};
-use trie::{Ptr as _, Slot, TrieEntry};
+use qapi::{
+    caps::{
+        cap_table::{CapTableOps, ConsKind, ConsOp, ThreadCons},
+        CapError, CapId, CapabilityKind, PositiveIsize, NUM_SLOTS, SLOT_SIZE,
+    },
+    syscall::{SyscallArgs, SyscallArgsInit, SyscallStruct},
+    types::UserPtr,
+};
+use sync::cell::AtomicCell;
+use trie::{Ptr, Slot, TrieEntry};
+use zerocopy::{AlignmentError, CastError, FromBytes, Immutable, KnownLayout};
 
 use crate::{
+    core_local::CoreLocal,
     kmem::KPtr,
     retyping::FrameExt,
     sync_call::{SyncCall, SyncRet},
@@ -21,11 +31,15 @@ use crate::{
 pub type CapTable<S> = TrieEntry<NUM_SLOTS, CapSlot<S>>;
 
 #[derive(Debug)]
-#[repr(align(128))]
-pub struct CapSlot<S: System> {
+#[derive_where(Clone)]
+pub struct ImmutableSlot<S: System> {
     pub child: Option<KPtr<CapTable<S>>>,
     pub capability: Capability<S>,
 }
+
+#[derive(Deref, DerefMut, Debug)]
+#[repr(align(128))]
+pub struct CapSlot<S: System>(AtomicCell<ImmutableSlot<S>>);
 
 impl<S: System> Default for CapSlot<S> {
     fn default() -> Self {
@@ -33,6 +47,12 @@ impl<S: System> Default for CapSlot<S> {
             assert!(CapTable::<S>::slot_size() == SLOT_SIZE);
             assert!(core::mem::size_of::<CapTable<S>>() == Page::SIZE);
         }
+        Self(AtomicCell::new(ImmutableSlot::default()))
+    }
+}
+
+impl<S: System> Default for ImmutableSlot<S> {
+    fn default() -> Self {
         Self {
             child: None,
             capability: Default::default(),
@@ -45,7 +65,7 @@ impl<S: System> Slot<NUM_SLOTS> for CapSlot<S> {
     type Ptr<T> = KPtr<T>;
 
     fn child(&self) -> Result<Option<KPtr<CapTable<S>>>, Self::Err> {
-        Ok(self.child.clone())
+        Ok(self.get_cloned().child)
     }
 }
 
@@ -73,6 +93,10 @@ impl<S: System> Resources<S> {
         }
     }
 
+    pub fn addrspace_cap(&self) -> &KPtr<S::PageTable> {
+        &self.addrspace
+    }
+
     pub fn addrspace(&self) -> impl Deref<Target = S::Addrspace> + '_ {
         // We want reference semantics here to avoid the addrspace outliving the
         // page table it refers to
@@ -82,9 +106,23 @@ impl<S: System> Resources<S> {
         }
     }
 
-    pub fn cap(&self, index: CapId) -> Option<impl Deref<Target = Capability<S>>> {
-        let slot = CapTable::get(self.capabilities.clone(), index.value()).unwrap()?;
-        Some(slot.map(|s| &s.capability))
+    pub fn cap(&self, index: CapId) -> Option<Capability<S>> {
+        let slot = self.slot(index)?;
+        Some(slot.get_cloned().capability)
+    }
+
+    pub fn slot(&self, index: CapId) -> Option<impl Ptr<CapSlot<S>>> {
+        CapTable::get(self.capabilities.clone(), index.value()).unwrap_infallible()
+    }
+}
+
+pub trait UnwrapInfallible<T> {
+    fn unwrap_infallible(self) -> T;
+}
+
+impl<T> UnwrapInfallible<T> for Result<T, Infallible> {
+    fn unwrap_infallible(self) -> T {
+        self.unwrap()
     }
 }
 
@@ -106,7 +144,7 @@ impl<S: System> Capability<S> {
         Self::Empty
     }
 
-    pub fn exercise(&self, args: &[usize; 5]) -> Result<PositiveIsize, CapError> {
+    pub fn exercise(&self, args: SyscallArgs<SyscallArgsInit>) -> Result<PositiveIsize, CapError> {
         match self {
             Self::Empty => Err(CapError::CapNotFound),
             Self::Thread(t) => t.exercise(args, CapabilityKind::Thread),
@@ -120,29 +158,105 @@ impl<S: System> Capability<S> {
     }
 }
 
+pub struct TrustedUserPtr<T>(NonNull<T>);
+impl<T> TryFrom<UserPtr<T>> for TrustedUserPtr<T> {
+    type Error = CapError;
+
+    fn try_from(value: UserPtr<T>) -> Result<Self, Self::Error> {
+        let start = value.addr();
+        if start == 0 {
+            return Err(CapError::BadUserMemory);
+        }
+        let end = value
+            .addr()
+            .checked_add(size_of::<T>())
+            .ok_or(CapError::BadUserMemory)?;
+        let start_ptr = VirtAddr::try_new(start).map_err(|_| CapError::BadUserMemory)?;
+        let end_ptr = VirtAddr::try_new(end).map_err(|_| CapError::BadUserMemory)?;
+        if !start_ptr.is_user() || !end_ptr.is_user() {
+            return Err(CapError::BadUserMemory);
+        }
+        Ok(Self(NonNull::new(start as *mut T).unwrap()))
+    }
+}
+
+impl<T> TrustedUserPtr<T>
+where
+    T: FromBytes + KnownLayout + Immutable + Copy,
+{
+    pub fn safe_read(&self) -> Result<T, CapError> {
+        let mut result = MaybeUninit::<T>::uninit();
+        let success = unsafe {
+            user_buffer_read(
+                result.as_mut_ptr() as *mut u8,
+                self.0.as_ptr() as *const u8,
+                size_of::<T>(),
+            )
+        };
+        if success {
+            Ok(unsafe { result.assume_init() })
+        } else {
+            Err(CapError::BadUserMemory)
+        }
+    }
+}
+
 // Don't feel like dealing with orphan rules...
 fn exercise_cap_table<S: System>(
-    this: &CapTable<S>,
-    args: &[usize; 5],
+    this: &KPtr<CapTable<S>>,
+    args: SyscallArgs<SyscallArgsInit>,
     kind: CapabilityKind,
 ) -> Result<PositiveIsize, CapError> {
-    todo!();
+    match CapTableOps::try_from_args(args)? {
+        CapTableOps::Cons(ConsOp {
+            slot_id,
+            kind,
+            cons_args,
+        }) => {
+            let slot = CapTable::index(this.clone(), slot_id);
+            match kind {
+                ConsKind::Thread => {
+                    let cons_args = TrustedUserPtr::try_from(cons_args.cast::<ThreadCons>())?;
+                    let args = cons_args.safe_read()?;
+
+                    todo!();
+                }
+                ConsKind::CapTable => todo!(),
+                ConsKind::TranscientPageTable => todo!(),
+                ConsKind::Addrspace => todo!(),
+                ConsKind::SyncCall => todo!(),
+                ConsKind::SyncRet => todo!(),
+            }
+        }
+    }
 }
 
 impl<S: System> CapabilityResource for Thread<S> {
-    fn exercise(&self, args: &[usize; 5], kind: CapabilityKind) -> Result<PositiveIsize, CapError> {
-        todo!()
+    fn exercise(
+        &self,
+        args: SyscallArgs<SyscallArgsInit>,
+        kind: CapabilityKind,
+    ) -> Result<PositiveIsize, CapError> {
+        todo!();
     }
 }
 
 impl<S: System> CapabilityResource for SyncCall<S> {
-    fn exercise(&self, args: &[usize; 5], kind: CapabilityKind) -> Result<PositiveIsize, CapError> {
+    fn exercise(
+        &self,
+        args: SyscallArgs<SyscallArgsInit>,
+        kind: CapabilityKind,
+    ) -> Result<PositiveIsize, CapError> {
         todo!()
     }
 }
 
 impl CapabilityResource for SyncRet {
-    fn exercise(&self, args: &[usize; 5], kind: CapabilityKind) -> Result<PositiveIsize, CapError> {
+    fn exercise(
+        &self,
+        args: SyscallArgs<SyscallArgsInit>,
+        kind: CapabilityKind,
+    ) -> Result<PositiveIsize, CapError> {
         todo!()
     }
 }
@@ -151,7 +265,11 @@ impl CapabilityResource for SyncRet {
 pub struct Retype;
 
 impl CapabilityResource for Retype {
-    fn exercise(&self, args: &[usize; 5], kind: CapabilityKind) -> Result<PositiveIsize, CapError> {
+    fn exercise(
+        &self,
+        args: SyscallArgs<SyscallArgsInit>,
+        kind: CapabilityKind,
+    ) -> Result<PositiveIsize, CapError> {
         todo!()
     }
 }

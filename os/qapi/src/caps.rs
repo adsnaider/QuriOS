@@ -1,5 +1,6 @@
 use derive_more::{Display, Error, Into, TryFrom};
 use trie::TrieIndexError;
+use zerocopy::{FromBytes, Immutable, IntoBytes};
 
 pub mod cap_table;
 pub mod page_table;
@@ -9,6 +10,8 @@ pub const PAGE_SIZE: usize = 4096;
 pub const SLOT_SIZE: usize = 128;
 
 pub const NUM_SLOTS: usize = PAGE_SIZE / SLOT_SIZE;
+
+pub type SlotId = trie::SlotId<NUM_SLOTS>;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u8)]
@@ -22,7 +25,21 @@ pub enum CapabilityKind {
     Retype,
 }
 
-#[derive(Debug, Display, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(
+    Debug,
+    Display,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    IntoBytes,
+    FromBytes,
+    Immutable,
+)]
+#[repr(transparent)]
 pub struct CapId(u32);
 
 impl TryFrom<usize> for CapId {
@@ -42,6 +59,10 @@ impl From<CapId> for usize {
 }
 
 impl CapId {
+    pub const fn new(id: u32) -> Self {
+        Self(id)
+    }
+
     pub const fn value(&self) -> u32 {
         self.0
     }
@@ -59,6 +80,10 @@ pub enum CapError {
     CapNotFound = -3,
     #[display("Invalid syscall argument wasn't typed properly")]
     InvalidArg = -4,
+    #[display("Invalid syscall operation isn't valid for capability")]
+    InvalidOp = -5,
+    #[display("Invalid user pointer triggered a page fault while reading or writing")]
+    BadUserMemory = -6,
 }
 
 impl CapError {

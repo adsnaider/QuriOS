@@ -4,7 +4,10 @@ pub(crate) mod bump_alloc;
 
 use arch::{
     exec::ExecState,
-    mem::{Addrspace, Frame, FrameAllocError, MapPageError, Page, PageFlags, VirtAddr},
+    mem::{
+        Addrspace, Frame, FrameAllocError, MapPageError, Page, PageFlags, VirtAddr,
+        UNTYPED_MEMORY_OFFSET,
+    },
     System,
 };
 use bump_alloc::{BumpFrameAllocator, OutOfMemory};
@@ -22,7 +25,6 @@ use loader::{ElfError, Loader, LoaderError, MemFlags, Program, SegmentLoadError}
 use crate::{
     pmo::PhysAddrExt as _,
     retyping::{FrameExt, RetypeTable},
-    UNTYPED_MEMORY_OFFSET,
 };
 
 #[derive(Debug)]

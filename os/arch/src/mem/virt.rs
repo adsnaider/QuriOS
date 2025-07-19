@@ -1,5 +1,7 @@
 use derive_more::{Display, Error};
 
+use super::{HIGHER_HALF, UNTYPED_MEMORY_OFFSET};
+
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord)]
 pub struct Page {
@@ -98,6 +100,14 @@ impl VirtAddr {
         Self::new(0)
     }
 
+    pub const fn memory_segment(&self) -> MemorySegment {
+        match self.0 {
+            ..UNTYPED_MEMORY_OFFSET => MemorySegment::User,
+            UNTYPED_MEMORY_OFFSET..HIGHER_HALF => MemorySegment::Untyped,
+            HIGHER_HALF.. => MemorySegment::Kernel,
+        }
+    }
+
     pub const fn is_higher_half(&self) -> bool {
         self.0 >= 0xFFFF_8000_0000_0000
     }
@@ -105,4 +115,23 @@ impl VirtAddr {
     pub const fn is_lower_half(&self) -> bool {
         !self.is_higher_half()
     }
+
+    pub const fn is_kernel(&self) -> bool {
+        self.is_higher_half()
+    }
+
+    pub const fn is_user(&self) -> bool {
+        self.0 < UNTYPED_MEMORY_OFFSET
+    }
+
+    pub const fn is_untyped_region(&self) -> bool {
+        self.is_lower_half() && self.0 >= UNTYPED_MEMORY_OFFSET
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum MemorySegment {
+    Kernel,
+    User,
+    Untyped,
 }

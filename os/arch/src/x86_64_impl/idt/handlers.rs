@@ -168,7 +168,7 @@ extern "C" fn save_all_with_err_code_and_ret_isr<F: IsrHandler<Exception, ()>>()
     // SAFETY: Sticking with ISR calling convention. Preserved registers are pushed on
     // call to sysv64 ABI.
     unsafe {
-        naked_asm!(push_scratch!(), "sub rsp, 8", "lea rdi, [rsp + 8*11]", "call {inner}", "add rsp, 8", pop_scratch!(), "iretq", inner = sym F::call);
+        naked_asm!(push_scratch!(), "sub rsp, 8", "lea rdi, [rsp + 8*11]", "call {inner}", "add rsp, 8", pop_scratch!(), "add rsp, 8", "iretq", inner = sym F::call);
     }
 }
 

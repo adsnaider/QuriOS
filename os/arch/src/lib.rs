@@ -3,7 +3,7 @@
 use core::fmt::Debug;
 
 use exec::ExecState;
-use mem::{Addrspace, Frame, Pmo};
+use mem::{Addrspace, Pmo};
 use qapi::{
     caps::{CapError, CapabilityKind, PositiveIsize},
     syscall::{SyscallArgs, SyscallArgsInit},
@@ -24,8 +24,11 @@ cfg_if::cfg_if! {
     }
 }
 
-type SyscallHandler<S> =
-    fn(SyscallArgs<SyscallArgsInit>, <S as System>::SyscallCtx) -> Result<PositiveIsize, CapError>;
+type SyscallHandler<S> = fn(
+    usize,
+    SyscallArgs<SyscallArgsInit>,
+    <S as System>::SyscallCtx,
+) -> Result<PositiveIsize, CapError>;
 
 static SYSTEM: AtomicOnceCell<ArchSystem> = AtomicOnceCell::new();
 pub fn system() -> &'static ArchSystem {
@@ -65,5 +68,9 @@ pub unsafe trait System: Sized {
 pub trait SyscallCtx {}
 
 pub trait CapabilityResource {
-    fn exercise(&self, args: &[usize; 5], kind: CapabilityKind) -> Result<PositiveIsize, CapError>;
+    fn exercise(
+        &self,
+        args: SyscallArgs<SyscallArgsInit>,
+        kind: CapabilityKind,
+    ) -> Result<PositiveIsize, CapError>;
 }

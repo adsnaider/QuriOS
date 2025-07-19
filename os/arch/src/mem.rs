@@ -1,15 +1,18 @@
-mod phys;
-mod pmo;
-mod virt;
+pub mod phys;
+pub mod pmo;
+pub mod virt;
 
-use core::marker::PhantomData;
+use core::{arch::naked_asm, marker::PhantomData, sync::atomic::AtomicBool};
 
 use bitflags::bitflags;
 
 use derive_more::{Display, Error, From};
 pub use phys::{Frame, PhysAddr};
 pub use pmo::Pmo;
-pub use virt::{Page, VirtAddr};
+pub use virt::{MemorySegment, Page, VirtAddr};
+
+pub const UNTYPED_MEMORY_OFFSET: usize = 0x0000_7000_0000_0000;
+pub const HIGHER_HALF: usize = 0xFFFF_8000_0000_0000;
 
 #[derive(Debug, Error, Display)]
 pub enum FrameAllocError {
@@ -46,6 +49,8 @@ pub trait Addrspace: Sized {
         parent_flags: PageFlags,
         alloc: &mut A,
     ) -> Result<Flusher<Self>, MapPageError>;
+
+    fn translate_page(&self, page: Page) -> Option<(Frame, PageFlags)>;
 
     // TODO: Support huge pages as well
 
@@ -121,4 +126,70 @@ impl From<loader::MemFlags> for PageFlags {
         }
         pflags
     }
+}
+
+pub(crate) static mut USER_BUFFER_SAFE_READ: bool = false;
+
+#[unsafe(naked)]
+pub unsafe extern "C" fn user_buffer_read(
+    kernel_buffer: *mut u8,
+    user_buffer: *const u8,
+    length: usize,
+) -> bool {
+    naked_asm!(
+        "        mov     rax, qword ptr [rip + {trap_flag}@GOTPCREL] ",
+        "        mov     byte ptr [rax], 1 ",
+        "        test    rdx, rdx ",
+        "        je      6f",
+        "        mov     ecx, edx ",
+        "        and     ecx, 3 ",
+        "        cmp     rdx, 4 ",
+        "        jae     2f",
+        "        xor     r8d, r8d ",
+        "        jmp     4f",
+        "2: ",
+        "        and     rdx, -4 ",
+        "        xor     r9d, r9d ",
+        "3: ",
+        "        movzx   r8d, byte ptr [rsi + r9] ",
+        "        mov     byte ptr [rdi + r9], r8b ",
+        "        movzx   r8d, byte ptr [rsi + r9 + 1] ",
+        "        mov     byte ptr [rdi + r9 + 1], r8b ",
+        "        movzx   r8d, byte ptr [rsi + r9 + 2] ",
+        "        mov     byte ptr [rdi + r9 + 2], r8b ",
+        "        lea     r8, [r9 + 4] ",
+        "        movzx   r10d, byte ptr [rsi + r9 + 3] ",
+        "        mov     byte ptr [rdi + r9 + 3], r10b ",
+        "        mov     r9, r8 ",
+        "        cmp     rdx, r8 ",
+        "        jne     3b ",
+        "4: ",
+        "        test    rcx, rcx ",
+        "        je      6f ",
+        "        add     rdi, r8 ",
+        "        add     rsi, r8 ",
+        "        xor     edx, edx ",
+        "5: ",
+        "        movzx   r8d, byte ptr [rsi + rdx] ",
+        "        mov     byte ptr [rdi + rdx], r8b ",
+        "        inc     rdx ",
+        "        cmp     rcx, rdx ",
+        "        jne     5b",
+        "6: ",
+        "        mov     byte ptr [rax], 0 ",
+        "        mov     al, 1 ",
+        "        ret ",
+        trap_flag = sym USER_BUFFER_SAFE_READ
+    );
+}
+
+#[unsafe(naked)]
+pub(crate) unsafe extern "C" fn user_buffer_read_page_fault_call_gate() {
+    naked_asm!(
+        "mov rax, qword ptr [rip + {trap_flag}@GOTPCREL]",
+        "mov byte ptr [rax], 0 ",
+        "mov al, 0",
+        "ret",
+        trap_flag = sym USER_BUFFER_SAFE_READ
+    );
 }

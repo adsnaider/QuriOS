@@ -18,12 +18,13 @@ use arch::{
     system, ArchSystem,
 };
 use boot::{bump_alloc::BumpFrameAllocator, Process};
-use caps::{CapTable, Resources};
+use caps::{CapTable, Capability, Resources};
 use kmem::KPtr;
 use limine::{
     request::{HhdmRequest, MemoryMapRequest, ModuleRequest, StackSizeRequest},
     BaseRevision,
 };
+use qapi::caps::CapId;
 use sync::{cell::AtomicLazyCell, singleton::Singleton};
 use syscall::syscall_handler;
 use tap::TapFallible;
@@ -45,7 +46,6 @@ static PMO: AtomicLazyCell<Pmo> = AtomicLazyCell::new(|| {
     unsafe { Pmo::new(VirtAddr::new(pmo as usize)) }
 });
 static MODULES_REQUEST: ModuleRequest = ModuleRequest::new();
-pub const UNTYPED_MEMORY_OFFSET: usize = 0x0000_7000_0000_0000;
 
 pub fn kinit() {
     serial::init();
@@ -105,12 +105,29 @@ pub fn uinit() -> ! {
     let cap_table = CapTable::default();
     // SAFETY: The kernel frame is unused
     let cap_table = unsafe { KPtr::new_unchecked(frame, cap_table) };
-    let resources = Resources::new(init.addrspace, cap_table);
+    let resources = Resources::new(init.addrspace, cap_table.clone());
     let thread = Thread::new(init.exec, resources);
     let thread_frame = fallocator
         .alloc_kernel_frame()
         .expect("Out of memory error during initialization");
     // SAFETY: The kernel frame is unused
     let thread = unsafe { KPtr::new_unchecked(thread_frame, thread) };
+
+    thread
+        .active_comp()
+        .slot(CapId::new(0))
+        .expect("We should have enough space for boot capabilities")
+        .insert(caps::ImmutableSlot {
+            child: None,
+            capability: Capability::CapTable(cap_table),
+        });
+    thread
+        .active_comp()
+        .slot(CapId::new(1))
+        .expect("We should have enough space for boot capabilities")
+        .insert(caps::ImmutableSlot {
+            child: None,
+            capability: Capability::Addrspace(KPtr::clone(thread.active_comp().addrspace_cap())),
+        });
     Thread::dispatch(thread)
 }

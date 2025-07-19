@@ -1,20 +1,20 @@
 use core::{marker::PhantomData, mem::MaybeUninit};
 
-use derive_more::Debug;
+use derive_more::{Debug, From, Into, TryFrom};
 
-use crate::caps::{CapError, CapId};
+use crate::caps::CapError;
 
 #[cfg(feature = "userspace")]
 pub mod ulib {
-    use crate::caps::{CapError, CapResult, PositiveIsize};
+    use crate::caps::{CapError, CapId, CapResult, PositiveIsize};
 
-    use super::SyscallArgs;
+    use super::{SyscallOp, SyscallStruct};
     use core::{arch::naked_asm, mem::MaybeUninit};
 
     #[unsafe(naked)]
     pub extern "C" fn syscall_raw(
         cap: usize,
-        a: MaybeUninit<usize>,
+        op: SyscallOp,
         b: MaybeUninit<usize>,
         c: MaybeUninit<usize>,
         d: MaybeUninit<usize>,
@@ -28,14 +28,15 @@ pub mod ulib {
     }
 
     #[inline(always)]
-    pub fn syscall<S>(args: SyscallArgs<S>) -> Result<PositiveIsize, CapError> {
+    pub fn syscall<S: SyscallStruct>(cap: CapId, args: S) -> Result<PositiveIsize, CapError> {
+        let args = args.into_args();
         CapResult::from_isize(syscall_raw(
-            args.cap,
+            cap.into(),
+            args.op,
             args.args[0],
             args.args[1],
             args.args[2],
             args.args[3],
-            args.args[4],
         ))
     }
 }
@@ -43,11 +44,13 @@ pub mod ulib {
 pub struct SyscallArgsInit;
 pub struct SyscallArgsUninit;
 
+pub type SyscallParams = [MaybeUninit<usize>; 4];
+
 #[derive(Debug)]
 #[repr(C)]
 pub struct SyscallArgs<InitStatus> {
-    cap: usize,
-    args: [MaybeUninit<usize>; 5],
+    op: SyscallOp,
+    args: [MaybeUninit<usize>; 4],
     _phantom: PhantomData<InitStatus>,
 }
 
@@ -59,26 +62,25 @@ impl<InitStatus> Clone for SyscallArgs<InitStatus> {
 }
 
 impl<InitStatus> SyscallArgs<InitStatus> {
-    /// Returns the capability ID to exercise with the syscall
-    pub fn cap(&self) -> Result<CapId, CapError> {
-        self.cap.try_into()
-    }
-
     pub fn into_uninit(self) -> SyscallArgs<SyscallArgsUninit> {
         SyscallArgs {
-            cap: self.cap,
+            op: self.op,
             args: self.args,
             _phantom: PhantomData,
         }
+    }
+
+    pub fn op(&self) -> SyscallOp {
+        self.op
     }
 }
 
 impl SyscallArgs<SyscallArgsUninit> {
     /// Constructs a (possibly) partially uninitialized set of syscall arguments
-    pub fn new_partial(cap: usize, args: [MaybeUninit<usize>; 5]) -> Self {
+    pub const fn new_uninit(op: SyscallOp) -> Self {
         Self {
-            cap,
-            args,
+            op,
+            args: [const { MaybeUninit::uninit() }; 4],
             _phantom: PhantomData,
         }
     }
@@ -94,31 +96,27 @@ impl SyscallArgs<SyscallArgsUninit> {
     }
 
     /// Returns the arguments in this syscall
-    pub fn args(&self) -> &[MaybeUninit<usize>; 5] {
+    pub fn args(&self) -> &[MaybeUninit<usize>; 4] {
         &self.args
     }
 
     /// Returns the arguments in this syscall
-    pub fn args_mut(&mut self) -> &mut [MaybeUninit<usize>; 5] {
+    pub fn args_mut(&mut self) -> &mut [MaybeUninit<usize>; 4] {
         &mut self.args
-    }
-
-    /// Returns an uninitialized set of syscall arguments.
-    pub fn new_uninit(cap: usize) -> Self {
-        Self::new_partial(cap, [MaybeUninit::uninit(); 5])
     }
 }
 
 impl SyscallArgs<SyscallArgsInit> {
-    pub fn new(cap: usize, args: [usize; 5]) -> Self {
+    pub fn new(op: SyscallOp, args: [usize; 4]) -> Self {
         Self {
-            cap,
+            op,
             // SAFETY: MaybeUninit uses repr transparent.
-            args: unsafe { core::mem::transmute::<[usize; 5], [MaybeUninit<usize>; 5]>(args) },
+            args: unsafe { core::mem::transmute::<[usize; 4], [MaybeUninit<usize>; 4]>(args) },
             _phantom: PhantomData,
         }
     }
-    pub fn args(&self) -> &[usize; 5] {
+
+    pub fn args(&self) -> &[usize; 4] {
         // SAFETY: Type state guarantees this is valid.
         unsafe { core::mem::transmute(&self.args) }
     }
@@ -136,6 +134,17 @@ impl<T> SyscallStruct for SyscallArgs<T> {
 
     fn try_from_args(args: SyscallArgs<SyscallArgsInit>) -> Result<Self, CapError> {
         // SAFETY: repr(C) with PhantomData guarantees same layout and size and struct validity.
-        Ok(unsafe { core::mem::transmute(args) })
+        Ok(unsafe { core::mem::transmute::<SyscallArgs<SyscallArgsInit>, Self>(args) })
+    }
+}
+
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, From, Into)]
+pub struct SyscallOp(usize);
+impl SyscallOp {
+    pub const CAP_TABLE_CONS: Self = Self(0);
+
+    pub const fn as_usize(self) -> usize {
+        self.0
     }
 }

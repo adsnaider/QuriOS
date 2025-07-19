@@ -1,7 +1,11 @@
 #![allow(unused)]
 use core::sync::atomic::{AtomicU64, Ordering};
 
-use qapi::caps::{CapError, CapabilityKind, PositiveIsize};
+use bitflags::Flags;
+use qapi::{
+    caps::{CapError, CapabilityKind, PositiveIsize},
+    syscall::{SyscallArgs, SyscallArgsInit},
+};
 use x86_64::{
     instructions::tlb,
     registers::control::Cr3,
@@ -81,6 +85,25 @@ impl From<VirtAddr> for x86_64::VirtAddr {
     fn from(value: VirtAddr) -> Self {
         // SAFETY: Transparent representation
         unsafe { core::mem::transmute(value) }
+    }
+}
+
+impl From<PageTableFlags> for PageFlags {
+    fn from(value: PageTableFlags) -> Self {
+        let mut flags = PageFlags::READABLE;
+        if value.contains(PageTableFlags::PRESENT) {
+            flags |= PageFlags::PRESENT;
+        }
+        if !value.contains(PageTableFlags::NO_EXECUTE) {
+            flags |= PageFlags::EXECUTABLE;
+        }
+        if value.contains(PageTableFlags::WRITABLE) {
+            flags |= PageFlags::WRITABLE;
+        }
+        if value.contains(PageTableFlags::USER_ACCESSIBLE) {
+            flags |= PageFlags::USER_ACCESSIBLE;
+        }
+        flags
     }
 }
 
@@ -182,6 +205,29 @@ impl Addrspace for X64Addrspace {
             l4_frame: frame,
         }
     }
+
+    fn translate_page(&self, page: Page) -> Option<(Frame, PageFlags)> {
+        let mut level = Some(PageTableLevel::top());
+        let mut frame = self.l4_frame;
+        let addr = page.base();
+        let mut flags = PageFlags::all();
+        while let Some(current_level) = level {
+            // SAFETY: All mapped entries that contain a frame will have a valid page table frame
+            let table: &AnyPageTable = unsafe { &*self.pmo.phys_to_virt(frame.base()).as_ptr() };
+
+            level = current_level.lower();
+            let offset = addr.page_table_index(current_level);
+            let (current_frame, current_flags) = table.get(offset).get()?;
+            if current_flags.contains(PageTableFlags::HUGE_PAGE) {
+                return None;
+            }
+            frame = current_frame;
+            let current_flags: PageFlags = current_flags.into();
+            // On each level the true page flags restriction is increased.
+            flags &= current_flags;
+        }
+        Some((frame, flags))
+    }
 }
 
 #[extend::ext]
@@ -228,7 +274,11 @@ impl Default for AnyPageTable {
 }
 
 impl CapabilityResource for AnyPageTable {
-    fn exercise(&self, args: &[usize; 5], kind: CapabilityKind) -> Result<PositiveIsize, CapError> {
+    fn exercise(
+        &self,
+        args: SyscallArgs<SyscallArgsInit>,
+        kind: CapabilityKind,
+    ) -> Result<PositiveIsize, CapError> {
         todo!()
     }
 }

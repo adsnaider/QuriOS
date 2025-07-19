@@ -11,7 +11,8 @@ use x86_64::{
     registers::rflags::RFlags,
     structures::idt::{
         DivergingHandlerFunc, DivergingHandlerFuncWithErrCode, Entry, HandlerFunc,
-        HandlerFuncWithErrCode, InterruptStackFrame, PageFaultHandlerFunc,
+        HandlerFuncWithErrCode, InterruptStackFrame, InterruptStackFrameValue,
+        PageFaultHandlerFunc,
     },
 };
 
@@ -45,9 +46,19 @@ impl<Kind> ExceptionCtx<Kind> {
     }
 
     /// Returns the interrupt stack frame for this ISR
-    pub fn interrupt_stack_frame(&self) -> InterruptStackFrame {
+    pub fn interrupt_stack_frame(&self) -> &InterruptStackFrameValue {
         // SAFETY: We can assume the stack_top is valid as it was created with unsafe code to guarantee that.
-        unsafe { core::ptr::read(self.stack_top as usize as *const InterruptStackFrame) }
+        unsafe { &*(self.stack_top as usize as *const InterruptStackFrameValue) }
+    }
+
+    /// Returns the interrupt stack frame for this ISR
+    ///
+    /// # Safety
+    ///
+    /// Modifying the interrupt stack frame may result in undefined behavior in numerous ways
+    pub unsafe fn interrupt_stack_frame_mut(&mut self) -> &mut InterruptStackFrameValue {
+        // SAFETY: We can assume the stack_top is valid as it was created with unsafe code to guarantee that.
+        unsafe { &mut *(self.stack_top as usize as *mut InterruptStackFrameValue) }
     }
 }
 

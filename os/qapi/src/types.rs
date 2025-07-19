@@ -4,11 +4,11 @@ use zerocopy::{Immutable, IntoBytes, KnownLayout};
 
 #[repr(transparent)]
 #[derive(IntoBytes, KnownLayout, Immutable)]
-pub struct OrphanPtr<T> {
+pub struct UserPtr<T> {
     addr: usize,
     _phantom: PhantomData<*const T>,
 }
-impl<T> OrphanPtr<T> {
+impl<T> UserPtr<T> {
     pub fn new(ptr: *const T) -> Self {
         Self {
             addr: ptr.addr(),
@@ -26,12 +26,23 @@ impl<T> OrphanPtr<T> {
     pub fn addr(&self) -> usize {
         self.addr
     }
+
+    pub fn cast<U>(self) -> UserPtr<U> {
+        UserPtr {
+            addr: self.addr,
+            _phantom: PhantomData,
+        }
+    }
+
+    pub fn as_ptr(&self) -> *const T {
+        self.addr as *const T
+    }
 }
 
 #[repr(C)]
 #[derive(KnownLayout, Immutable)]
 pub struct CSlice<'a, T> {
-    ptr: OrphanPtr<T>,
+    ptr: UserPtr<T>,
     length: usize,
     _cont: PhantomData<&'a [T]>,
 }
@@ -53,13 +64,13 @@ impl<T> Clone for CSlice<'static, T> {
         *self
     }
 }
-impl<T> Copy for OrphanPtr<T> {}
-impl<T> Clone for OrphanPtr<T> {
+impl<T> Copy for UserPtr<T> {}
+impl<T> Clone for UserPtr<T> {
     fn clone(&self) -> Self {
         *self
     }
 }
-impl<T> core::fmt::Debug for OrphanPtr<T> {
+impl<T> core::fmt::Debug for UserPtr<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("OrphanPtr")
             .field("addr", &self.addr)
@@ -85,7 +96,7 @@ impl<'a, T> CSlice<'a, T> {
     /// data
     pub unsafe fn from_raw_parts(ptr: *const T, length: usize) -> Self {
         Self {
-            ptr: OrphanPtr::new(ptr),
+            ptr: UserPtr::new(ptr),
             length,
             _cont: PhantomData,
         }

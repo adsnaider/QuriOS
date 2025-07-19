@@ -1,6 +1,7 @@
 use core::ops::Deref;
 
 // TODO: This is likely going to use GSBase to get the correct value
+#[repr(transparent)]
 pub struct CoreLocal<T> {
     data: T,
 }
