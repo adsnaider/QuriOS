@@ -2,14 +2,24 @@ use core::arch::asm;
 
 use exec::{ExceptionCtx, ExecCtx, Interrupt};
 use mem_impl::page_table::{AnyPageTable, X64Addrspace};
-use x86_64::instructions::interrupts;
+use x86_64::{
+    instructions::interrupts,
+    registers::{
+        control::{Cr4, Cr4Flags},
+        model_specific::{GsBase, KernelGsBase},
+        segmentation::{GS, Segment64},
+    },
+};
 
 mod exec;
 mod gdt;
 mod idt;
 mod mem_impl;
 
-use crate::{SyscallHandler, System, mem::Pmo};
+use crate::{
+    SyscallHandler, System,
+    mem::{Pmo, VirtAddr},
+};
 
 #[derive(Debug)]
 pub struct X64Sys {
@@ -38,6 +48,11 @@ unsafe impl System for X64Sys {
             pmo,
             syscall_handler,
         }
+    }
+
+    fn set_core_data(&self, addr: VirtAddr) {
+        log::info!("Setting GS Base to {addr:?}");
+        GsBase::write(addr.into());
     }
 }
 

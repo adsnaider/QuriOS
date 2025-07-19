@@ -157,7 +157,7 @@ extern "C" fn save_all_and_ret_isr<F: IsrHandler<Interrupt, ()>>() {
     // SAFETY: Sticking with ISR calling convention. Preserved registers are pushed on
     // call to sysv64 ABI.
     unsafe {
-        naked_asm!(push_scratch!(), "lea rdi, [rsp + 8*9]", "call {inner}", pop_scratch!(), "iretq", inner = sym F::call);
+        naked_asm!("swapgs", push_scratch!(), "lea rdi, [rsp + 8*9]", "call {inner}", pop_scratch!(), "swapgs", "iretq", inner = sym F::call);
     }
 }
 
@@ -168,7 +168,7 @@ extern "C" fn save_all_with_err_code_and_ret_isr<F: IsrHandler<Exception, ()>>()
     // SAFETY: Sticking with ISR calling convention. Preserved registers are pushed on
     // call to sysv64 ABI.
     unsafe {
-        naked_asm!(push_scratch!(), "sub rsp, 8", "lea rdi, [rsp + 8*11]", "call {inner}", "add rsp, 8", pop_scratch!(), "add rsp, 8", "iretq", inner = sym F::call);
+        naked_asm!("swapgs", push_scratch!(), "sub rsp, 8", "lea rdi, [rsp + 8*11]", "call {inner}", "add rsp, 8", pop_scratch!(), "add rsp, 8", "swapgs", "iretq", inner = sym F::call);
     }
 }
 
@@ -179,7 +179,7 @@ extern "C" fn save_some_and_diverge_isr<F: IsrHandler<Interrupt, Infallible>>() 
     // SAFETY: Sticking with ISR calling convention. Preserved registers are pushed on
     // call to sysv64 ABI.
     unsafe {
-        naked_asm!("sub rsp, 8", "lea rdi, [rsp + 8]", "call {inner}", "ud2", inner = sym F::call);
+        naked_asm!("swapgs", "sub rsp, 8", "lea rdi, [rsp + 8]", "call {inner}", "ud2", inner = sym F::call);
     }
 }
 
@@ -190,6 +190,6 @@ extern "C" fn save_some_with_err_code_and_diverge_isr<F: IsrHandler<Exception, I
     // SAFETY: Sticking with ISR calling convention. Preserved registers are pushed on
     // call to sysv64 ABI.
     unsafe {
-        naked_asm!("lea rdi, [rsp]", "call {inner}", "ud2", inner = sym F::call);
+        naked_asm!("swapgs", "lea rdi, [rsp]", "call {inner}", "ud2", inner = sym F::call);
     }
 }

@@ -140,9 +140,11 @@ extern "C" fn syscall_int(
     // will work so long as userspace doesn't need to pass arguments on the stack.
     // Since we filled all the register-args, we need to add the exception context on the stack.
     naked_asm!(
+        "swapgs",
         "push rsp",
         "call {inner}",
         "add rsp, 8",
+        "swapgs",
         "iretq",
         inner = sym inner,
     )

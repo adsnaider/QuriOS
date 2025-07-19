@@ -2,7 +2,7 @@ use core::{cell::RefCell, ops::Deref};
 
 use arch::{exec::ExecState, mem::Addrspace, ArchSystem, System};
 
-use crate::{caps::Resources, core_local::CoreLocal, kmem::KPtr};
+use crate::{caps::Resources, core_local::CoreLocalData, kmem::KPtr};
 
 #[repr(C)]
 #[derive(Debug)]
@@ -11,17 +11,13 @@ pub struct Thread<S: System> {
     resources: Resources<S>,
 }
 
-// TODO: There may be a better way to do this by allowing the syscall handler to take the thread out, and pushing it back before dispatching
-static CURRENT_THREAD: CoreLocal<RefCell<Option<KPtr<Thread<ArchSystem>>>>> =
-    CoreLocal::new(RefCell::new(None));
-
 impl Thread<ArchSystem> {
     pub fn current() -> impl Deref<Target = Option<KPtr<Self>>> {
-        CURRENT_THREAD.borrow()
+        CoreLocalData::get().current_thread.borrow()
     }
 
     fn replace_current(new: KPtr<Self>) -> Option<KPtr<Self>> {
-        CURRENT_THREAD.replace(Some(new))
+        CoreLocalData::get().current_thread.replace(Some(new))
     }
 
     pub fn dispatch(this: KPtr<Self>) -> ! {

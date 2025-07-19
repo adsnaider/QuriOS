@@ -116,8 +116,8 @@ pub fn init() {
         CS::set_reg(GDT.1.code_selector);
         DS::set_reg(GDT.1.data_selector);
         ES::set_reg(GDT.1.data_selector);
-        FS::set_reg(GDT.1.data_selector);
-        GS::set_reg(GDT.1.data_selector);
+        FS::set_reg(SegmentSelector(0));
+        GS::set_reg(SegmentSelector(0));
         SS::set_reg(GDT.1.data_selector);
         load_tss(GDT.1.tss_selector);
     }

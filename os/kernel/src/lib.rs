@@ -13,17 +13,21 @@ pub(crate) mod hint;
 
 mod boot;
 
+use core::{arch::asm, cell::RefCell};
+
 use arch::{
-    mem::{Pmo, VirtAddr},
-    system, ArchSystem,
+    mem::{Page, Pmo, VirtAddr},
+    system, ArchSystem, System,
 };
 use boot::{bump_alloc::BumpFrameAllocator, Process};
 use caps::{CapTable, Capability, Resources};
+use core_local::CoreLocalData;
 use kmem::KPtr;
 use limine::{
     request::{HhdmRequest, MemoryMapRequest, ModuleRequest, StackSizeRequest},
     BaseRevision,
 };
+use pmo::PhysAddrExt;
 use qapi::caps::CapId;
 use sync::{cell::AtomicLazyCell, singleton::Singleton};
 use syscall::syscall_handler;
@@ -96,6 +100,13 @@ pub fn uinit() -> ! {
 
     log::info!("Found init image. Loading userspace process");
     let mut fallocator = BumpFrameAllocator::new();
+
+    CoreLocalData::init(
+        fallocator
+            .alloc_kernel_frame()
+            .expect("Out of memory error during initialization"),
+    );
+
     let init = Process::<ArchSystem>::load(system(), proc, 10, initrd, &mut fallocator)
         .expect("Error loading init process");
 

@@ -135,3 +135,17 @@ pub enum MemorySegment {
     User,
     Untyped,
 }
+
+impl From<VirtAddr> for x86_64::VirtAddr {
+    fn from(value: VirtAddr) -> Self {
+        // SAFETY: Transparent representation
+        unsafe { core::mem::transmute(value) }
+    }
+}
+
+impl From<x86_64::VirtAddr> for VirtAddr {
+    fn from(value: x86_64::VirtAddr) -> Self {
+        // SAFETY: Transparent representation
+        unsafe { core::mem::transmute(value) }
+    }
+}

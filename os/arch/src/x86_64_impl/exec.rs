@@ -148,8 +148,6 @@ impl ExecCtx {
                 "mov ax, (4 * 8) | 3",
                 "mov ds, ax",
                 "mov es, ax",
-                "mov fs, ax",
-                "mov gs, ax",
                 // Restore SCRATCH
                 "mov rax, [rdi + 8*0]",
                 "mov rcx, [rdi + 8*1]",
@@ -173,6 +171,7 @@ impl ExecCtx {
                 "push (3 * 8) | 3",     // CS with RPL 3
                 "push [rdi + 8*17]",    // Push the new instruction pointer
                 "mov rdi, [rdi + 8*4]", // And the RDI register
+                "swapgs",
                 "iretq",
             )
         }

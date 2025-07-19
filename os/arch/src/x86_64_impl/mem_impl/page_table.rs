@@ -74,20 +74,6 @@ impl X64Addrspace {
     }
 }
 
-impl From<Frame> for PhysFrame {
-    fn from(value: Frame) -> Self {
-        // SAFETY: Transparent representation
-        unsafe { core::mem::transmute(value) }
-    }
-}
-
-impl From<VirtAddr> for x86_64::VirtAddr {
-    fn from(value: VirtAddr) -> Self {
-        // SAFETY: Transparent representation
-        unsafe { core::mem::transmute(value) }
-    }
-}
-
 impl From<PageTableFlags> for PageFlags {
     fn from(value: PageTableFlags) -> Self {
         let mut flags = PageFlags::READABLE;

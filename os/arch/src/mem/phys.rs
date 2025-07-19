@@ -1,3 +1,5 @@
+use x86_64::structures::paging::PhysFrame;
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[repr(transparent)]
 pub struct Frame {
@@ -79,5 +81,12 @@ impl PhysAddr {
 
     pub const fn as_u64(&self) -> u64 {
         self.0
+    }
+}
+
+impl From<Frame> for PhysFrame {
+    fn from(value: Frame) -> Self {
+        // SAFETY: Transparent representation
+        unsafe { core::mem::transmute(value) }
     }
 }

@@ -19,7 +19,6 @@ use trie::{Ptr, Slot, TrieEntry};
 use zerocopy::{AlignmentError, CastError, FromBytes, Immutable, KnownLayout};
 
 use crate::{
-    core_local::CoreLocal,
     kmem::KPtr,
     retyping::FrameExt,
     sync_call::{SyncCall, SyncRet},

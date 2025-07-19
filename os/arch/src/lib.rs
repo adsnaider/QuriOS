@@ -3,12 +3,15 @@
 use core::fmt::Debug;
 
 use exec::ExecState;
-use mem::{Addrspace, Pmo};
+use mem::{Addrspace, Pmo, VirtAddr};
 use qapi::{
     caps::{CapError, CapabilityKind, PositiveIsize},
     syscall::{SyscallArgs, SyscallArgsInit},
 };
 use sync::cell::AtomicOnceCell;
+
+pub use x86_64::registers::model_specific::GsBase;
+pub use x86_64::registers::model_specific::KernelGsBase;
 
 #[cfg(target_arch = "x86_64")]
 mod x86_64_impl;
@@ -63,6 +66,9 @@ pub unsafe trait System: Sized {
 
     /// Returns a valid pointer to the currently active address space
     fn addrspace(&self) -> Self::Addrspace;
+
+    /// Sets the per-cpu address of a core-local structure.
+    fn set_core_data(&self, addr: VirtAddr);
 }
 
 pub trait SyscallCtx {}
