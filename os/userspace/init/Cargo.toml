@@ -7,6 +7,7 @@ edition = "2024"
 path = "src/main.rs"
 name = "main"
 test = false
+bench = false
 
 [dependencies]
 entry.workspace = true
