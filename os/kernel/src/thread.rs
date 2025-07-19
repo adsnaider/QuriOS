@@ -1,8 +1,6 @@
-use core::{cell::RefCell, ops::Deref};
-
 use arch::{exec::ExecState, mem::Addrspace, ArchSystem, System};
 
-use crate::{caps::Resources, core_local::CoreLocalData, kmem::KPtr};
+use crate::{caps::Resources, kmem::KPtr};
 
 #[repr(C)]
 #[derive(Debug)]
@@ -12,15 +10,11 @@ pub struct Thread<S: System> {
 }
 
 impl Thread<ArchSystem> {
-    pub fn current() -> impl Deref<Target = Option<KPtr<Self>>> {
-        CoreLocalData::get().current_thread.borrow()
+    fn replace_current(new: KPtr<Self>, current: &mut Option<KPtr<Self>>) -> Option<KPtr<Self>> {
+        current.replace(new)
     }
 
-    fn replace_current(new: KPtr<Self>) -> Option<KPtr<Self>> {
-        CoreLocalData::get().current_thread.replace(Some(new))
-    }
-
-    pub fn dispatch(this: KPtr<Self>) -> ! {
+    pub fn dispatch(this: KPtr<Self>, current: &mut Option<KPtr<Self>>) -> ! {
         // Our kernel is non-preemptive which makes every other case really
         // simple as it's a completely synchronous call-response. However, thread
         // dispatching is somewhat weird because we exit the kernel early on the
@@ -43,7 +37,7 @@ impl Thread<ArchSystem> {
         #[allow(clippy::clone_on_copy)]
         let exec_state = this.exec_state.clone();
         {
-            let previous = Self::replace_current(this);
+            let previous = Self::replace_current(this, current);
             if let Some(previous) = &previous {
                 previous.exec_state.save();
             }

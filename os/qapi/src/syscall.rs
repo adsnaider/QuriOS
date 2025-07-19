@@ -1,6 +1,6 @@
 use core::{marker::PhantomData, mem::MaybeUninit};
 
-use derive_more::{Debug, From, Into, TryFrom};
+use derive_more::{Debug, From, Into};
 
 use crate::caps::CapError;
 

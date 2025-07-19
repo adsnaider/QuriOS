@@ -38,6 +38,8 @@ impl<Kind> ExceptionCtx<Kind> {
     ///
     /// The stack_top must refer to the RSP register after the
     /// InterruptStackFrame is loaded (but before any error code or registers)
+    ///
+    /// Only one ExceptionCtx may be instantiated per exception/interrupt
     pub unsafe fn new(stack_top: u64) -> Self {
         Self {
             stack_top,

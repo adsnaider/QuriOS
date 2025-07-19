@@ -1,8 +1,8 @@
-use core::{convert::Infallible, marker::PhantomData, mem::MaybeUninit, ops::Deref, ptr::NonNull};
+use core::{convert::Infallible, marker::PhantomData, mem::MaybeUninit, ops::Deref};
 
 use arch::{
     mem::{user_buffer_read, Addrspace, Page, VirtAddr},
-    system, ArchSystem, CapabilityResource, System,
+    CapabilityResource, System,
 };
 use derive_more::{Deref, DerefMut};
 use derive_where::derive_where;
@@ -16,7 +16,7 @@ use qapi::{
 };
 use sync::cell::AtomicCell;
 use trie::{Ptr, Slot, TrieEntry};
-use zerocopy::{AlignmentError, CastError, FromBytes, Immutable, KnownLayout};
+use zerocopy::{FromBytes, Immutable, KnownLayout};
 
 use crate::{
     kmem::KPtr,
@@ -157,15 +157,12 @@ impl<S: System> Capability<S> {
     }
 }
 
-pub struct TrustedUserPtr<T>(NonNull<T>);
+pub struct TrustedUserPtr<T>(*mut T);
 impl<T> TryFrom<UserPtr<T>> for TrustedUserPtr<T> {
     type Error = CapError;
 
     fn try_from(value: UserPtr<T>) -> Result<Self, Self::Error> {
         let start = value.addr();
-        if start == 0 {
-            return Err(CapError::BadUserMemory);
-        }
         let end = value
             .addr()
             .checked_add(size_of::<T>())
@@ -175,7 +172,7 @@ impl<T> TryFrom<UserPtr<T>> for TrustedUserPtr<T> {
         if !start_ptr.is_user() || !end_ptr.is_user() {
             return Err(CapError::BadUserMemory);
         }
-        Ok(Self(NonNull::new(start as *mut T).unwrap()))
+        Ok(Self(start as *mut T))
     }
 }
 
@@ -185,14 +182,20 @@ where
 {
     pub fn safe_read(&self) -> Result<T, CapError> {
         let mut result = MaybeUninit::<T>::uninit();
+        // SAFETY: TrustedUserPtr construction verifies the validity of the pointer itself and the routine guarantees proper
+        // handling of page fault to return false.
         let success = unsafe {
             user_buffer_read(
                 result.as_mut_ptr() as *mut u8,
-                self.0.as_ptr() as *const u8,
+                self.0 as *const u8,
                 size_of::<T>(),
             )
         };
         if success {
+            // SAFETY: `user_buffer_read` guarantees that true is returned if the copy was
+            // successful. Since T implements FromBytes + KnownLayout + Imuutable, we have
+            // guarantees that the only failure cases are 1. misaligned pointer (checked at
+            // construction), or size error (assumed at construction).
             Ok(unsafe { result.assume_init() })
         } else {
             Err(CapError::BadUserMemory)
@@ -204,7 +207,7 @@ where
 fn exercise_cap_table<S: System>(
     this: &KPtr<CapTable<S>>,
     args: SyscallArgs<SyscallArgsInit>,
-    kind: CapabilityKind,
+    _kind: CapabilityKind,
 ) -> Result<PositiveIsize, CapError> {
     match CapTableOps::try_from_args(args)? {
         CapTableOps::Cons(ConsOp {
@@ -212,11 +215,11 @@ fn exercise_cap_table<S: System>(
             kind,
             cons_args,
         }) => {
-            let slot = CapTable::index(this.clone(), slot_id);
+            let _slot = CapTable::index(this.clone(), slot_id);
             match kind {
                 ConsKind::Thread => {
                     let cons_args = TrustedUserPtr::try_from(cons_args.cast::<ThreadCons>())?;
-                    let args = cons_args.safe_read()?;
+                    let _args = cons_args.safe_read()?;
 
                     todo!();
                 }
@@ -233,8 +236,8 @@ fn exercise_cap_table<S: System>(
 impl<S: System> CapabilityResource for Thread<S> {
     fn exercise(
         &self,
-        args: SyscallArgs<SyscallArgsInit>,
-        kind: CapabilityKind,
+        _args: SyscallArgs<SyscallArgsInit>,
+        _kind: CapabilityKind,
     ) -> Result<PositiveIsize, CapError> {
         todo!();
     }
@@ -243,8 +246,8 @@ impl<S: System> CapabilityResource for Thread<S> {
 impl<S: System> CapabilityResource for SyncCall<S> {
     fn exercise(
         &self,
-        args: SyscallArgs<SyscallArgsInit>,
-        kind: CapabilityKind,
+        _args: SyscallArgs<SyscallArgsInit>,
+        _kind: CapabilityKind,
     ) -> Result<PositiveIsize, CapError> {
         todo!()
     }
@@ -253,8 +256,8 @@ impl<S: System> CapabilityResource for SyncCall<S> {
 impl CapabilityResource for SyncRet {
     fn exercise(
         &self,
-        args: SyscallArgs<SyscallArgsInit>,
-        kind: CapabilityKind,
+        _args: SyscallArgs<SyscallArgsInit>,
+        _kind: CapabilityKind,
     ) -> Result<PositiveIsize, CapError> {
         todo!()
     }
@@ -266,8 +269,8 @@ pub struct Retype;
 impl CapabilityResource for Retype {
     fn exercise(
         &self,
-        args: SyscallArgs<SyscallArgsInit>,
-        kind: CapabilityKind,
+        _args: SyscallArgs<SyscallArgsInit>,
+        _kind: CapabilityKind,
     ) -> Result<PositiveIsize, CapError> {
         todo!()
     }

@@ -10,9 +10,6 @@ use qapi::{
 };
 use sync::cell::AtomicOnceCell;
 
-pub use x86_64::registers::model_specific::GsBase;
-pub use x86_64::registers::model_specific::KernelGsBase;
-
 #[cfg(target_arch = "x86_64")]
 mod x86_64_impl;
 

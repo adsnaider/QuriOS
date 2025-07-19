@@ -2,14 +2,7 @@ use core::arch::asm;
 
 use exec::{ExceptionCtx, ExecCtx, Interrupt};
 use mem_impl::page_table::{AnyPageTable, X64Addrspace};
-use x86_64::{
-    instructions::interrupts,
-    registers::{
-        control::{Cr4, Cr4Flags},
-        model_specific::{GsBase, KernelGsBase},
-        segmentation::{GS, Segment64},
-    },
-};
+use x86_64::{instructions::interrupts, registers::model_specific::GsBase};
 
 mod exec;
 mod gdt;

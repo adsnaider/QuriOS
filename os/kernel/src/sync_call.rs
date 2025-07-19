@@ -6,8 +6,9 @@ use crate::caps::Resources;
 
 #[derive_where(Debug, Clone)]
 pub struct SyncCall<S: System> {
-    comp: Resources<S>,
-    entry: UserPtr<()>,
+    _comp: Resources<S>,
+    _entry: UserPtr<()>,
+    _tag: usize,
 }
 
 #[derive(Debug, Clone)]

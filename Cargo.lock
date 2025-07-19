@@ -156,6 +156,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "ghost-cell"
+version = "0.2.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8449d342b1c67f49169e92e71deb7b9b27f30062301a16dbc27a4cc8d2351b7"
+
+[[package]]
 name = "goblin"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -202,6 +208,7 @@ dependencies = [
  "derive-where",
  "derive_more",
  "extend",
+ "ghost-cell",
  "heapless",
  "limine",
  "loader",

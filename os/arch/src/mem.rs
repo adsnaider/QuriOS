@@ -2,7 +2,7 @@ pub mod phys;
 pub mod pmo;
 pub mod virt;
 
-use core::{arch::naked_asm, marker::PhantomData, sync::atomic::AtomicBool};
+use core::{arch::naked_asm, marker::PhantomData};
 
 use bitflags::bitflags;
 

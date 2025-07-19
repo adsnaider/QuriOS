@@ -13,24 +13,22 @@ pub(crate) mod hint;
 
 mod boot;
 
-use core::{arch::asm, cell::RefCell};
-
 use arch::{
-    mem::{Page, Pmo, VirtAddr},
-    system, ArchSystem, System,
+    mem::{Pmo, VirtAddr},
+    system, ArchSystem,
 };
 use boot::{bump_alloc::BumpFrameAllocator, Process};
 use caps::{CapTable, Capability, Resources};
 use core_local::CoreLocalData;
+use ghost_cell::GhostToken;
 use kmem::KPtr;
 use limine::{
     request::{HhdmRequest, MemoryMapRequest, ModuleRequest, StackSizeRequest},
     BaseRevision,
 };
-use pmo::PhysAddrExt;
 use qapi::caps::CapId;
 use sync::{cell::AtomicLazyCell, singleton::Singleton};
-use syscall::syscall_handler;
+use syscall::{syscall_handler, syscall_token::SyscallToken};
 use tap::TapFallible;
 use tar_no_std::TarArchiveRef;
 use thread::Thread;
@@ -140,5 +138,12 @@ pub fn uinit() -> ! {
             child: None,
             capability: Capability::Addrspace(KPtr::clone(thread.active_comp().addrspace_cap())),
         });
-    Thread::dispatch(thread)
+    GhostToken::new(|token| {
+        // SAFETY: This is okay as it's the "pre-syscall" syscall
+        let mut token = unsafe { SyscallToken::new(token) };
+        Thread::dispatch(
+            thread,
+            &mut CoreLocalData::get_mut(&mut token).current_thread,
+        )
+    })
 }
