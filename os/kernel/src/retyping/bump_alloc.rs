@@ -1,4 +1,4 @@
-use arch::mem::{Frame, PhysAddr};
+use crate::arch::mem::{Frame, PhysAddr};
 use limine::memory_map::{Entry, EntryType};
 
 use super::MemoryMap;

@@ -1,6 +1,6 @@
 pub mod page_table;
 
-use crate::mem::{Frame, Page};
+use crate::arch::mem::{Frame, Page};
 
 impl Page {
     pub const SIZE: usize = 4096;

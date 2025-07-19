@@ -11,12 +11,12 @@ use loader::{Loader, MemFlags, Program};
 use super::exec::ScratchRegs;
 use super::paging::page_table::AnyPageTable;
 use super::paging::RawFrame;
-use crate::arch::exec::{ControlRegs, Regs};
-use crate::arch::paging::page_table::{Addrspace, PageTableFlags};
-use crate::arch::paging::{Page, VirtAddr, PAGE_SIZE};
-use crate::bump_allocator::BumpAllocator;
-use crate::kptr::KPtr;
-use crate::retyping::RetypeTable;
+use crate::arch::arch::exec::{ControlRegs, Regs};
+use crate::arch::arch::paging::page_table::{Addrspace, PageTableFlags};
+use crate::arch::arch::paging::{Page, VirtAddr, PAGE_SIZE};
+use crate::arch::bump_allocator::BumpAllocator;
+use crate::arch::kptr::KPtr;
+use crate::arch::retyping::RetypeTable;
 
 #[derive(Debug)]
 pub struct Process {

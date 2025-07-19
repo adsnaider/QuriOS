@@ -1,4 +1,4 @@
-use arch::System;
+use crate::arch::System;
 use derive_where::derive_where;
 use qapi::types::UserPtr;
 

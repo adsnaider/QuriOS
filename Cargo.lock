@@ -3,23 +3,6 @@
 version = 4
 
 [[package]]
-name = "arch"
-version = "0.1.0"
-dependencies = [
- "bitflags 2.9.1",
- "cfg-if",
- "derive_more",
- "extend",
- "loader",
- "log",
- "qapi",
- "sealed",
- "serial",
- "sync",
- "x86_64",
-]
-
-[[package]]
 name = "autocfg"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -204,7 +187,8 @@ dependencies = [
 name = "kernel"
 version = "0.1.0"
 dependencies = [
- "arch",
+ "bitflags 2.9.1",
+ "cfg-if",
  "derive-where",
  "derive_more",
  "extend",
@@ -213,12 +197,15 @@ dependencies = [
  "limine",
  "loader",
  "log",
+ "paste",
  "qapi",
+ "sealed",
  "serial",
  "sync",
  "tap",
  "tar-no-std",
  "trie",
+ "x86_64",
  "zerocopy",
 ]
 
@@ -295,6 +282,12 @@ name = "once_cell"
 version = "1.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
+
+[[package]]
+name = "paste"
+version = "1.0.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 
 [[package]]
 name = "plain"

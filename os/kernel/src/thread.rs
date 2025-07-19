@@ -1,6 +1,15 @@
-use arch::{exec::ExecState, mem::Addrspace, ArchSystem, System};
+use core::cell::RefCell;
 
-use crate::{caps::Resources, kmem::KPtr};
+use crate::arch::{exec::ExecState, mem::Addrspace, ArchSystem, System};
+use qapi::caps::CapId;
+
+use crate::{
+    caps::{Capability, Resources},
+    core_local::CORE_LOCAL_CURRENT_THREAD,
+    kmem::KPtr,
+};
+
+pub type CurrentThread = RefCell<Option<KPtr<Thread<ArchSystem>>>>;
 
 #[repr(C)]
 #[derive(Debug)]
@@ -10,11 +19,20 @@ pub struct Thread<S: System> {
 }
 
 impl Thread<ArchSystem> {
-    fn replace_current(new: KPtr<Self>, current: &mut Option<KPtr<Self>>) -> Option<KPtr<Self>> {
-        current.replace(new)
+    fn replace_current(new: KPtr<Self>) -> Option<KPtr<Self>> {
+        CORE_LOCAL_CURRENT_THREAD.replace(Some(new))
     }
 
-    pub fn dispatch(this: KPtr<Self>, current: &mut Option<KPtr<Self>>) -> ! {
+    pub fn current_cap(cap: CapId) -> Option<Capability<ArchSystem>> {
+        CORE_LOCAL_CURRENT_THREAD
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .active_comp()
+            .cap(cap)
+    }
+
+    pub fn dispatch(this: KPtr<Self>) -> ! {
         // Our kernel is non-preemptive which makes every other case really
         // simple as it's a completely synchronous call-response. However, thread
         // dispatching is somewhat weird because we exit the kernel early on the
@@ -37,7 +55,7 @@ impl Thread<ArchSystem> {
         #[allow(clippy::clone_on_copy)]
         let exec_state = this.exec_state.clone();
         {
-            let previous = Self::replace_current(this, current);
+            let previous = Self::replace_current(this);
             if let Some(previous) = &previous {
                 previous.exec_state.save();
             }

@@ -13,12 +13,12 @@ use x86_64::{
 };
 
 use crate::{
-    CapabilityResource,
-    mem::{
+    arch::mem::{
         Addrspace, Flusher, Frame, FrameAllocator, MapPageError, Page, PageFlags, PhysAddr, Pmo,
         VirtAddr,
     },
-    x86_64_impl::X64Sys,
+    arch::x86_64_impl::X64Sys,
+    arch::CapabilityResource,
 };
 
 #[derive(Debug)]

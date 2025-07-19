@@ -16,7 +16,7 @@ use x86_64::{
     },
 };
 
-use crate::{SyscallCtx, exec::ExecState};
+use crate::arch::{SyscallCtx, exec::ExecState};
 
 use super::gdt;
 

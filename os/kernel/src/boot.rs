@@ -2,7 +2,7 @@
 
 pub(crate) mod bump_alloc;
 
-use arch::{
+use crate::arch::{
     exec::ExecState,
     mem::{
         Addrspace, Frame, FrameAllocError, MapPageError, Page, PageFlags, VirtAddr,

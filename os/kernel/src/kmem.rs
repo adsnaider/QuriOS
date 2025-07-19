@@ -9,7 +9,7 @@ use crate::{
     pmo::{PhysAddrExt as _, VirtAddrExt as _},
     retyping::{AsUnusedKernelError, FrameExt, KernelFrame},
 };
-use arch::mem::{Frame, Page, VirtAddr};
+use crate::arch::mem::{Frame, Page, VirtAddr};
 use trie::Ptr;
 
 /// A "kernel" pointer to any page-aligned resource.

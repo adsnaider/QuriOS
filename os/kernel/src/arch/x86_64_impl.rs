@@ -9,9 +9,9 @@ mod gdt;
 mod idt;
 mod mem_impl;
 
-use crate::{
-    SyscallHandler, System,
+use crate::arch::{
     mem::{Pmo, VirtAddr},
+    SyscallHandler, System,
 };
 
 #[derive(Debug)]

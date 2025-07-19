@@ -3,7 +3,7 @@ mod bump_alloc;
 use core::mem::{ManuallyDrop, MaybeUninit};
 use core::sync::atomic::{AtomicU16, Ordering};
 
-use arch::mem::{Frame, Page, VirtAddr};
+use crate::arch::mem::{Frame, Page, VirtAddr};
 use derive_more::{Display, Error, From};
 use limine::memory_map::{Entry, EntryType};
 use sync::cell::{AtomicOnceCell, OnceError};

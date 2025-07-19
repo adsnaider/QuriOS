@@ -2,7 +2,7 @@
 members = [
   "os/kernel",
   "os/crates/*",
-  "os/arch",
+  # "os/arch",
   "os/userspace/init",
   "os/qapi",
 ]

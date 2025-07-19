@@ -9,7 +9,7 @@ use x86_64::registers::segmentation::{CS, DS, ES, FS, GS, SS, Segment};
 use x86_64::structures::gdt::{Descriptor, GlobalDescriptorTable, SegmentSelector};
 use x86_64::structures::tss::TaskStateSegment;
 
-use crate::mem::Page;
+use crate::arch::mem::Page;
 
 /// The TSS stack table index to be used for the Double Fault exception.
 pub const DOUBLE_FAULT_IST_INDEX: u16 = 0;

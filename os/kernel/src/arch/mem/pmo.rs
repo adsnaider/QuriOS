@@ -1,4 +1,4 @@
-use crate::mem::{PhysAddr, VirtAddr};
+use crate::arch::mem::{PhysAddr, VirtAddr};
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]

@@ -1,4 +1,4 @@
-use arch::mem::{PhysAddr, VirtAddr};
+use crate::arch::mem::{PhysAddr, VirtAddr};
 
 use crate::PMO;
 

@@ -1,4 +1,4 @@
-use arch::mem::{Frame, FrameAllocError, FrameAllocator, PhysAddr};
+use crate::arch::mem::{Frame, FrameAllocError, FrameAllocator, PhysAddr};
 use derive_more::{Display, Error};
 
 use crate::retyping::{AsTypeError, FrameExt, KernelFrame, UserFrame};

@@ -1,65 +1,47 @@
-use core::{
-    arch::asm,
-    mem::{align_of, size_of},
+use core::mem::{align_of, size_of};
+
+use crate::arch::{
+    mem::{core_local::CoreLocalData, Page},
+    system, System,
 };
 
-use arch::{mem::Page, system, ArchSystem, System};
-use serial::sdbg;
+use crate::{pmo::PhysAddrExt, retyping::KernelFrame, thread::CurrentThread};
 
-use crate::{
-    kmem::KPtr, pmo::PhysAddrExt, retyping::KernelFrame, syscall::syscall_token::SyscallToken,
-    thread::Thread,
-};
-
-#[derive(Debug, Default)]
+#[derive(Default)]
 #[repr(C)]
-pub struct CoreLocalData {
-    self_ptr: *mut Self,
-    pub current_thread: Option<KPtr<Thread<ArchSystem>>>,
+pub struct KernelLocalStore {
+    current_thread: CurrentThread,
+    safe_buffer_lock: bool,
 }
 
-#[allow(unused)]
-impl CoreLocalData {
-    pub fn init(frame: KernelFrame) {
+macro_rules! get_core_local_data_impl {
+    ($vis:vis $field:ident, $ty:ty) => {
+        paste::paste! {
+            #[allow(unused)]
+            $vis const [<CORE_LOCAL_ $field:upper _OFF>]: usize = core::mem::offset_of!(crate::arch::mem::core_local::CoreLocalData<KernelLocalStore>, data.$field);
+            // SAFETY: This is safe by construction since we get the offset with `offset_of` macro and this is the only place we are allowed to construct a CoreLocal type.
+            $vis static [<CORE_LOCAL_ $field:upper >]: crate::arch::mem::core_local::CoreLocal<[<CORE_LOCAL_ $field:upper _OFF>], $ty> = unsafe { crate::arch::mem::core_local::CoreLocal::new() };
+        }
+    };
+}
+
+#[extend::ext]
+pub impl CoreLocalData<KernelLocalStore> {
+    fn init(frame: KernelFrame) {
         const {
-            assert!(size_of::<CoreLocalData>() <= Page::SIZE);
-            assert!(Page::SIZE % align_of::<CoreLocalData>() == 0);
+            assert!(size_of::<Self>() <= Page::SIZE);
+            assert!(Page::SIZE % align_of::<Self>() == 0);
         }
         let frame = frame.into_raw();
         let addr = frame.addr().to_virtual();
         system().set_core_data(addr);
 
         let addr = addr.as_mut_ptr();
-        let this = Self {
-            self_ptr: addr,
-            ..Default::default()
-        };
-        sdbg!(&this);
+        let this = Self::new(addr, Default::default());
         // SAFETY: Address is valid and effectively leaked.
         unsafe { core::ptr::write(addr, this) };
     }
-
-    pub fn get<'a, 'brand>(_token: &'a SyscallToken<'brand>) -> &'a Self {
-        // SAFETY: Access to token guarantees shared borrow semantics here.
-        unsafe { &*Self::get_ptr() }
-    }
-
-    pub fn get_mut<'a, 'brand>(_token: &'a mut SyscallToken<'brand>) -> &'a mut Self {
-        // SAFETY: Access to token guarantees mutable borrow semantics here.
-        unsafe { &mut *Self::get_ptr_mut() }
-    }
-
-    pub fn get_ptr_mut() -> *mut Self {
-        let ptr: *mut Self;
-        // SAFETY: The first qword in the gs base will be the self-referencing pointer.
-        unsafe {
-            asm!("mov {}, qword ptr gs:[0]", lateout(reg) ptr);
-        }
-        debug_assert!(!ptr.is_null());
-        ptr
-    }
-
-    pub fn get_ptr() -> *const Self {
-        Self::get_ptr_mut() as *const _
-    }
 }
+
+get_core_local_data_impl!(pub current_thread, CurrentThread);
+get_core_local_data_impl!(pub safe_buffer_lock, bool);

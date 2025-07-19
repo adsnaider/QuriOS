@@ -21,7 +21,6 @@ bench = false
 log.workspace = true
 serial.workspace = true
 sync.workspace = true
-arch.workspace = true
 derive_more.workspace = true
 loader.workspace = true
 tap.workspace = true
@@ -35,3 +34,13 @@ zerocopy.workspace = true
 trie.workspace = true
 derive-where = "1.5.0"
 ghost-cell = "0.2.6"
+paste = "1.0.15"
+
+bitflags = "2.9.1"
+cfg-if = "1.0.1"
+sealed.workspace = true
+
+[target.'cfg(target_arch = "x86_64")'.dependencies]
+x86_64 = { version = "0.15.2", default-features = false, features = [
+  "instructions",
+] }

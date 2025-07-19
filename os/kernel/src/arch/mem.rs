@@ -2,6 +2,8 @@ pub mod phys;
 pub mod pmo;
 pub mod virt;
 
+pub mod core_local;
+
 use core::{arch::naked_asm, marker::PhantomData};
 
 use bitflags::bitflags;
@@ -10,6 +12,8 @@ use derive_more::{Display, Error, From};
 pub use phys::{Frame, PhysAddr};
 pub use pmo::Pmo;
 pub use virt::{MemorySegment, Page, VirtAddr};
+
+use crate::core_local::CORE_LOCAL_SAFE_BUFFER_LOCK_OFF;
 
 pub const UNTYPED_MEMORY_OFFSET: usize = 0x0000_7000_0000_0000;
 pub const HIGHER_HALF: usize = 0xFFFF_8000_0000_0000;
@@ -128,8 +132,6 @@ impl From<loader::MemFlags> for PageFlags {
     }
 }
 
-pub(crate) static mut USER_BUFFER_SAFE_READ: bool = false;
-
 /// Copies data from a user buffer into the kernel buffer and catches an page fault exceptions returning false when such occurs.
 ///
 /// # Safety
@@ -146,7 +148,7 @@ pub unsafe extern "C" fn user_buffer_read(
     // SAFETY: This function requires no stack usage or internal calls as the page fault will direclty unwind
     // into `user_buffer_read_page_fault_call_gate`.
     naked_asm!(
-        "        mov     rax, qword ptr [rip + {trap_flag}@GOTPCREL] ",
+        "        mov     rax, qword ptr gs:[{user_buffer_lock_gs_offset}] ",
         "        mov     byte ptr [rax], 1 ",
         "        test    rdx, rdx ",
         "        je      6f",
@@ -188,17 +190,17 @@ pub unsafe extern "C" fn user_buffer_read(
         "        mov     byte ptr [rax], 0 ",
         "        mov     al, 1 ",
         "        ret ",
-        trap_flag = sym USER_BUFFER_SAFE_READ
+        user_buffer_lock_gs_offset = const CORE_LOCAL_SAFE_BUFFER_LOCK_OFF
     );
 }
 
 #[unsafe(naked)]
 pub(crate) unsafe extern "C" fn user_buffer_read_page_fault_call_gate() {
     naked_asm!(
-        "mov rax, qword ptr [rip + {trap_flag}@GOTPCREL]",
+        "mov rax, qword ptr gs:[{user_buffer_lock_gs_offset}]",
         "mov byte ptr [rax], 0 ",
         "mov al, 0",
         "ret",
-        trap_flag = sym USER_BUFFER_SAFE_READ
+        user_buffer_lock_gs_offset = const CORE_LOCAL_SAFE_BUFFER_LOCK_OFF
     );
 }

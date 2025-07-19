@@ -7,21 +7,20 @@ use qapi::syscall::SyscallArgs;
 use qapi::{caps::CapResult as _, syscall::SyscallOp};
 use sync::cell::AtomicLazyCell;
 use x86_64::{
-    PrivilegeLevel, VirtAddr as VirtAddrImpl,
     registers::control::Cr2,
     structures::idt::{InterruptDescriptorTable, PageFaultErrorCode},
+    PrivilegeLevel, VirtAddr as VirtAddrImpl,
 };
 
-use crate::mem::{
-    MemorySegment, USER_BUFFER_SAFE_READ, VirtAddr, user_buffer_read_page_fault_call_gate,
-};
-use crate::{
-    SYSTEM,
+use crate::arch::mem::{user_buffer_read_page_fault_call_gate, MemorySegment, VirtAddr};
+use crate::arch::{
     x86_64_impl::{
         exec::{Exception, ExceptionCtx},
         gdt,
     },
+    SYSTEM,
 };
+use crate::core_local::CORE_LOCAL_SAFE_BUFFER_LOCK;
 
 use super::exec::Interrupt;
 
@@ -90,7 +89,7 @@ fn page_fault_handler(mut ctx: ExceptionCtx<Exception>) {
         PrivilegeLevel::Ring0 => match addr.memory_segment() {
             MemorySegment::User => {
                 // SAFETY: NOT SAFE - TODO CoreLocal
-                if unsafe { USER_BUFFER_SAFE_READ } {
+                if *CORE_LOCAL_SAFE_BUFFER_LOCK.get() {
                     isr_stack.instruction_pointer =
                         VirtAddrImpl::new(user_buffer_read_page_fault_call_gate as usize as u64);
                 } else {
