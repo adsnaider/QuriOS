@@ -9,16 +9,13 @@ mod gdt;
 mod idt;
 mod mem_impl;
 
-use crate::arch::{
-    mem::{Pmo, VirtAddr},
-    SyscallHandler, System,
+use crate::{
+    arch::{mem::VirtAddr, System},
+    PMO,
 };
 
 #[derive(Debug)]
-pub struct X64Sys {
-    pmo: Pmo,
-    syscall_handler: SyscallHandler<Self>,
-}
+pub struct X64Sys {}
 
 // SAFETY: The system trait implementation is aaccurate for x86-64 systems.
 unsafe impl System for X64Sys {
@@ -29,18 +26,15 @@ unsafe impl System for X64Sys {
 
     fn addrspace(&self) -> Self::Addrspace {
         // SAFETY: PMO is correct from initialization
-        X64Addrspace::current(self.pmo)
+        X64Addrspace::current(*PMO)
     }
 
-    fn init(pmo: Pmo, syscall_handler: SyscallHandler<Self>) -> Self {
+    fn init() -> Self {
         interrupts::disable();
         sce_enable();
         gdt::init();
         idt::init();
-        Self {
-            pmo,
-            syscall_handler,
-        }
+        Self {}
     }
 
     fn set_core_data(&self, addr: VirtAddr) {

@@ -13,14 +13,12 @@ use x86_64::{
 };
 
 use crate::arch::mem::{user_buffer_read_page_fault_call_gate, MemorySegment, VirtAddr};
-use crate::arch::{
-    x86_64_impl::{
-        exec::{Exception, ExceptionCtx},
-        gdt,
-    },
-    SYSTEM,
+use crate::arch::x86_64_impl::{
+    exec::{Exception, ExceptionCtx},
+    gdt,
 };
 use crate::core_local::CORE_LOCAL_SAFE_BUFFER_LOCK;
+use crate::syscall::syscall_handler;
 
 use super::exec::Interrupt;
 
@@ -129,12 +127,7 @@ extern "C" fn syscall_int(
     ) -> isize {
         // SAFETY: It would be impossible to get to this interrupt handler
         // without having first initialized the IDT with arch::init
-        (unsafe { SYSTEM.get_unchecked() }.syscall_handler)(
-            cap,
-            SyscallArgs::new(op, [a, b, c, d]),
-            ctx,
-        )
-        .into_isize()
+        syscall_handler(cap, SyscallArgs::new(op, [a, b, c, d]), ctx).into_isize()
     }
     // SAFETY: Userspace expects syscall interrupt to behave like a C calling convention syscall which
     // will work so long as userspace doesn't need to pass arguments on the stack.

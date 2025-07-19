@@ -1,7 +1,7 @@
 use core::fmt::Debug;
 
 use exec::ExecState;
-use mem::{Addrspace, Pmo, VirtAddr};
+use mem::{Addrspace, VirtAddr};
 use qapi::{
     caps::{CapError, CapabilityKind, PositiveIsize},
     syscall::{SyscallArgs, SyscallArgsInit},
@@ -22,12 +22,6 @@ cfg_if::cfg_if! {
     }
 }
 
-type SyscallHandler<S> = fn(
-    usize,
-    SyscallArgs<SyscallArgsInit>,
-    <S as System>::SyscallCtx,
-) -> Result<PositiveIsize, CapError>;
-
 static SYSTEM: AtomicOnceCell<ArchSystem> = AtomicOnceCell::new();
 pub fn system() -> &'static ArchSystem {
     SYSTEM
@@ -36,9 +30,9 @@ pub fn system() -> &'static ArchSystem {
 }
 
 /// Initializes the architecture-specific subsystem.
-pub fn init(pmo: Pmo, syscall_handler: SyscallHandler<ArchSystem>) {
+pub fn init() {
     SYSTEM
-        .set(ArchSystem::init(pmo, syscall_handler))
+        .set(ArchSystem::init())
         .expect("Tried to initialize system twice")
 }
 
@@ -57,7 +51,7 @@ pub unsafe trait System: Sized {
     type SyscallCtx: SyscallCtx + Debug;
 
     /// Initializes the architecture-specific subsystem
-    fn init(pmo: Pmo, syscall_handler: SyscallHandler<Self>) -> Self;
+    fn init() -> Self;
 
     /// Returns a valid pointer to the currently active address space
     fn addrspace(&self) -> Self::Addrspace;

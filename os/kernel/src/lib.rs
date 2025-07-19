@@ -28,7 +28,6 @@ use limine::{
 };
 use qapi::caps::CapId;
 use sync::{cell::AtomicLazyCell, singleton::Singleton};
-use syscall::syscall_handler;
 use tap::TapFallible;
 use tar_no_std::TarArchiveRef;
 use thread::Thread;
@@ -56,7 +55,7 @@ pub fn kinit() {
         .get_response()
         .expect("Limine stack size response missing");
     // SAFETY: PMO is correct from limine
-    arch::init(*PMO.get(), syscall_handler);
+    arch::init();
 
     let memory_map: &'static mut MemoryMapRequest = MEMORY_MAP
         .take_ref_mut()
