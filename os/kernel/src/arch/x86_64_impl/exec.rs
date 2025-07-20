@@ -16,7 +16,7 @@ use x86_64::{
     },
 };
 
-use crate::arch::{SyscallCtx, exec::ExecState};
+use crate::arch::{exec::ExecState, SyscallCtx};
 
 use super::gdt;
 
@@ -121,6 +121,15 @@ impl ExecState for ExecCtx {
         // TODO: Maybe don't give access to all hardware here but it's good for debugging.
         regs.control.rflags =
             (RFlags::INTERRUPT_FLAG | RFlags::IOPL_HIGH | RFlags::IOPL_LOW).bits();
+        Self { regs }
+    }
+
+    fn new_thread(entry: usize, stack_top: usize) -> Self {
+        let mut regs = Regs::default();
+        regs.control.rip = entry as u64;
+        regs.control.rsp = stack_top as u64;
+        // TODO: Maybe don't give access to all hardware here but it's good for debugging.
+        regs.control.rflags = (RFlags::INTERRUPT_FLAG).bits();
         Self { regs }
     }
 }

@@ -1,20 +1,20 @@
 use core::{marker::PhantomData, mem::MaybeUninit};
 
-use derive_more::{Debug, From, Into};
+use derive_more::{Debug, TryFrom};
 
 use crate::caps::CapError;
 
 #[cfg(feature = "userspace")]
 pub mod ulib {
-    use crate::caps::{CapError, CapId, CapResult, PositiveIsize};
+    use crate::caps::{CapError, CapResult, PositiveIsize};
 
-    use super::{SyscallOp, SyscallStruct};
+    use super::SyscallStruct;
     use core::{arch::naked_asm, mem::MaybeUninit};
 
     #[unsafe(naked)]
     pub extern "C" fn syscall_raw(
-        cap: usize,
-        op: SyscallOp,
+        op: usize,
+        a: MaybeUninit<usize>,
         b: MaybeUninit<usize>,
         c: MaybeUninit<usize>,
         d: MaybeUninit<usize>,
@@ -28,15 +28,15 @@ pub mod ulib {
     }
 
     #[inline(always)]
-    pub fn syscall<S: SyscallStruct>(cap: CapId, args: S) -> Result<PositiveIsize, CapError> {
+    pub fn syscall<S: SyscallStruct>(args: S) -> Result<PositiveIsize, CapError> {
         let args = args.into_args();
         CapResult::from_isize(syscall_raw(
-            cap.into(),
             args.op,
             args.args[0],
             args.args[1],
             args.args[2],
             args.args[3],
+            args.args[4],
         ))
     }
 }
@@ -44,13 +44,15 @@ pub mod ulib {
 pub struct SyscallArgsInit;
 pub struct SyscallArgsUninit;
 
-pub type SyscallParams = [MaybeUninit<usize>; 4];
+pub const SYSCALL_ARGS: usize = 5;
+pub type UninitSyscallParams = [MaybeUninit<usize>; SYSCALL_ARGS];
+pub type InitSyscallParams = [usize; SYSCALL_ARGS];
 
 #[derive(Debug)]
 #[repr(C)]
 pub struct SyscallArgs<InitStatus> {
-    op: SyscallOp,
-    args: [MaybeUninit<usize>; 4],
+    op: usize,
+    args: UninitSyscallParams,
     _phantom: PhantomData<InitStatus>,
 }
 
@@ -70,8 +72,8 @@ impl<InitStatus> SyscallArgs<InitStatus> {
         }
     }
 
-    pub fn op(&self) -> SyscallOp {
-        self.op
+    pub fn op(&self) -> Result<SyscallOp, CapError> {
+        self.op.try_into().map_err(|_| CapError::InvalidOp)
     }
 }
 
@@ -79,8 +81,16 @@ impl SyscallArgs<SyscallArgsUninit> {
     /// Constructs a (possibly) partially uninitialized set of syscall arguments
     pub const fn new_uninit(op: SyscallOp) -> Self {
         Self {
-            op,
-            args: [const { MaybeUninit::uninit() }; 4],
+            op: op as usize,
+            args: [const { MaybeUninit::uninit() }; 5],
+            _phantom: PhantomData,
+        }
+    }
+
+    pub const fn new_with_args(op: SyscallOp, args: UninitSyscallParams) -> Self {
+        Self {
+            op: op as usize,
+            args,
             _phantom: PhantomData,
         }
     }
@@ -96,27 +106,27 @@ impl SyscallArgs<SyscallArgsUninit> {
     }
 
     /// Returns the arguments in this syscall
-    pub fn args(&self) -> &[MaybeUninit<usize>; 4] {
+    pub fn args(&self) -> &UninitSyscallParams {
         &self.args
     }
 
     /// Returns the arguments in this syscall
-    pub fn args_mut(&mut self) -> &mut [MaybeUninit<usize>; 4] {
+    pub fn args_mut(&mut self) -> &mut UninitSyscallParams {
         &mut self.args
     }
 }
 
 impl SyscallArgs<SyscallArgsInit> {
-    pub fn new(op: SyscallOp, args: [usize; 4]) -> Self {
+    pub fn new(op: SyscallOp, args: InitSyscallParams) -> Self {
         Self {
-            op,
+            op: op as usize,
             // SAFETY: MaybeUninit uses repr transparent.
-            args: unsafe { core::mem::transmute::<[usize; 4], [MaybeUninit<usize>; 4]>(args) },
+            args: unsafe { core::mem::transmute::<InitSyscallParams, UninitSyscallParams>(args) },
             _phantom: PhantomData,
         }
     }
 
-    pub fn args(&self) -> &[usize; 4] {
+    pub fn args(&self) -> &InitSyscallParams {
         // SAFETY: Type state guarantees this is valid.
         unsafe { core::mem::transmute(&self.args) }
     }
@@ -138,13 +148,14 @@ impl<T> SyscallStruct for SyscallArgs<T> {
     }
 }
 
-#[repr(transparent)]
-#[derive(Debug, Copy, Clone, Eq, PartialEq, From, Into)]
-pub struct SyscallOp(usize);
-impl SyscallOp {
-    pub const CAP_TABLE_CONS: Self = Self(0);
+#[repr(usize)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, TryFrom)]
+#[try_from(repr)]
+#[non_exhaustive]
+pub enum SyscallOp {
+    CapTableCons = SyscallOp::CAP_TABLE_CONS,
+}
 
-    pub const fn as_usize(self) -> usize {
-        self.0
-    }
+impl SyscallOp {
+    pub const CAP_TABLE_CONS: usize = 0;
 }

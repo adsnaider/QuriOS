@@ -1,20 +1,22 @@
 use crate::arch::{ArchSystem, System};
+use cap_table::cap_table_cons;
 use qapi::{
-    caps::{CapError, PositiveIsize},
-    syscall::{SyscallArgs, SyscallArgsInit},
+    caps::{cap_table::ConsOp, CapError, PositiveIsize},
+    syscall::{SyscallArgs, SyscallArgsInit, SyscallOp},
 };
 
-use crate::thread::Thread;
+mod cap_table;
 
 pub fn syscall_handler(
-    cap: usize,
     args: SyscallArgs<SyscallArgsInit>,
     ctx: <ArchSystem as System>::SyscallCtx,
 ) -> Result<PositiveIsize, CapError> {
-    let cap = cap.try_into()?;
     // SAFETY: We are allowed to get a mutable reference at the start of the syscall. It will get dropped
-    log::info!("Handling syscall: {cap} with args {args:?} {ctx:#?}");
-    // SAFETY: We should always have a thread set on syscall handling
-    let cap = Thread::current_cap(cap).ok_or(CapError::CapNotFound)?;
-    cap.exercise(args)
+    log::debug!("Handling syscall: {args:?} {ctx:#?}");
+
+    let op = args.op()?;
+    match op {
+        SyscallOp::CapTableCons => cap_table_cons(ConsOp::try_from_args(args.args())?),
+        _ => Err(CapError::SyscallNotImplemented),
+    }
 }

@@ -18,7 +18,6 @@ use crate::{
         VirtAddr,
     },
     arch::x86_64_impl::X64Sys,
-    arch::CapabilityResource,
 };
 
 #[derive(Debug)]
@@ -256,16 +255,6 @@ pub struct AnyPageTable([PageTableEntry; 512]);
 impl Default for AnyPageTable {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-impl CapabilityResource for AnyPageTable {
-    fn exercise(
-        &self,
-        args: SyscallArgs<SyscallArgsInit>,
-        kind: CapabilityKind,
-    ) -> Result<PositiveIsize, CapError> {
-        todo!()
     }
 }
 

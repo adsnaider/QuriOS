@@ -1,6 +1,6 @@
 use super::*;
 
-use crate::syscall::ulib::syscall;
+use crate::syscall::{SyscallArgs, SyscallOp, ulib::syscall};
 
 impl CapTable {
     pub fn construct(&self, args: ConsArgs, slot: SlotId<NUM_SLOTS>) -> Result<(), CapError> {
@@ -13,11 +13,14 @@ impl CapTable {
             ConsArgs::CapTable(_cap_table_cons) => todo!(),
         };
 
-        let cons_op = ConsOp {
+        let args = ConsOp {
+            table_cap: self.0,
             slot_id: slot,
             kind,
             cons_args: UserPtr::from_addr(args_bytes.as_ptr() as usize),
-        };
-        syscall(self.0, cons_op).map(|_| ())
+        }
+        .into_args();
+        let op = SyscallOp::CapTableCons;
+        syscall(SyscallArgs::new_with_args(op, args)).map(|_| ())
     }
 }

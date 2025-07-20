@@ -109,25 +109,25 @@ fn page_fault_handler(mut ctx: ExceptionCtx<Exception>) {
 
 #[unsafe(naked)]
 extern "C" fn syscall_int(
-    cap: usize,
     op: SyscallOp,
+    a: usize,
     b: usize,
     c: usize,
     d: usize,
     e: usize,
 ) -> isize {
     extern "C" fn inner(
-        cap: usize,
         op: SyscallOp,
         a: usize,
         b: usize,
         c: usize,
         d: usize,
+        e: usize,
         ctx: ExceptionCtx<Interrupt>,
     ) -> isize {
         // SAFETY: It would be impossible to get to this interrupt handler
         // without having first initialized the IDT with arch::init
-        syscall_handler(cap, SyscallArgs::new(op, [a, b, c, d]), ctx).into_isize()
+        syscall_handler(SyscallArgs::new(op, [a, b, c, d, e]), ctx).into_isize()
     }
     // SAFETY: Userspace expects syscall interrupt to behave like a C calling convention syscall which
     // will work so long as userspace doesn't need to pass arguments on the stack.

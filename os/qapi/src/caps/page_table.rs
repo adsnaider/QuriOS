@@ -26,4 +26,8 @@ impl Addrspace {
     pub const fn new(cap: CapId) -> Self {
         Self(cap)
     }
+
+    pub const fn cap(&self) -> CapId {
+        self.0
+    }
 }

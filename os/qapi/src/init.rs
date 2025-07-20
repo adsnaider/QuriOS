@@ -54,4 +54,4 @@ impl BootCaps {
 
 #[derive(Debug)]
 #[repr(transparent)]
-pub struct RetypeEntry(AtomicU16);
+pub struct RetypeEntry(pub AtomicU16);

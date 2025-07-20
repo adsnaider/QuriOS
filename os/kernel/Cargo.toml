@@ -31,7 +31,6 @@ extend = "1.2.0"
 heapless = "0.8.0"
 qapi.workspace = true
 zerocopy.workspace = true
-trie.workspace = true
 derive-where = "1.5.0"
 ghost-cell = "0.2.6"
 paste = "1.0.15"
@@ -39,6 +38,7 @@ paste = "1.0.15"
 bitflags = "2.9.1"
 cfg-if = "1.0.1"
 sealed.workspace = true
+tailcall = "1.0.1"
 
 [target.'cfg(target_arch = "x86_64")'.dependencies]
 x86_64 = { version = "0.15.2", default-features = false, features = [

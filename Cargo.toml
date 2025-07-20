@@ -1,11 +1,5 @@
 [workspace]
-members = [
-  "os/kernel",
-  "os/crates/*",
-  # "os/arch",
-  "os/userspace/init",
-  "os/qapi",
-]
+members = ["os/kernel", "os/crates/*", "os/userspace/init", "os/qapi"]
 resolver = "2"
 
 [workspace.dependencies]
@@ -14,7 +8,6 @@ serial = { path = "os/crates/serial" }
 sync = { path = "os/crates/sync" }
 entry = { path = "os/crates/entry" }
 loader = { path = "os/crates/loader" }
-trie = { path = "os/crates/trie" }
 qapi = { path = "os/qapi" }
 
 zerocopy = { version = "0.8.26", features = ["derive"] }

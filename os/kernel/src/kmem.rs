@@ -5,12 +5,11 @@ use core::ptr::NonNull;
 use core::sync::atomic::Ordering;
 use core::{mem::ManuallyDrop, sync::atomic::fence};
 
+use crate::arch::mem::{Frame, Page, VirtAddr};
 use crate::{
     pmo::{PhysAddrExt as _, VirtAddrExt as _},
     retyping::{AsUnusedKernelError, FrameExt, KernelFrame},
 };
-use crate::arch::mem::{Frame, Page, VirtAddr};
-use trie::Ptr;
 
 /// A "kernel" pointer to any page-aligned resource.
 ///
@@ -51,6 +50,34 @@ impl<T> KPtr<T> {
     pub fn new(frame: Frame, value: T) -> Result<Self, AsUnusedKernelError> {
         // SAFETY: Frame is typed as kernel and atomically incremented
         unsafe { Ok(Self::new_unchecked(frame.try_as_unused_kernel()?, value)) }
+    }
+
+    /// Cast's the pointee from T to U
+    ///
+    /// # Safety
+    ///
+    /// Same safetey requirements as `transmute::<T, U>`.
+    pub const unsafe fn cast<U>(self) -> KPtr<U> {
+        const {
+            assert!(core::mem::size_of::<T>() == core::mem::size_of::<U>());
+            assert!(core::mem::align_of::<T>() % core::mem::align_of::<U>() == 0);
+        }
+        // SAFETY: Precondition
+        unsafe { core::mem::transmute(self) }
+    }
+
+    /// Cast's the pointee from T to U
+    ///
+    /// # Safety
+    ///
+    /// Same safetey requirements as `transmute::<T, U>`.
+    pub const unsafe fn cast_ref<U>(&self) -> &KPtr<U> {
+        const {
+            assert!(core::mem::size_of::<T>() == core::mem::size_of::<U>());
+            assert!(core::mem::align_of::<T>() % core::mem::align_of::<U>() == 0);
+        }
+        // SAFETY: Precondition
+        unsafe { core::mem::transmute(self) }
     }
 
     /// Constructs a KPtr from some pretyped kernel frame
@@ -148,5 +175,3 @@ impl<T> Drop for KPtr<T> {
         }
     }
 }
-
-impl<T> Ptr<T> for KPtr<T> {}

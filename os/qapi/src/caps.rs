@@ -1,5 +1,4 @@
 use derive_more::{Display, Error, Into, TryFrom};
-use trie::TrieIndexError;
 use zerocopy::{FromBytes, Immutable, IntoBytes};
 
 pub mod cap_table;
@@ -11,7 +10,28 @@ pub const SLOT_SIZE: usize = 128;
 
 pub const NUM_SLOTS: usize = PAGE_SIZE / SLOT_SIZE;
 
-pub type SlotId = trie::SlotId<NUM_SLOTS>;
+#[derive(Debug, Copy, Clone)]
+pub struct SlotId<const COUNT: usize>(usize);
+
+impl<const COUNT: usize> SlotId<COUNT> {
+    pub const fn new(value: usize) -> Result<Self, CapError> {
+        if value < COUNT {
+            Ok(Self(value))
+        } else {
+            Err(CapError::InvalidTableSlot)
+        }
+    }
+
+    pub const fn as_usize(self) -> usize {
+        self.0
+    }
+}
+
+impl<const COUNT: usize> From<SlotId<COUNT>> for usize {
+    fn from(value: SlotId<COUNT>) -> Self {
+        value.0
+    }
+}
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u8)]
@@ -84,6 +104,16 @@ pub enum CapError {
     InvalidOp = -5,
     #[display("Invalid user pointer triggered a page fault while reading or writing")]
     BadUserMemory = -6,
+    #[display("The slot ID would overflow the resource table")]
+    InvalidTableSlot = -7,
+    #[display("The requested syscall operation is currently unimplemented")]
+    SyscallNotImplemented = -8,
+    #[display("The frame provided is not typed as kernel")]
+    NotKernelTyped = -9,
+    #[display("The frame provided is already in use")]
+    FrameInUse = -10,
+    #[display("The capability is not empty (and cannot be set)")]
+    CapNotEmpty = -11,
 }
 
 impl CapError {
@@ -101,6 +131,12 @@ impl From<CapError> for isize {
 #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Into)]
 #[repr(transparent)]
 pub struct PositiveIsize(isize);
+
+impl PositiveIsize {
+    pub const fn zero() -> Self {
+        Self(0)
+    }
+}
 
 impl TryFrom<isize> for PositiveIsize {
     type Error = PositiveIsizeUnderflow;
@@ -136,11 +172,5 @@ impl CapResult for Result<PositiveIsize, CapError> {
             Ok(pos) => Ok(pos),
             Err(_) => Err(CapError::from_isize(value)),
         }
-    }
-}
-
-impl From<TrieIndexError> for CapError {
-    fn from(_: TrieIndexError) -> Self {
-        Self::CapIndexOutOfRange
     }
 }

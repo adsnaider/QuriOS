@@ -2,10 +2,6 @@ use core::fmt::Debug;
 
 use exec::ExecState;
 use mem::{Addrspace, VirtAddr};
-use qapi::{
-    caps::{CapError, CapabilityKind, PositiveIsize},
-    syscall::{SyscallArgs, SyscallArgsInit},
-};
 use sync::cell::AtomicOnceCell;
 
 #[cfg(target_arch = "x86_64")]
@@ -46,7 +42,7 @@ pub fn init() {
 /// The implementation must adhere exactly to the documentation
 pub unsafe trait System: Sized {
     type Addrspace: Addrspace + Debug;
-    type PageTable: Debug + Default + CapabilityResource;
+    type PageTable: Debug + Default;
     type ExecState: ExecState + Clone;
     type SyscallCtx: SyscallCtx + Debug;
 
@@ -61,11 +57,3 @@ pub unsafe trait System: Sized {
 }
 
 pub trait SyscallCtx {}
-
-pub trait CapabilityResource {
-    fn exercise(
-        &self,
-        args: SyscallArgs<SyscallArgsInit>,
-        kind: CapabilityKind,
-    ) -> Result<PositiveIsize, CapError>;
-}

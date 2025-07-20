@@ -1,13 +1,12 @@
 use core::cell::RefCell;
 
-use crate::arch::{exec::ExecState, mem::Addrspace, ArchSystem, System};
+use crate::{
+    arch::{exec::ExecState, mem::Addrspace, ArchSystem, System},
+    caps::{CapRef, CapTable},
+};
 use qapi::caps::CapId;
 
-use crate::{
-    caps::{Capability, Resources},
-    core_local::CORE_LOCAL_CURRENT_THREAD,
-    kmem::KPtr,
-};
+use crate::{caps::Resources, core_local::CORE_LOCAL_CURRENT_THREAD, kmem::KPtr};
 
 pub type CurrentThread = RefCell<Option<KPtr<Thread<ArchSystem>>>>;
 
@@ -23,13 +22,16 @@ impl Thread<ArchSystem> {
         CORE_LOCAL_CURRENT_THREAD.replace(Some(new))
     }
 
-    pub fn current_cap(cap: CapId) -> Option<Capability<ArchSystem>> {
-        CORE_LOCAL_CURRENT_THREAD
-            .borrow()
-            .as_ref()
-            .unwrap()
-            .active_comp()
-            .cap(cap)
+    pub fn get_cap(cap: CapId) -> Option<CapRef<ArchSystem>> {
+        CapTable::get(
+            CORE_LOCAL_CURRENT_THREAD
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .active_comp()
+                .cap_table(),
+            cap.value(),
+        )
     }
 
     pub fn dispatch(this: KPtr<Self>) -> ! {

@@ -3,18 +3,17 @@
 use core::mem::MaybeUninit;
 
 use derive_more::{From, Into, TryFrom};
-use trie::SlotId;
 use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout};
 
 use crate::{
-    syscall::{SyscallArgs, SyscallArgsInit, SyscallArgsUninit, SyscallOp, SyscallStruct},
+    syscall::{InitSyscallParams, SYSCALL_ARGS, UninitSyscallParams},
     types::UserPtr,
 };
 
 #[cfg(feature = "userspace")]
 pub mod ulib;
 
-use super::{CapError, CapId, NUM_SLOTS, page_table::Addrspace};
+use super::{CapError, CapId, NUM_SLOTS, SlotId, page_table::Addrspace};
 
 #[repr(transparent)]
 #[derive(
@@ -37,30 +36,28 @@ pub struct CapTable(CapId);
 
 #[derive(Debug, Copy, Clone)]
 pub struct ConsOp {
+    pub table_cap: CapId,
     pub slot_id: SlotId<NUM_SLOTS>,
     pub kind: ConsKind,
     pub cons_args: UserPtr<()>,
 }
 
-impl SyscallStruct for ConsOp {
-    fn into_args(self) -> SyscallArgs<SyscallArgsUninit> {
-        let mut sysargs = SyscallArgs::new_uninit(SyscallOp::CAP_TABLE_CONS);
-        let args = sysargs.args_mut();
-        args[0] = MaybeUninit::new(self.slot_id.into());
-        args[1] = MaybeUninit::new(self.kind as usize);
-        args[2] = MaybeUninit::new(self.cons_args.addr());
-        sysargs
+impl ConsOp {
+    pub fn into_args(self) -> UninitSyscallParams {
+        let mut args = [MaybeUninit::uninit(); SYSCALL_ARGS];
+        args[0] = MaybeUninit::new(self.table_cap.into());
+        args[1] = MaybeUninit::new(self.slot_id.into());
+        args[2] = MaybeUninit::new(self.kind as usize);
+        args[3] = MaybeUninit::new(self.cons_args.addr());
+        args
     }
 
-    fn try_from_args(args: SyscallArgs<SyscallArgsInit>) -> Result<Self, CapError> {
-        if args.op() != SyscallOp::CAP_TABLE_CONS {
-            return Err(CapError::InvalidOp);
-        }
-        let args = args.args();
+    pub fn try_from_args(args: &InitSyscallParams) -> Result<Self, CapError> {
         Ok(Self {
-            slot_id: SlotId::new(args[0])?,
-            kind: args[1].try_into().map_err(|_| CapError::InvalidArg)?,
-            cons_args: UserPtr::from_addr(args[2]),
+            table_cap: CapId::try_from(args[0])?,
+            slot_id: SlotId::new(args[1])?,
+            kind: args[2].try_into().map_err(|_| CapError::InvalidArg)?,
+            cons_args: UserPtr::from_addr(args[3]),
         })
     }
 }
@@ -68,6 +65,10 @@ impl SyscallStruct for ConsOp {
 impl CapTable {
     pub const fn new(cap: CapId) -> Self {
         Self(cap)
+    }
+
+    pub const fn cap(&self) -> CapId {
+        self.0
     }
 }
 
@@ -89,6 +90,7 @@ pub struct ThreadCons {
     pub rsp: usize,
     pub addrspace: Addrspace,
     pub caps: CapTable,
+    pub frame: u64,
 }
 #[derive(KnownLayout, IntoBytes, FromBytes, Immutable, Debug, Copy, Clone)]
 #[repr(C)]
@@ -116,25 +118,4 @@ pub enum ConsKind {
     Addrspace,
     SyncCall,
     SyncRet,
-}
-
-#[repr(usize)]
-#[derive(Debug, Copy, Clone)]
-pub enum CapTableOps {
-    Cons(ConsOp) = SyscallOp::CAP_TABLE_CONS.as_usize(),
-}
-
-impl SyscallStruct for CapTableOps {
-    fn into_args(self) -> SyscallArgs<SyscallArgsUninit> {
-        match self {
-            CapTableOps::Cons(cons_op) => cons_op.into_args(),
-        }
-    }
-
-    fn try_from_args(args: SyscallArgs<SyscallArgsInit>) -> Result<Self, CapError> {
-        match args.op() {
-            SyscallOp::CAP_TABLE_CONS => Ok(Self::Cons(ConsOp::try_from_args(args)?)),
-            _ => Err(CapError::InvalidOp),
-        }
-    }
 }

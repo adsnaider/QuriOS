@@ -19,14 +19,14 @@ use crate::arch::{
     system, ArchSystem,
 };
 use boot::{bump_alloc::BumpFrameAllocator, Process};
-use caps::{CapTable, Capability, Resources};
+use caps::{trie::TrieSlotPayload, CapBlock, CapTable, Capability, Resources};
 use core_local::CoreLocalDataKernelLocalStoreExt as _;
 use kmem::KPtr;
 use limine::{
     request::{HhdmRequest, MemoryMapRequest, ModuleRequest, StackSizeRequest},
     BaseRevision,
 };
-use qapi::caps::CapId;
+use qapi::caps::SlotId;
 use sync::{cell::AtomicLazyCell, singleton::Singleton};
 use tap::TapFallible;
 use tar_no_std::TarArchiveRef;
@@ -121,21 +121,24 @@ pub fn uinit() -> ! {
     // SAFETY: The kernel frame is unused
     let thread = unsafe { KPtr::new_unchecked(thread_frame, thread) };
 
-    thread
-        .active_comp()
-        .slot(CapId::new(0))
-        .expect("We should have enough space for boot capabilities")
-        .insert(caps::ImmutableSlot {
-            child: None,
-            capability: Capability::CapTable(cap_table),
-        });
-    thread
-        .active_comp()
-        .slot(CapId::new(1))
-        .expect("We should have enough space for boot capabilities")
-        .insert(caps::ImmutableSlot {
-            child: None,
-            capability: Capability::Addrspace(KPtr::clone(thread.active_comp().addrspace_cap())),
-        });
+    CapBlock::at(
+        // SAFETY: It's okay to cast a cap table to cap block.
+        unsafe { thread.active_comp().cap_table().cast_ref() },
+        SlotId::new(0).unwrap(),
+    )
+    .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::CapBlock(
+        // SAFETY: It's okay to cast a cap table to cap block.
+        unsafe { cap_table.cast() },
+    )))
+    .expect("Unable to set boot capabilities");
+    CapBlock::at(
+        // SAFETY: It's okay to cast a cap table to cap block.
+        unsafe { thread.active_comp().cap_table().cast_ref() },
+        SlotId::new(1).unwrap(),
+    )
+    .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::Addrspace(
+        KPtr::clone(thread.active_comp().addrspace_cap()),
+    )))
+    .expect("Unable to set boot capabilities");
     Thread::dispatch(thread)
 }

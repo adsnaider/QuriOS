@@ -139,6 +139,7 @@ impl From<loader::MemFlags> for PageFlags {
 /// Aside from the page fault, this function doesn't perform any aditional checks regarding pointer validity (canonical, user-space only,
 /// size, etc.). These constraints are left to higher-level abstractions to check.
 #[unsafe(naked)]
+#[must_use]
 pub unsafe extern "C" fn user_buffer_read(
     kernel_buffer: *mut u8,
     user_buffer: *const u8,
