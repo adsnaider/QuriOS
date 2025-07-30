@@ -53,6 +53,14 @@ impl<S: System> CapRef<S> {
             _ => Err(CapError::InvalidArg),
         }
     }
+
+    pub fn as_thread(&self) -> Result<&KPtr<Thread<S>>, CapError> {
+        let data = self.data().ok_or(CapError::CapNotFound)?;
+        match data {
+            Capability::Thread(kptr) => Ok(kptr),
+            _ => Err(CapError::InvalidArg),
+        }
+    }
 }
 
 #[derive_where(Debug, Clone)]

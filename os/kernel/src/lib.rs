@@ -140,5 +140,14 @@ pub fn uinit() -> ! {
         KPtr::clone(thread.active_comp().addrspace_cap()),
     )))
     .expect("Unable to set boot capabilities");
-    Thread::dispatch(thread)
+    CapBlock::at(
+        // SAFETY: It's okay to cast a cap table to cap block.
+        unsafe { thread.active_comp().cap_table().cast_ref() },
+        SlotId::new(2).unwrap(),
+    )
+    .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::Thread(
+        KPtr::clone(&thread),
+    )))
+    .expect("Unable to set boot capabilities");
+    Thread::dispatch_diverging(thread)
 }

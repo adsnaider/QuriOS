@@ -1,7 +1,7 @@
 mod asm_utils;
 use core::{arch::naked_asm, convert::Infallible};
 
-use asm_utils::{pop_scratch, push_scratch};
+use asm_utils::{pop_preserved, pop_scratch, push_preserved, push_scratch};
 use x86_64::structures::idt::{
     DivergingHandlerFunc, DivergingHandlerFuncWithErrCode, Entry, EntryOptions, HandlerFunc,
     HandlerFuncWithErrCode, PageFaultHandlerFunc,
@@ -157,7 +157,7 @@ extern "C" fn save_all_and_ret_isr<F: IsrHandler<Interrupt, ()>>() {
     // SAFETY: Sticking with ISR calling convention. Preserved registers are pushed on
     // call to sysv64 ABI.
     unsafe {
-        naked_asm!("swapgs", push_scratch!(), "lea rdi, [rsp + 8*9]", "call {inner}", pop_scratch!(), "swapgs", "iretq", inner = sym F::call);
+        naked_asm!("swapgs", push_scratch!(), push_preserved!(), "lea rdi, [rsp + 8*9]", "call {inner}", pop_preserved!(), pop_scratch!(), "swapgs", "iretq", inner = sym F::call);
     }
 }
 

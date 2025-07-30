@@ -33,8 +33,20 @@ impl Thread<ArchSystem> {
             cap.value(),
         )
     }
+    pub fn dispatch_diverging(to: KPtr<Self>) -> ! {
+        to.active_comp().addrspace().activate();
+        // TODO: Remove lint allow once type alias impl trait works and ArchSystem uses it.
+        #[allow(clippy::clone_on_copy)]
+        let exec_state = to.exec_state.clone();
+        assert!(Self::replace_current(to).is_none());
+        log::info!("Set the active thread");
+        exec_state.dispatch();
+    }
 
-    pub fn dispatch(this: KPtr<Self>) -> ! {
+    pub fn dispatch(
+        this: KPtr<Self>,
+        ctx: &<<ArchSystem as System>::ExecState as ExecState>::RegCtx,
+    ) -> ! {
         // Our kernel is non-preemptive which makes every other case really
         // simple as it's a completely synchronous call-response. However, thread
         // dispatching is somewhat weird because we exit the kernel early on the
@@ -59,7 +71,7 @@ impl Thread<ArchSystem> {
         {
             let previous = Self::replace_current(this);
             if let Some(previous) = &previous {
-                previous.exec_state.save();
+                previous.exec_state.save(ctx);
             }
         }
         log::info!("Set the active thread");

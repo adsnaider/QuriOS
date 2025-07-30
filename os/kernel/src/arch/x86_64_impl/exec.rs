@@ -1,7 +1,9 @@
 //! x86-64 execution context.
 #![allow(unused)]
 
-use core::{arch::naked_asm, convert::Infallible, marker::PhantomData, mem::MaybeUninit};
+use core::{
+    arch::naked_asm, cell::Cell, convert::Infallible, marker::PhantomData, mem::MaybeUninit,
+};
 
 use derive_more::Debug;
 
@@ -16,7 +18,7 @@ use x86_64::{
     },
 };
 
-use crate::arch::{exec::ExecState, SyscallCtx};
+use crate::arch::exec::ExecState;
 
 use super::gdt;
 
@@ -30,8 +32,6 @@ pub struct ExceptionCtx<Kind> {
     stack_top: u64,
     _kind: PhantomData<Kind>,
 }
-
-impl SyscallCtx for ExceptionCtx<Interrupt> {}
 
 impl<Kind> ExceptionCtx<Kind> {
     /// # Safety
@@ -85,28 +85,50 @@ impl ExceptionCtx<Exception> {
 
 impl ExceptionCtx<Interrupt> {
     pub fn preserved_regs(&self) -> PreservedRegs {
-        todo!();
+        unsafe {
+            let preserved = (self.stack_top as *const ScratchRegs).add(1) as *const PreservedRegs;
+            core::ptr::read(preserved)
+        }
     }
 
     pub fn scratch_regs(&self) -> ScratchRegs {
-        todo!();
+        let scratch = self.stack_top as *const ScratchRegs;
+        unsafe { core::ptr::read(scratch) }
     }
 
     pub fn current_control(&self) -> ControlRegs {
-        todo!();
+        let isr = self.interrupt_stack_frame();
+        ControlRegs {
+            rflags: isr.cpu_flags.bits(),
+            rsp: isr.stack_pointer.as_u64(),
+            rip: isr.instruction_pointer.as_u64(),
+        }
     }
+}
+
+trait RegCtx {
+    fn preserved_regs(&self) -> PreservedRegs;
+    fn scratch_regs(&self) -> ScratchRegs;
+    fn current_control(&self) -> ControlRegs;
 }
 
 /// Execution context that can be dispatched.
 #[repr(transparent)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 pub struct ExecCtx {
-    regs: Regs,
+    regs: Cell<Regs>,
 }
 
 impl ExecState for ExecCtx {
-    fn save(&self) {
-        todo!()
+    type RegCtx = ExceptionCtx<Interrupt>;
+
+    fn save(&self, ctx: &Self::RegCtx) {
+        let regs = Regs {
+            scratch: ctx.scratch_regs(),
+            preserved: ctx.preserved_regs(),
+            control: ctx.current_control(),
+        };
+        self.regs.set(regs);
     }
 
     fn dispatch(&self) -> ! {
@@ -121,7 +143,9 @@ impl ExecState for ExecCtx {
         // TODO: Maybe don't give access to all hardware here but it's good for debugging.
         regs.control.rflags =
             (RFlags::INTERRUPT_FLAG | RFlags::IOPL_HIGH | RFlags::IOPL_LOW).bits();
-        Self { regs }
+        Self {
+            regs: Cell::new(regs),
+        }
     }
 
     fn new_thread(entry: usize, stack_top: usize) -> Self {
@@ -129,22 +153,23 @@ impl ExecState for ExecCtx {
         regs.control.rip = entry as u64;
         regs.control.rsp = stack_top as u64;
         // TODO: Maybe don't give access to all hardware here but it's good for debugging.
-        regs.control.rflags = (RFlags::INTERRUPT_FLAG).bits();
-        Self { regs }
+        regs.control.rflags =
+            (RFlags::INTERRUPT_FLAG | RFlags::IOPL_HIGH | RFlags::IOPL_LOW).bits();
+        Self {
+            regs: Cell::new(regs),
+        }
     }
 }
 
 impl ExecCtx {
     pub fn new(regs: Regs) -> Self {
-        Self { regs }
+        Self {
+            regs: Cell::new(regs),
+        }
     }
 
-    pub fn regs(&self) -> &Regs {
-        &self.regs
-    }
-
-    pub fn regs_mut(&mut self) -> &mut Regs {
-        &mut self.regs
+    pub fn regs(&self) -> Regs {
+        self.regs.get()
     }
 
     #[unsafe(naked)]

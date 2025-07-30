@@ -20,7 +20,6 @@ impl CapTable {
             cons_args: UserPtr::from_addr(args_bytes.as_ptr() as usize),
         }
         .into_args();
-        let op = SyscallOp::CapTableCons;
-        syscall(SyscallArgs::new_with_args(op, args)).map(|_| ())
+        syscall(SyscallArgs::new_with_args(SyscallOp::CapTableCons, args)).map(|_| ())
     }
 }

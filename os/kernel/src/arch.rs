@@ -44,7 +44,6 @@ pub unsafe trait System: Sized {
     type Addrspace: Addrspace + Debug;
     type PageTable: Debug + Default;
     type ExecState: ExecState + Clone;
-    type SyscallCtx: SyscallCtx + Debug;
 
     /// Initializes the architecture-specific subsystem
     fn init() -> Self;
@@ -55,5 +54,3 @@ pub unsafe trait System: Sized {
     /// Sets the per-cpu address of a core-local structure.
     fn set_core_data(&self, addr: VirtAddr);
 }
-
-pub trait SyscallCtx {}

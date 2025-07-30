@@ -1,6 +1,6 @@
 use core::arch::asm;
 
-use exec::{ExceptionCtx, ExecCtx, Interrupt};
+use exec::ExecCtx;
 use mem_impl::page_table::{AnyPageTable, X64Addrspace};
 use x86_64::{instructions::interrupts, registers::model_specific::GsBase};
 
@@ -21,7 +21,6 @@ pub struct X64Sys {}
 unsafe impl System for X64Sys {
     type Addrspace = X64Addrspace;
     type ExecState = ExecCtx;
-    type SyscallCtx = ExceptionCtx<Interrupt>;
     type PageTable = AnyPageTable;
 
     fn addrspace(&self) -> Self::Addrspace {

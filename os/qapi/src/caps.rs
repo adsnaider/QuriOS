@@ -3,6 +3,7 @@ use zerocopy::{FromBytes, Immutable, IntoBytes};
 
 pub mod cap_table;
 pub mod page_table;
+pub mod thread;
 
 #[cfg(target_arch = "x86_64")]
 pub const PAGE_SIZE: usize = 4096;

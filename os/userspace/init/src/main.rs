@@ -4,8 +4,9 @@
 use entry::entry;
 use qapi::{
     caps::{
-        SlotId,
+        CapId, SlotId,
         cap_table::{ConsArgs, ThreadCons},
+        thread::Thread,
     },
     init::{BootArgs, BootCaps},
     mem::Frame,
@@ -14,6 +15,7 @@ use qapi::{
 #[entry]
 fn main(args: &'static BootArgs) -> ! {
     serial::init();
+    log::info!("Landed on userspace init");
     let bootcaps = BootCaps::new();
     let memory_map = args.memory_map.into_slice();
     let frame = memory_map
@@ -30,7 +32,7 @@ fn main(args: &'static BootArgs) -> ! {
         .construct(
             ConsArgs::Thread(ThreadCons {
                 entry: thread2 as usize,
-                rsp: t2_stack.as_mut_slice().as_mut_ptr() as usize,
+                rsp: unsafe { t2_stack.as_mut_slice().as_mut_ptr_range().end.byte_sub(8) as usize },
                 addrspace: bootcaps.self_addrspace,
                 caps: bootcaps.self_caps,
                 frame: frame.base(),
@@ -38,13 +40,17 @@ fn main(args: &'static BootArgs) -> ! {
             SlotId::new(10).unwrap(),
         )
         .expect("Unable to construct second thread");
-    log::info!("Landed on userspace init");
+    let thread = Thread::new(CapId::new(10));
+    thread.dispatch().expect("Couldn't dispatch second thread");
+    log::info!("Back from thread 2");
     todo!();
 }
 
-fn thread2() -> ! {
-    log::info!("Landed on userspace init");
+extern "C" fn thread2() -> ! {
+    log::info!("Landed on userspace thread 2");
     #[allow(clippy::empty_loop)]
+    let thread = Thread::new(CapId::new(2));
+    thread.dispatch();
     loop {}
 }
 
