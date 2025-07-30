@@ -17,7 +17,7 @@ pub fn syscall_handler(
     ctx: <<ArchSystem as System>::ExecState as ExecState>::RegCtx,
 ) -> Result<PositiveIsize, CapError> {
     // SAFETY: We are allowed to get a mutable reference at the start of the syscall. It will get dropped
-    log::debug!("Handling syscall: {args:?} {ctx:#?}");
+    log::trace!("Handling syscall: {args:?} {ctx:#?}");
 
     let op = args.op()?;
     match op {

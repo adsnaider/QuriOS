@@ -174,20 +174,20 @@ impl<S: System> Process<S> {
         };
         log::info!("Loading process headers");
         let process = program.load(&mut loader)?;
-        log::debug!("Entry: {:X}", process.entry());
+        log::debug!("Entry: {:#X}", process.entry());
 
         let stack_top = untyped_memory_offset;
         let stack_bottom = untyped_memory_offset
             .checked_sub(stack_pages * Page::SIZE)
             .unwrap();
-        log::info!("Setting up stack pages at {:X?}", stack_bottom..stack_top);
+        log::info!("Setting up stack pages at {:#X?}", stack_bottom..stack_top);
         loader
             .load_zeroed(stack_bottom..stack_top, MemFlags::READ | MemFlags::WRITE)
             .unwrap();
 
         let untyped_pages = untyped_memory_length / Page::SIZE;
         let untyped_start = Page::from_start_address(VirtAddr::new(untyped_memory_offset)).index();
-        log::info!("Setting up {untyped_pages} untyped pages at {untyped_memory_offset:X?}",);
+        log::info!("Setting up {untyped_pages} untyped pages at {untyped_memory_offset:#X?}",);
         for (frame, page) in (untyped_start..(untyped_start + untyped_pages)).enumerate() {
             let page = Page::from_index(page).unwrap();
             let frame = Frame::from_index(frame as u64).unwrap();
@@ -257,7 +257,7 @@ impl<S: System> Process<S> {
         log::info!("Initialized user process");
         Ok(Self {
             addrspace,
-            exec: S::ExecState::for_entry(
+            exec: S::ExecState::for_init_comp(
                 boot_fn,
                 stack_top as *const (),
                 bootargs_start as *const BootArgs,

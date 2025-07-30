@@ -62,29 +62,9 @@ impl<Kind> ExceptionCtx<Kind> {
         // SAFETY: We can assume the stack_top is valid as it was created with unsafe code to guarantee that.
         unsafe { &mut *(self.stack_top as usize as *mut InterruptStackFrameValue) }
     }
-}
 
-impl ExceptionCtx<Exception> {
     pub fn preserved_regs(&self) -> PreservedRegs {
-        todo!();
-    }
-
-    pub fn scratch_regs(&self) -> ScratchRegs {
-        todo!();
-    }
-
-    pub fn current_control(&self) -> ControlRegs {
-        todo!();
-    }
-
-    pub fn error_code(&self) -> u64 {
-        // SAFETY: Stack must contain error code below the interrupt stack frame
-        unsafe { core::ptr::read((self.stack_top - 8) as *const u64) }
-    }
-}
-
-impl ExceptionCtx<Interrupt> {
-    pub fn preserved_regs(&self) -> PreservedRegs {
+        // SAFETY: Preserved regs are pushed after scratch registers. Should be safe to read this.
         unsafe {
             let preserved = (self.stack_top as *const ScratchRegs).add(1) as *const PreservedRegs;
             core::ptr::read(preserved)
@@ -93,6 +73,7 @@ impl ExceptionCtx<Interrupt> {
 
     pub fn scratch_regs(&self) -> ScratchRegs {
         let scratch = self.stack_top as *const ScratchRegs;
+        // SAFETY: Scratch registers are pushed first before, so should be here.
         unsafe { core::ptr::read(scratch) }
     }
 
@@ -103,6 +84,13 @@ impl ExceptionCtx<Interrupt> {
             rsp: isr.stack_pointer.as_u64(),
             rip: isr.instruction_pointer.as_u64(),
         }
+    }
+}
+
+impl ExceptionCtx<Exception> {
+    pub fn error_code(&self) -> u64 {
+        // SAFETY: Stack must contain error code below the interrupt stack frame
+        unsafe { core::ptr::read((self.stack_top - 8) as *const u64) }
     }
 }
 
@@ -135,7 +123,7 @@ impl ExecState for ExecCtx {
         self.dispatch_raw();
     }
 
-    fn for_entry(entry_fun: EntryFn, stack_top: *const (), arg0: *const BootArgs) -> Self {
+    fn for_init_comp(entry_fun: EntryFn, stack_top: *const (), arg0: *const BootArgs) -> Self {
         let mut regs = Regs::default();
         regs.scratch.rdi = arg0 as u64;
         regs.control.rip = entry_fun as *const () as u64;

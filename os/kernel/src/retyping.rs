@@ -228,7 +228,8 @@ pub impl Frame {
 
     fn try_as_kernel(self) -> Result<KernelFrame, AsTypeError> {
         log::trace!("Trying {self:?} as kernel frame");
-        self.retype_entry()?
+        let old_count = self
+            .retype_entry()?
             .get_as_and_increment(State::Kernel)
             .map_err(|(state, value)| {
                 if !matches!(state, State::Kernel) {
@@ -238,6 +239,7 @@ pub impl Frame {
                     AsTypeError::MaxRefs(MaxRefs)
                 }
             })?;
+        log::trace!("Cloned {self:?}: Old count {old_count}");
         Ok(KernelFrame(self))
     }
 
@@ -257,7 +259,8 @@ pub impl Frame {
     /// The raw frame must be typed as kernel
     unsafe fn as_kernel_unchecked(self) -> KernelFrame {
         let frame = KernelFrame(self);
-        frame.entry().increment().unwrap();
+        let old_count = frame.entry().increment().unwrap();
+        log::trace!("Cloned {self:?}: Old count {old_count}");
         frame
     }
 
@@ -344,14 +347,15 @@ impl UserFrame {
     }
 
     pub fn try_clone(&self) -> Option<Self> {
-        self.0.retype_entry().unwrap().increment().ok()?;
+        let old_count = self.0.retype_entry().unwrap().increment().ok()?;
+        log::trace!("Cloned {self:?}: Old count {old_count}");
         Some(Self(self.raw()))
     }
 
     pub fn drop(self) -> u16 {
         let this = ManuallyDrop::new(self);
         let count = this.entry().decrement().unwrap();
-        log::debug!("Dropping {this:?}: Old count {count}");
+        log::trace!("Dropping {this:?}: Old count {count}");
         count
     }
 }
@@ -384,14 +388,15 @@ impl KernelFrame {
     }
 
     pub fn try_clone(&self) -> Option<Self> {
-        self.0.retype_entry().unwrap().increment().ok()?;
+        let old_count = self.0.retype_entry().unwrap().increment().ok()?;
+        log::trace!("Cloned {self:?}: Old count {old_count}");
         Some(Self(self.raw()))
     }
 
     pub fn drop(self) -> u16 {
         let this = ManuallyDrop::new(self);
         let count = this.entry().decrement().unwrap();
-        log::debug!("Dropping {this:?}: Old count {count}");
+        log::trace!("Dropping {this:?}: Old count {count}");
         count
     }
 }
@@ -399,14 +404,14 @@ impl KernelFrame {
 impl Drop for KernelFrame {
     fn drop(&mut self) {
         let count = self.entry().decrement().unwrap();
-        log::debug!("Dropping {self:?}: Old count {count}");
+        log::trace!("Dropping {self:?}: Old count {count}");
     }
 }
 
 impl Drop for UserFrame {
     fn drop(&mut self) {
         let count = self.entry().decrement().unwrap();
-        log::debug!("Dropping {self:?}: Old count {count}");
+        log::trace!("Dropping {self:?}: Old count {count}");
     }
 }
 
@@ -493,7 +498,7 @@ impl RetypeEntry {
         Self::value_into(self.0.load(Ordering::Relaxed))
     }
 
-    pub fn get_as_and_increment(&self, wants: State) -> Result<(), (State, u16)> {
+    pub fn get_as_and_increment(&self, wants: State) -> Result<u16, (State, u16)> {
         self.0
             .fetch_update(Ordering::Release, Ordering::Relaxed, |value| {
                 let (state, count) = Self::value_into(value);
@@ -503,7 +508,7 @@ impl RetypeEntry {
                     None
                 }
             })
-            .map(|_| ())
+            .map(|state| Self::value_into(state).1)
             .map_err(Self::value_into)
     }
 

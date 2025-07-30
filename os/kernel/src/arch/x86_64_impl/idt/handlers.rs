@@ -157,7 +157,7 @@ extern "C" fn save_all_and_ret_isr<F: IsrHandler<Interrupt, ()>>() {
     // SAFETY: Sticking with ISR calling convention. Preserved registers are pushed on
     // call to sysv64 ABI.
     unsafe {
-        naked_asm!("swapgs", push_scratch!(), push_preserved!(), "lea rdi, [rsp + 8*9]", "call {inner}", pop_preserved!(), pop_scratch!(), "swapgs", "iretq", inner = sym F::call);
+        naked_asm!("swapgs", push_scratch!(), push_preserved!(), "lea rdi, [rsp + 8*15]", "call {inner}", pop_preserved!(), pop_scratch!(), "swapgs", "iretq", inner = sym F::call);
     }
 }
 
@@ -168,7 +168,7 @@ extern "C" fn save_all_with_err_code_and_ret_isr<F: IsrHandler<Exception, ()>>()
     // SAFETY: Sticking with ISR calling convention. Preserved registers are pushed on
     // call to sysv64 ABI.
     unsafe {
-        naked_asm!("swapgs", push_scratch!(), "sub rsp, 8", "lea rdi, [rsp + 8*11]", "call {inner}", "add rsp, 8", pop_scratch!(), "add rsp, 8", "swapgs", "iretq", inner = sym F::call);
+        naked_asm!("swapgs", push_scratch!(), push_preserved!(), "sub rsp, 8", "lea rdi, [rsp + 8*17]", "call {inner}", "add rsp, 8", pop_preserved!(), pop_scratch!(), "add rsp, 8", "swapgs", "iretq", inner = sym F::call);
     }
 }
 
