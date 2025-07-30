@@ -154,8 +154,10 @@ impl<T> SyscallStruct for SyscallArgs<T> {
 #[non_exhaustive]
 pub enum SyscallOp {
     CapTableCons = SyscallOp::CAP_TABLE_CONS,
+    Retype = SyscallOp::RETYPE,
 }
 
 impl SyscallOp {
     pub const CAP_TABLE_CONS: usize = 0;
+    pub const RETYPE: usize = 1;
 }

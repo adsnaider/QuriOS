@@ -114,6 +114,16 @@ pub enum CapError {
     FrameInUse = -10,
     #[display("The capability is not empty (and cannot be set)")]
     CapNotEmpty = -11,
+    #[display("The frame provided is permanently unavailable")]
+    FrameUnavailable = -12,
+    #[display("The frame is already untyped")]
+    FrameAlreadyUntyped = -13,
+    #[display("The frame is typed and must be untyped first")]
+    FrameAlreadyTyped = -14,
+    #[display("Can't untype due to existing references")]
+    FrameRefsExist = -15,
+    #[display("Frame exceeds the system's physical memory range")]
+    FrameOffAvailableMemoryRange = -16,
 }
 
 impl CapError {

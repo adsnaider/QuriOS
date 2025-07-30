@@ -300,6 +300,24 @@ pub impl Frame {
         self.try_into_untyped_from(State::Kernel)?;
         Ok(self)
     }
+
+    fn try_to_kernel(self) -> Result<(), RetypeError> {
+        self.retype_entry()?
+            .retype(State::Untyped, State::Kernel, 0, 0)
+            .map_err(|(state, _count)| RetypeError::InvalidFromState(state))?;
+        Ok(())
+    }
+
+    fn try_to_untyped(self) -> Result<(), RetypeError> {
+        self.try_into_untyped().map(|_| ())
+    }
+
+    fn try_to_user(self) -> Result<(), RetypeError> {
+        self.retype_entry()?
+            .retype(State::Untyped, State::User, 0, 0)
+            .map_err(|(state, _count)| RetypeError::InvalidFromState(state))?;
+        Ok(())
+    }
 }
 
 impl UserFrame {

@@ -4,7 +4,11 @@ use qapi::caps::{
 };
 
 use crate::{
-    arch::{exec::ExecState, mem::Frame, ArchSystem, System},
+    arch::{
+        exec::ExecState,
+        mem::{Frame, PhysAddr},
+        ArchSystem, System,
+    },
     caps::{trie::TrieSlotPayload, CapBlock, Capability},
     thread::Thread,
 };
@@ -38,7 +42,7 @@ pub fn cap_table_cons(opts: ConsOp) -> Result<PositiveIsize, CapError> {
                     comp.cast_ref::<CapTable<ArchSystem>>().clone()
                 }),
             );
-            let frame = Frame::from_index(frame)?;
+            let frame = Frame::try_from_start_address(PhysAddr::try_new(frame)?)?;
             let thread = KPtr::new(frame, thread)?;
             CapBlock::at(ctable, opts.slot_id)
                 .try_set(TrieSlotPayload::Data(Capability::Thread(thread)))?;

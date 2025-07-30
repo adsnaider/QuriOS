@@ -8,6 +8,7 @@ use qapi::{
         cap_table::{ConsArgs, ThreadCons},
     },
     init::{BootArgs, BootCaps},
+    mem::Frame,
 };
 
 #[entry]
@@ -19,9 +20,10 @@ fn main(args: &'static BootArgs) -> ! {
         .iter()
         .enumerate()
         .find(|(_, entry)| entry.0.load(core::sync::atomic::Ordering::Relaxed) == 0x4000)
-        .map(|(idx, _)| idx as u64)
+        .map(|(idx, _)| Frame::from_index(idx))
         .unwrap();
-    log::info!("Found unused frame at: {frame}");
+    log::info!("Found unused frame: {frame:?}");
+    frame.retype(qapi::mem::RetypeKind::IntoKernel).unwrap();
     let mut t2_stack = [0usize; 128];
     bootcaps
         .self_caps
@@ -31,7 +33,7 @@ fn main(args: &'static BootArgs) -> ! {
                 rsp: t2_stack.as_mut_slice().as_mut_ptr() as usize,
                 addrspace: bootcaps.self_addrspace,
                 caps: bootcaps.self_caps,
-                frame,
+                frame: frame.base(),
             }),
             SlotId::new(10).unwrap(),
         )
