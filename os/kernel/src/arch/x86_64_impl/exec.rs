@@ -136,10 +136,11 @@ impl ExecState for ExecCtx {
         }
     }
 
-    fn new_thread(entry: usize, stack_top: usize) -> Self {
+    fn new_thread(entry: usize, stack_top: usize, arg0: usize) -> Self {
         let mut regs = Regs::default();
         regs.control.rip = entry as u64;
         regs.control.rsp = stack_top as u64;
+        regs.scratch.rdi = arg0 as u64;
         // TODO: Maybe don't give access to all hardware here but it's good for debugging.
         regs.control.rflags =
             (RFlags::INTERRUPT_FLAG | RFlags::IOPL_HIGH | RFlags::IOPL_LOW).bits();

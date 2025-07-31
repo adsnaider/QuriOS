@@ -3,11 +3,7 @@
 
 use entry::entry;
 use qapi::{
-    caps::{
-        CapId, SlotId,
-        cap_table::{ConsArgs, ThreadCons},
-        thread::Thread,
-    },
+    caps::{CapId, SlotId, thread::Thread},
     init::{BootArgs, BootCaps},
     mem::Frame,
 };
@@ -29,28 +25,29 @@ fn main(args: &'static BootArgs) -> ! {
     let mut t2_stack = [0usize; 128];
     bootcaps
         .self_caps
-        .construct(
-            ConsArgs::Thread(ThreadCons {
-                entry: thread2 as usize,
-                rsp: unsafe { t2_stack.as_mut_slice().as_mut_ptr_range().end.byte_sub(8) as usize },
-                addrspace: bootcaps.self_addrspace,
-                caps: bootcaps.self_caps,
-                frame: frame.base(),
-            }),
+        .make_thread(
             SlotId::new(10).unwrap(),
+            thread2,
+            // SAFETY: byte_sub doesn't exceed past the range of the slice
+            unsafe { t2_stack.as_mut_slice().as_mut_ptr_range().end.byte_sub(8) as *mut () },
+            bootcaps.self_addrspace,
+            bootcaps.self_caps,
+            frame,
+            42,
         )
         .expect("Unable to construct second thread");
     let thread = Thread::new(CapId::new(10));
+    log::info!("Jumping to thread 2");
     thread.dispatch().expect("Couldn't dispatch second thread");
     log::info!("Back from thread 2");
     todo!();
 }
 
-extern "C" fn thread2() -> ! {
-    log::info!("Landed on userspace thread 2");
-    #[allow(clippy::empty_loop)]
+extern "C" fn thread2(arg0: usize) -> ! {
+    log::info!("Landed on userspace thread 2: {arg0}");
     let thread = Thread::new(CapId::new(2));
-    thread.dispatch();
+    thread.dispatch().expect("Error jumping to thread 1");
+    #[allow(clippy::empty_loop)]
     loop {}
 }
 

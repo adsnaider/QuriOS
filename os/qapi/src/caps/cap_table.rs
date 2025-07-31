@@ -91,7 +91,9 @@ pub struct ThreadCons {
     pub addrspace: Addrspace,
     pub caps: CapTable,
     pub frame: u64,
+    pub arg0: usize,
 }
+
 #[derive(KnownLayout, IntoBytes, FromBytes, Immutable, Debug, Copy, Clone)]
 #[repr(C)]
 pub struct PageTableCons {}

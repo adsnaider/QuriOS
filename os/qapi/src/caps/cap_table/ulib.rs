@@ -1,8 +1,35 @@
 use super::*;
 
-use crate::syscall::{SyscallArgs, SyscallOp, ulib::syscall};
+use crate::{
+    mem::Frame,
+    syscall::{SyscallArgs, SyscallOp, ulib::syscall},
+};
 
 impl CapTable {
+    #[allow(clippy::too_many_arguments)]
+    pub fn make_thread(
+        &self,
+        slot: SlotId<NUM_SLOTS>,
+        entry: extern "C" fn(usize) -> !,
+        stack_top: *mut (),
+        addrspace: Addrspace,
+        caps: CapTable,
+        frame: Frame,
+        arg0: usize,
+    ) -> Result<(), CapError> {
+        self.construct(
+            ConsArgs::Thread(ThreadCons {
+                entry: entry as usize,
+                rsp: stack_top as usize,
+                addrspace,
+                caps,
+                frame: frame.base(),
+                arg0,
+            }),
+            slot,
+        )
+    }
+
     pub fn construct(&self, args: ConsArgs, slot: SlotId<NUM_SLOTS>) -> Result<(), CapError> {
         let (kind, args_bytes) = match &args {
             ConsArgs::Thread(thread_cons) => (ConsKind::Thread, thread_cons.as_bytes()),

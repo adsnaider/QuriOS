@@ -1,8 +1,6 @@
 mod handlers;
 
-use core::arch::naked_asm;
-
-use handlers::{Isr, PanicHandler};
+use handlers::{save_all_and_ret_syscall, Isr, PanicHandler};
 use qapi::syscall::SyscallArgs;
 use qapi::{caps::CapResult as _, syscall::SyscallOp};
 use sync::cell::AtomicLazyCell;
@@ -68,7 +66,9 @@ fn init_idt() {
         // SAFETY: The address provided will match the syscall ABI
         unsafe {
             idt[SYSCALL_INT]
-                .set_handler_addr(VirtAddrImpl::from_ptr(syscall_int as *const ()))
+                .set_handler_addr(VirtAddrImpl::from_ptr(
+                    save_all_and_ret_syscall as *const (),
+                ))
                 .set_privilege_level(PrivilegeLevel::Ring3)
         };
         idt
@@ -107,7 +107,6 @@ fn page_fault_handler(mut ctx: ExceptionCtx<Exception>) {
     }
 }
 
-#[unsafe(naked)]
 extern "C" fn syscall_int(
     op: SyscallOp,
     a: usize,
@@ -115,30 +114,9 @@ extern "C" fn syscall_int(
     c: usize,
     d: usize,
     e: usize,
+    ctx: ExceptionCtx<Interrupt>,
 ) -> isize {
-    extern "C" fn inner(
-        op: SyscallOp,
-        a: usize,
-        b: usize,
-        c: usize,
-        d: usize,
-        e: usize,
-        ctx: ExceptionCtx<Interrupt>,
-    ) -> isize {
-        // SAFETY: It would be impossible to get to this interrupt handler
-        // without having first initialized the IDT with arch::init
-        syscall_handler(SyscallArgs::new(op, [a, b, c, d, e]), ctx).into_isize()
-    }
-    // SAFETY: Userspace expects syscall interrupt to behave like a C calling convention syscall which
-    // will work so long as userspace doesn't need to pass arguments on the stack.
-    // Since we filled all the register-args, we need to add the exception context on the stack.
-    naked_asm!(
-        "swapgs",
-        "push rsp",
-        "call {inner}",
-        "add rsp, 8",
-        "swapgs",
-        "iretq",
-        inner = sym inner,
-    )
+    // SAFETY: It would be impossible to get to this interrupt handler
+    // without having first initialized the IDT with arch::init
+    syscall_handler(SyscallArgs::new(op, [a, b, c, d, e]), ctx).into_isize()
 }

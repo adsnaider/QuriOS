@@ -29,6 +29,7 @@ pub fn cap_table_cons(opts: ConsOp) -> Result<PositiveIsize, CapError> {
                 addrspace,
                 caps,
                 frame,
+                arg0,
             } = opts.cons_args.cast::<ThreadCons>().verify()?.safe_read()?;
             let comp = Thread::get_cap(caps.cap()).ok_or(CapError::CapNotFound)?;
             let comp = comp.as_ctable()?;
@@ -36,7 +37,7 @@ pub fn cap_table_cons(opts: ConsOp) -> Result<PositiveIsize, CapError> {
             let addrspace = addrspace.as_addrspace()?;
 
             let thread = Thread::new(
-                <ArchSystem as System>::ExecState::new_thread(entry, rsp),
+                <ArchSystem as System>::ExecState::new_thread(entry, rsp, arg0),
                 // SAFETY: It's okay to cast a CapBlock to a CapTable
                 Resources::from_parts(addrspace.clone(), unsafe {
                     comp.cast_ref::<CapTable<ArchSystem>>().clone()
