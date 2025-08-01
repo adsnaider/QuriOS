@@ -60,7 +60,7 @@ pub unsafe trait System: Sized {
 }
 
 pub trait ArchCaps<S: System> {
-    fn addrspace<A>(addrspace: A) -> Self
+    fn new_addrspace<A>(addrspace: A) -> Self
     where
         A: Borrow<S::Addrspace>;
 

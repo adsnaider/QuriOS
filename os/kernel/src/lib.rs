@@ -139,7 +139,7 @@ pub fn uinit() -> ! {
         SlotId::new(1).unwrap(),
     )
     .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::Arch(
-        <ArchSystem as System>::ArchCaps::addrspace(&*thread.active_comp().addrspace()),
+        <ArchSystem as System>::ArchCaps::new_addrspace(&*thread.active_comp().addrspace()),
     )))
     .expect("Unable to set boot capabilities");
     CapBlock::at(

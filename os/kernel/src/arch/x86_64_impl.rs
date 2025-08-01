@@ -1,5 +1,6 @@
 use core::{arch::asm, borrow::Borrow};
 
+use crate::arch::Addrspace as _;
 use exec::ExecCtx;
 use mem_impl::page_table::{AnyPageTable, X64Addrspace};
 use qapi::caps::CapError;
@@ -77,14 +78,19 @@ pub enum ArchCaps {
 }
 
 impl super::ArchCaps<X64Sys> for ArchCaps {
-    fn addrspace<A>(addrspace: A) -> Self
+    fn new_addrspace<A>(addrspace: A) -> Self
     where
         A: Borrow<X64Addrspace>,
     {
-        todo!()
+        let frame = addrspace.borrow().frame();
+        // SAFETY: We can use KPtr<AnyPageTable> from an addrspace frame.
+        Self::L4(unsafe { KPtr::from_frame_unchecked(frame.try_clone().unwrap()) })
     }
 
     fn as_addrspace(&self) -> Result<&KPtr<AnyPageTable>, CapError> {
-        todo!();
+        match self {
+            Self::L4(addrspace) => Ok(addrspace),
+            _ => Err(CapError::InvalidArg),
+        }
     }
 }

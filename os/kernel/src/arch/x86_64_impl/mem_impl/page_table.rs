@@ -13,16 +13,19 @@ use x86_64::{
 };
 
 use crate::{
-    arch::mem::{
-        Addrspace, Flusher, Frame, FrameAllocator, MapPageError, Page, PageFlags, PhysAddr, Pmo,
-        VirtAddr,
+    arch::{
+        mem::{
+            Addrspace, Flusher, Frame, FrameAllocator, MapPageError, Page, PageFlags, PhysAddr,
+            Pmo, VirtAddr,
+        },
+        x86_64_impl::X64Sys,
     },
-    arch::x86_64_impl::X64Sys,
+    retyping::{FrameExt, KernelFrame},
 };
 
 #[derive(Debug)]
 pub struct X64Addrspace {
-    l4_frame: Frame,
+    l4_frame: KernelFrame,
     pmo: Pmo,
 }
 
@@ -35,7 +38,7 @@ impl X64Addrspace {
     /// It's reasonable to have multiple threads with a reference to the same addrspace but
     /// the frame must not be reused/recycled until all addrspaces are dropped and the current
     /// active addrspace is not one of them.
-    pub unsafe fn new_with_kernel_entries(l4_frame: Frame, pmo: Pmo) -> Self {
+    pub unsafe fn new_with_kernel_entries(l4_frame: KernelFrame, pmo: Pmo) -> Self {
         let current = Self::current(pmo);
         let mut new_l4 = AnyPageTable::new();
         for i in 256..512 {
@@ -49,12 +52,12 @@ impl X64Addrspace {
             }
         }
         // SAFETY: We have exclusive access to the frame as we are initializaing it.
-        unsafe { core::ptr::write(pmo.phys_to_virt(l4_frame.addr()).as_mut_ptr(), new_l4) };
+        unsafe { core::ptr::write(pmo.phys_to_virt(l4_frame.raw().addr()).as_mut_ptr(), new_l4) };
         Self { l4_frame, pmo }
     }
 
     fn l4_table(&self) -> &AnyPageTable {
-        let addr = self.pmo.phys_to_virt(self.l4_frame.addr()).as_ptr();
+        let addr = self.pmo.phys_to_virt(self.frame().raw().addr()).as_ptr();
         // SAFETY: As long as this addrspace is valid, the frame is guaranteed to not be freed up.
         unsafe { &*addr }
     }
@@ -63,7 +66,9 @@ impl X64Addrspace {
         let frame = Self::current_raw();
         Self {
             pmo,
-            l4_frame: frame,
+            l4_frame: frame
+                .try_as_kernel()
+                .expect("Current L4 frame is not typed as kernel!"),
         }
     }
 
@@ -170,7 +175,7 @@ impl Addrspace for X64Addrspace {
 
     fn activate(&self) {
         let (frame, flags) = Cr3::read();
-        let this_frame = self.l4_frame.into();
+        let this_frame = self.l4_frame.raw().into();
         if frame != this_frame {
             log::debug!("Switching addrspace from {frame:?} to {this_frame:?}");
             // SAFETY: Precondition for creating the Addrspace is that it remains valid.
@@ -180,11 +185,11 @@ impl Addrspace for X64Addrspace {
         }
     }
 
-    fn into_frame(self) -> Frame {
+    fn into_frame(self) -> KernelFrame {
         self.l4_frame
     }
 
-    fn from_frame(pmo: &Pmo, frame: Frame) -> Self {
+    fn from_frame(pmo: &Pmo, frame: KernelFrame) -> Self {
         Self {
             pmo: *pmo,
             l4_frame: frame,
@@ -193,7 +198,7 @@ impl Addrspace for X64Addrspace {
 
     fn translate_page(&self, page: Page) -> Option<(Frame, PageFlags)> {
         let mut level = Some(PageTableLevel::top());
-        let mut frame = self.l4_frame;
+        let mut frame = self.l4_frame.raw();
         let addr = page.base();
         let mut flags = PageFlags::all();
         while let Some(current_level) = level {
@@ -212,6 +217,10 @@ impl Addrspace for X64Addrspace {
             flags &= current_flags;
         }
         Some((frame, flags))
+    }
+
+    fn frame(&self) -> &KernelFrame {
+        &self.l4_frame
     }
 }
 

@@ -13,7 +13,7 @@ pub use phys::{Frame, PhysAddr};
 pub use pmo::Pmo;
 pub use virt::{MemorySegment, Page, VirtAddr};
 
-use crate::core_local::CORE_LOCAL_SAFE_BUFFER_LOCK_OFF;
+use crate::{core_local::CORE_LOCAL_SAFE_BUFFER_LOCK_OFF, retyping::KernelFrame};
 
 pub const UNTYPED_MEMORY_OFFSET: usize = 0x0000_7000_0000_0000;
 pub const HIGHER_HALF: usize = 0xFFFF_8000_0000_0000;
@@ -60,12 +60,10 @@ pub trait Addrspace: Sized {
 
     /// Flushes the given page, forcing the addrspace changes to go into effect
     fn flush(page: Page);
-
     fn activate(&self);
-
-    fn into_frame(self) -> Frame;
-
-    fn from_frame(pmo: &Pmo, frame: Frame) -> Self;
+    fn frame(&self) -> &KernelFrame;
+    fn into_frame(self) -> KernelFrame;
+    fn from_frame(pmo: &Pmo, frame: KernelFrame) -> Self;
 }
 
 #[must_use]

@@ -79,8 +79,7 @@ pub struct RefBound<'a, T> {
 impl<S: System> Resources<S> {
     pub fn new(addrspace: S::Addrspace, capabilities: KPtr<CapTable<S>>) -> Self {
         // SAFETY: Addrspace frame is already a kenrel frame by construction and holds a PageTable type.
-        let page_table =
-            unsafe { KPtr::from_frame_unchecked(addrspace.into_frame().as_kernel_unchecked()) };
+        let page_table = unsafe { KPtr::from_frame_unchecked(addrspace.into_frame()) };
         Self {
             addrspace: page_table,
             capabilities,
@@ -102,7 +101,13 @@ impl<S: System> Resources<S> {
         // We want reference semantics here to avoid the addrspace outliving the
         // page table it refers to
         RefBound {
-            inner: S::Addrspace::from_frame(PMO.get(), self.addrspace.frame()),
+            inner: S::Addrspace::from_frame(
+                PMO.get(),
+                self.addrspace
+                    .frame()
+                    .try_as_kernel()
+                    .expect("Addrspace frame is not kernel-typed"),
+            ),
             _life: PhantomData,
         }
     }
