@@ -7,7 +7,7 @@ pub mod thread;
 
 #[cfg(target_arch = "x86_64")]
 pub const PAGE_SIZE: usize = 4096;
-pub const SLOT_SIZE: usize = 128;
+pub const SLOT_SIZE: usize = 64;
 
 pub const NUM_SLOTS: usize = PAGE_SIZE / SLOT_SIZE;
 

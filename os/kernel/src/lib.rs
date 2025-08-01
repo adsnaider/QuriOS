@@ -18,6 +18,8 @@ use crate::arch::{
     mem::{core_local::CoreLocalData, Pmo, VirtAddr},
     system, ArchSystem,
 };
+use arch::ArchCaps;
+use arch::System;
 use boot::{bump_alloc::BumpFrameAllocator, Process};
 use caps::{trie::TrieSlotPayload, CapBlock, CapTable, Capability, Resources};
 use core_local::CoreLocalDataKernelLocalStoreExt as _;
@@ -136,8 +138,8 @@ pub fn uinit() -> ! {
         unsafe { thread.active_comp().cap_table().cast_ref() },
         SlotId::new(1).unwrap(),
     )
-    .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::Addrspace(
-        KPtr::clone(thread.active_comp().addrspace_cap()),
+    .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::Arch(
+        <ArchSystem as System>::ArchCaps::addrspace(&*thread.active_comp().addrspace()),
     )))
     .expect("Unable to set boot capabilities");
     CapBlock::at(

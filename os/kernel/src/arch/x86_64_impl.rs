@@ -1,7 +1,8 @@
-use core::arch::asm;
+use core::{arch::asm, borrow::Borrow};
 
 use exec::ExecCtx;
 use mem_impl::page_table::{AnyPageTable, X64Addrspace};
+use qapi::caps::CapError;
 use x86_64::{instructions::interrupts, registers::model_specific::GsBase};
 
 mod exec;
@@ -11,6 +12,7 @@ mod mem_impl;
 
 use crate::{
     arch::{mem::VirtAddr, System},
+    kmem::KPtr,
     PMO,
 };
 
@@ -22,6 +24,7 @@ unsafe impl System for X64Sys {
     type Addrspace = X64Addrspace;
     type ExecState = ExecCtx;
     type PageTable = AnyPageTable;
+    type ArchCaps = ArchCaps;
 
     fn addrspace(&self) -> Self::Addrspace {
         // SAFETY: PMO is correct from initialization
@@ -63,4 +66,25 @@ fn sce_enable() {
         );
     }
     log::info!("Enabled SCE x86-64 extension");
+}
+
+#[derive(Debug, Clone)]
+pub enum ArchCaps {
+    L4(KPtr<AnyPageTable>),
+    L3(KPtr<AnyPageTable>),
+    L2(KPtr<AnyPageTable>),
+    L1(KPtr<AnyPageTable>),
+}
+
+impl super::ArchCaps<X64Sys> for ArchCaps {
+    fn addrspace<A>(addrspace: A) -> Self
+    where
+        A: Borrow<X64Addrspace>,
+    {
+        todo!()
+    }
+
+    fn as_addrspace(&self) -> Result<&KPtr<AnyPageTable>, CapError> {
+        todo!();
+    }
 }

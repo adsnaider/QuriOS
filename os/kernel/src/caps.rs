@@ -5,7 +5,7 @@ use core::{convert::Infallible, marker::PhantomData, mem::MaybeUninit, ops::Dere
 use crate::{
     arch::{
         mem::{phys::BadAddress, user_buffer_read, Addrspace, VirtAddr},
-        System,
+        ArchCaps as _, System,
     },
     retyping::AsUnusedKernelError,
 };
@@ -49,7 +49,7 @@ impl<S: System> CapRef<S> {
     pub fn as_addrspace(&self) -> Result<&KPtr<S::PageTable>, CapError> {
         let data = self.data().ok_or(CapError::CapNotFound)?;
         match data {
-            Capability::Addrspace(kptr) => Ok(kptr),
+            Capability::Arch(arch_caps) => Ok(arch_caps.as_addrspace()?),
             _ => Err(CapError::InvalidArg),
         }
     }
@@ -127,11 +127,10 @@ pub enum Capability<S: System> {
     #[derive_where(default)]
     Empty,
     Thread(KPtr<Thread<S>>),
-    TranscientPageTable(KPtr<S::PageTable>),
-    Addrspace(KPtr<S::PageTable>),
     CapBlock(KPtr<CapBlock<S>>),
     SyncCall(SyncCall<S>),
     SyncRet(SyncRet),
+    Arch(S::ArchCaps),
 }
 
 impl<S: System> Capability<S> {

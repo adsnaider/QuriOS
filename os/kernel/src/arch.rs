@@ -1,8 +1,11 @@
-use core::fmt::Debug;
+use core::{borrow::Borrow, fmt::Debug};
 
 use exec::ExecState;
 use mem::{Addrspace, VirtAddr};
+use qapi::caps::CapError;
 use sync::cell::AtomicOnceCell;
+
+use crate::kmem::KPtr;
 
 #[cfg(target_arch = "x86_64")]
 mod x86_64_impl;
@@ -44,6 +47,7 @@ pub unsafe trait System: Sized {
     type Addrspace: Addrspace + Debug;
     type PageTable: Debug + Default;
     type ExecState: ExecState + Clone;
+    type ArchCaps: Debug + Clone + ArchCaps<Self>;
 
     /// Initializes the architecture-specific subsystem
     fn init() -> Self;
@@ -53,4 +57,12 @@ pub unsafe trait System: Sized {
 
     /// Sets the per-cpu address of a core-local structure.
     fn set_core_data(&self, addr: VirtAddr);
+}
+
+pub trait ArchCaps<S: System> {
+    fn addrspace<A>(addrspace: A) -> Self
+    where
+        A: Borrow<S::Addrspace>;
+
+    fn as_addrspace(&self) -> Result<&KPtr<S::PageTable>, CapError>;
 }
