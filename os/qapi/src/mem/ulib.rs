@@ -3,7 +3,10 @@ use crate::{
     syscall::{SyscallArgs, SyscallOp, ulib::syscall},
 };
 
-use super::{Frame, RetypeKind, RetypeOp};
+use super::{
+    Frame,
+    phys::{RetypeKind, RetypeOp},
+};
 
 impl Frame {
     pub fn retype(&self, to: RetypeKind) -> Result<(), CapError> {

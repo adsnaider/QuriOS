@@ -96,7 +96,7 @@ ktest: test-iso
 		{{qemu_args}}
 
 test:
-	cargo test
+	cargo test --workspace
 
 clean:
 	rm -rf {{artifact_dir}}

@@ -2,7 +2,7 @@ use crate::arch::{exec::ExecState, ArchSystem, System};
 use cap_table::cap_table_cons;
 use qapi::{
     caps::{cap_table::ConsOp, thread::DispatchOp, CapError, PositiveIsize},
-    mem::RetypeOp,
+    mem::phys::RetypeOp,
     syscall::{SyscallArgs, SyscallArgsInit, SyscallOp},
 };
 use retyping::retype;

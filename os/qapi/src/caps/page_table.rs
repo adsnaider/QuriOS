@@ -20,9 +20,9 @@ use super::CapId;
     FromBytes,
     Immutable,
 )]
-pub struct Addrspace(CapId);
+pub struct PageTableCap(CapId);
 
-impl Addrspace {
+impl PageTableCap {
     pub const fn new(cap: CapId) -> Self {
         Self(cap)
     }

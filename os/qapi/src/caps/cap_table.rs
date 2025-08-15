@@ -13,7 +13,7 @@ use crate::{
 #[cfg(feature = "userspace")]
 pub mod ulib;
 
-use super::{CapError, CapId, NUM_SLOTS, SlotId, page_table::Addrspace};
+use super::{CapError, CapId, NUM_SLOTS, SlotId, page_table::PageTableCap};
 
 #[repr(transparent)]
 #[derive(
@@ -32,7 +32,7 @@ use super::{CapError, CapId, NUM_SLOTS, SlotId, page_table::Addrspace};
     FromBytes,
     Immutable,
 )]
-pub struct CapTable(CapId);
+pub struct CapTableCap(CapId);
 
 #[derive(Debug, Copy, Clone)]
 pub struct ConsOp {
@@ -62,7 +62,7 @@ impl ConsOp {
     }
 }
 
-impl CapTable {
+impl CapTableCap {
     pub const fn new(cap: CapId) -> Self {
         Self(cap)
     }
@@ -88,8 +88,8 @@ pub enum ConsArgs {
 pub struct ThreadCons {
     pub entry: usize,
     pub rsp: usize,
-    pub addrspace: Addrspace,
-    pub caps: CapTable,
+    pub addrspace: PageTableCap,
+    pub caps: CapTableCap,
     pub frame: u64,
     pub arg0: usize,
 }

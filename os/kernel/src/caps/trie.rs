@@ -98,6 +98,10 @@ impl<const COUNT: usize, T> Trie<COUNT, T> {
         core::mem::size_of::<TrieBlock<COUNT, T>>()
     }
 
+    pub const fn slot_size() -> usize {
+        core::mem::size_of::<TrieSlot<COUNT, T>>()
+    }
+
     pub fn get(this: &KPtr<Self>, id: u32) -> Option<TrieRef<COUNT, T>> {
         let id: usize = id.try_into().unwrap();
         let this = this.clone();

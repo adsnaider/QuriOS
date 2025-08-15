@@ -3,13 +3,15 @@ members = ["os/kernel", "os/crates/*", "os/userspace/init", "os/qapi"]
 resolver = "2"
 
 [workspace.dependencies]
-arch = { path = "os/arch" }
 serial = { path = "os/crates/serial" }
 sync = { path = "os/crates/sync" }
 entry = { path = "os/crates/entry" }
 loader = { path = "os/crates/loader" }
+selfie = { path = "os/crates/selfie" }
 qapi = { path = "os/qapi" }
+ulib = { path = "os/crates/ulib" }
 
+hashbrown = "0.15.5"
 zerocopy = { version = "0.8.26", features = ["derive"] }
 uart_16550 = "0.3.0"
 log = "0.4.22"
@@ -25,6 +27,9 @@ derive_more = { version = "2.0.1", default-features = false, features = [
 ] }
 sealed = "0.6.0"
 tap = "1.0.1"
+allocator-api2 = { version = "0.2.21", default-features = false, features = [
+  "alloc",
+] }
 
 [profile.dev]
 debug = "full"

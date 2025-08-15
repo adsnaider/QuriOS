@@ -1,0 +1,3 @@
+[submodule "os/third_party/talc"]
+	path = os/third_party/talc
+	url = git@github.com:adsnaider/talc.git

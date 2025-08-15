@@ -4,8 +4,8 @@ use core::{convert::Infallible, marker::PhantomData, mem::MaybeUninit, ops::Dere
 
 use crate::{
     arch::{
-        mem::{phys::BadAddress, user_buffer_read, Addrspace, VirtAddr},
-        ArchCaps as _, System,
+        mem::{phys::BadAddress, user_buffer_read, Addrspace, Page, VirtAddr},
+        ArchCaps as _, ArchSystem, System,
     },
     retyping::AsUnusedKernelError,
 };
@@ -13,7 +13,7 @@ use derive_more::Deref;
 use derive_where::derive_where;
 use extend::ext;
 use qapi::{
-    caps::{CapError, NUM_SLOTS},
+    caps::{CapError, NUM_SLOTS, SLOT_SIZE},
     types::UserPtr,
 };
 use trie::{Trie, TrieBlock, TrieRef, TrieSetError};
@@ -27,11 +27,14 @@ use crate::{
     PMO,
 };
 
-const TRIE_SIZE: usize = NUM_SLOTS;
+const _EXPECTED_SLOT_SIZE: () = {
+    assert!(SLOT_SIZE == CapTable::<ArchSystem>::slot_size().next_power_of_two());
+    assert!(Page::SIZE == CapTable::<ArchSystem>::block_size().next_power_of_two());
+};
 
-pub type CapTable<S> = Trie<TRIE_SIZE, Capability<S>>;
-pub type CapBlock<S> = TrieBlock<TRIE_SIZE, Capability<S>>;
-pub type CapRef<S> = TrieRef<TRIE_SIZE, Capability<S>>;
+pub type CapTable<S> = Trie<NUM_SLOTS, Capability<S>>;
+pub type CapBlock<S> = TrieBlock<NUM_SLOTS, Capability<S>>;
+pub type CapRef<S> = TrieRef<NUM_SLOTS, Capability<S>>;
 
 impl<S: System> CapRef<S> {
     pub fn cap(&self) -> Option<&Capability<S>> {

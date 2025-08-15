@@ -5,15 +5,15 @@ use crate::{
     syscall::{SyscallArgs, SyscallOp, ulib::syscall},
 };
 
-impl CapTable {
+impl CapTableCap {
     #[allow(clippy::too_many_arguments)]
     pub fn make_thread(
         &self,
         slot: SlotId<NUM_SLOTS>,
         entry: extern "C" fn(usize) -> !,
         stack_top: *mut (),
-        addrspace: Addrspace,
-        caps: CapTable,
+        addrspace: PageTableCap,
+        caps: CapTableCap,
         frame: Frame,
         arg0: usize,
     ) -> Result<(), CapError> {

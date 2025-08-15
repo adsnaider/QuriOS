@@ -119,7 +119,7 @@ impl<'a, T> CSlice<'a, T> {
         self.length == 0
     }
 
-    pub fn into_slice(self) -> &'a [T] {
+    pub fn as_slice(&self) -> &'a [T] {
         // SAFETY: CSlice must be valid from precondition at construction
         unsafe { core::slice::from_raw_parts(self.ptr(), self.len()) }
     }
