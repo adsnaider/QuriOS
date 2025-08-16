@@ -21,7 +21,7 @@ pub fn syscall_handler(
 
     let op = args.op()?;
     match op {
-        SyscallOp::CapTableCons => cap_table_cons(ConsOp::try_from_args(args.args())?),
+        SyscallOp::CapCons => cap_table_cons(ConsOp::try_from_args(args.args())?),
         SyscallOp::Retype => retype(RetypeOp::try_from_args(args.args())?),
         SyscallOp::ThreadDispatch => dispatch(DispatchOp::try_from_args(args.args())?, &ctx),
         _ => Err(CapError::SyscallNotImplemented),

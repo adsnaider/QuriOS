@@ -153,13 +153,16 @@ impl<T> SyscallStruct for SyscallArgs<T> {
 #[try_from(repr)]
 #[non_exhaustive]
 pub enum SyscallOp {
-    CapTableCons = SyscallOp::CAP_TABLE_CONS,
-    Retype = SyscallOp::RETYPE,
-    ThreadDispatch = SyscallOp::THREAD_DISPATCH,
-}
-
-impl SyscallOp {
-    pub const CAP_TABLE_CONS: usize = 0;
-    pub const RETYPE: usize = 1;
-    pub const THREAD_DISPATCH: usize = 2;
+    CapCons = 1,
+    CapDrop,
+    CapCopy,
+    CapLink,
+    CapUnlink,
+    Retype,
+    ThreadDispatch,
+    PageTableLink,
+    PageTableUnlink,
+    PageTableUpdateFlags,
+    SyncInvoke,
+    Introspect,
 }

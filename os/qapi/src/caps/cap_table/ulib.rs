@@ -47,6 +47,6 @@ impl CapTableCap {
             cons_args: UserPtr::from_addr(args_bytes.as_ptr() as usize),
         }
         .into_args();
-        syscall(SyscallArgs::new_with_args(SyscallOp::CapTableCons, args)).map(|_| ())
+        syscall(SyscallArgs::new_with_args(SyscallOp::CapCons, args)).map(|_| ())
     }
 }
