@@ -132,12 +132,12 @@ pub enum SyscallOp {
     CapDrop,
     CapCopy,
     CapLink,
-    CapUnlink,
     Retype,
     ThreadDispatch,
     PageTableLink,
     PageTableUnlink,
     PageTableUpdateFlags,
     SyncInvoke,
+    SyncRet,
     Introspect,
 }

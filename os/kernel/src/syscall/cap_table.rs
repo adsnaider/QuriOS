@@ -1,5 +1,5 @@
 use qapi::caps::{CapError, PositiveIsize};
-use qapi::syscall::ops::ctable::{ConsKind, ConsOp, CopyOp, DropOp, LinkOp, ThreadCons, UnlinkOp};
+use qapi::syscall::ops::ctable::{ConsKind, ConsOp, CopyOp, DropOp, LinkOp, ThreadCons};
 
 use super::SyscallResp;
 use crate::arch::exec::ExecState;
@@ -51,17 +51,33 @@ pub fn cap_table_cons(opts: ConsOp) -> SyscallResp {
 }
 
 pub fn cap_table_copy(opts: CopyOp) -> SyscallResp {
-    todo!();
+    let to_table = Thread::get_cap(opts.to_table.cap()).ok_or(CapError::CapNotFound)?;
+    let to_table = to_table.as_ctable()?;
+
+    let from_cap = Thread::get_cap(opts.from_cap)
+        .ok_or(CapError::CapNotFound)?
+        .data()
+        .ok_or(CapError::CapNotFound)?
+        .clone();
+
+    CapBlock::at(to_table, opts.to_slot).try_set(TrieSlotPayload::Data(from_cap))?;
+    Ok(PositiveIsize::zero())
 }
 
 pub fn cap_table_drop(opts: DropOp) -> SyscallResp {
-    todo!();
+    let ctable = Thread::get_cap(opts.table_cap.cap()).ok_or(CapError::CapNotFound)?;
+    let ctable = ctable.as_ctable()?;
+    CapBlock::at(ctable, opts.slot_id).kill();
+    Ok(PositiveIsize::zero())
 }
 
 pub fn cap_table_link(opts: LinkOp) -> SyscallResp {
-    todo!();
-}
+    let top_table = Thread::get_cap(opts.top_table.cap()).ok_or(CapError::CapNotFound)?;
+    let top_table = top_table.as_ctable()?;
 
-pub fn cap_table_unlink(opts: UnlinkOp) -> SyscallResp {
-    todo!();
+    let bottom_table = Thread::get_cap(opts.bottom_table.cap()).ok_or(CapError::CapNotFound)?;
+    let bottom_table = bottom_table.as_ctable()?;
+
+    CapBlock::at(top_table, opts.slot_id).try_set(TrieSlotPayload::Link(bottom_table.clone()))?;
+    Ok(PositiveIsize::zero())
 }

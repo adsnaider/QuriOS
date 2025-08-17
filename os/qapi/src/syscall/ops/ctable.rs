@@ -25,13 +25,7 @@ pub struct DropOp {
 pub struct LinkOp {
     pub top_table: CapTableCap,
     pub slot_id: SysSlot,
-    pub linked_table: CapTableCap,
-}
-
-#[derive(Debug, Copy, Clone, SyscallRequest)]
-pub struct UnlinkOp {
-    pub top_table: CapTableCap,
-    pub slot_id: SysSlot,
+    pub bottom_table: CapTableCap,
 }
 
 #[derive(Debug, Copy, Clone, SyscallRequest)]
