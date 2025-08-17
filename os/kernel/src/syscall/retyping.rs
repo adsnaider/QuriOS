@@ -1,12 +1,9 @@
-use qapi::{
-    caps::{CapError, PositiveIsize},
-    syscall::ops::retype::{RetypeKind, RetypeOp},
-};
+use qapi::caps::{CapError, PositiveIsize};
+use qapi::syscall::ops::retype::{RetypeKind, RetypeOp};
 
-use crate::{
-    arch::mem::{phys::UnalignedAddress, Frame, PhysAddr},
-    retyping::{FrameExt, OutOfBounds, RetypeError, State},
-};
+use crate::arch::mem::phys::UnalignedAddress;
+use crate::arch::mem::{Frame, PhysAddr};
+use crate::retyping::{FrameExt, OutOfBounds, RetypeError, State};
 
 pub fn retype(RetypeOp { frame, to }: RetypeOp) -> Result<PositiveIsize, CapError> {
     let frame = Frame::try_from_start_address(PhysAddr::try_new(frame)?)?;

@@ -1,5 +1,6 @@
 mod asm_utils;
-use core::{arch::naked_asm, convert::Infallible};
+use core::arch::naked_asm;
+use core::convert::Infallible;
 
 use asm_utils::{pop_preserved, pop_scratch, push_preserved, push_scratch};
 use x86_64::structures::idt::{
@@ -7,10 +8,8 @@ use x86_64::structures::idt::{
     HandlerFuncWithErrCode, PageFaultHandlerFunc,
 };
 
-use crate::arch::x86_64_impl::{
-    exec::{Exception, ExceptionCtx, Interrupt},
-    idt::syscall_int,
-};
+use crate::arch::x86_64_impl::exec::{Exception, ExceptionCtx, Interrupt};
+use crate::arch::x86_64_impl::idt::syscall_int;
 
 pub trait IsrHandler<Kind, Ret> {
     extern "sysv64" fn call(_ctx: ExceptionCtx<Kind>) -> Ret;

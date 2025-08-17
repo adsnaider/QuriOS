@@ -2,30 +2,24 @@
 
 pub(crate) mod bump_alloc;
 
-use crate::arch::{
-    exec::ExecState,
-    mem::{
-        Addrspace, Frame, FrameAllocError, MapPageError, Page, PageFlags, VirtAddr,
-        UNTYPED_MEMORY_OFFSET,
-    },
-    System,
-};
-use bump_alloc::{BumpFrameAllocator, OutOfMemory};
 use core::mem::MaybeUninit;
 use core::ops::Range;
+
+use bump_alloc::{BumpFrameAllocator, OutOfMemory};
 use derive_more::{Display, Error, From};
-use qapi::{
-    init::{BootArgs, EntryFn, RetypeEntry},
-    types::CSlice,
-};
+use loader::{ElfError, Loader, LoaderError, MemFlags, Program, SegmentLoadError};
+use qapi::init::{BootArgs, EntryFn, RetypeEntry};
+use qapi::types::CSlice;
 use zerocopy::IntoBytes as _;
 
-use loader::{ElfError, Loader, LoaderError, MemFlags, Program, SegmentLoadError};
-
-use crate::{
-    pmo::PhysAddrExt as _,
-    retyping::{FrameExt, RetypeTable},
+use crate::arch::exec::ExecState;
+use crate::arch::mem::{
+    Addrspace, Frame, FrameAllocError, MapPageError, Page, PageFlags, VirtAddr,
+    UNTYPED_MEMORY_OFFSET,
 };
+use crate::arch::System;
+use crate::pmo::PhysAddrExt as _;
+use crate::retyping::{FrameExt, RetypeTable};
 
 #[derive(Debug)]
 pub struct Process<S: System> {

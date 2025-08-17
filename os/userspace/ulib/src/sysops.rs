@@ -1,19 +1,15 @@
 use extend::ext;
-use qapi::{
-    caps::{CapError, SysSlot, ctable::CapTableCap, thread::ThreadCap, vmtable::PageTableCap},
-    syscall::{
-        SyscallArgs, SyscallOp, SyscallRequest as _,
-        ops::{
-            ctable::{ConsArgs, ConsKind, ConsOp, ThreadCons},
-            retype::{RetypeKind, RetypeOp},
-            thread::DispatchOp,
-        },
-    },
-    types::UserPtr,
-};
-use zerocopy::IntoBytes as _;
-
+use qapi::caps::ctable::CapTableCap;
+use qapi::caps::thread::ThreadCap;
+use qapi::caps::vmtable::PageTableCap;
+use qapi::caps::{CapError, SysSlot};
 use qapi::mem::Frame;
+use qapi::syscall::ops::ctable::{ConsArgs, ConsKind, ConsOp, ThreadCons};
+use qapi::syscall::ops::retype::{RetypeKind, RetypeOp};
+use qapi::syscall::ops::thread::DispatchOp;
+use qapi::syscall::{SyscallArgs, SyscallOp, SyscallRequest as _};
+use qapi::types::UserPtr;
+use zerocopy::IntoBytes as _;
 
 use crate::syscall::syscall;
 

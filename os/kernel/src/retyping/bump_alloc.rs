@@ -1,7 +1,7 @@
-use crate::arch::mem::{Frame, PhysAddr};
 use limine::memory_map::{Entry, EntryType};
 
 use super::MemoryMap;
+use crate::arch::mem::{Frame, PhysAddr};
 
 pub struct BumpAllocator {
     memory_map: MemoryMap,

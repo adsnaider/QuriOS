@@ -1,12 +1,13 @@
 use core::cell::RefCell;
 
-use crate::{
-    arch::{exec::ExecState, mem::Addrspace, ArchSystem, System},
-    caps::{CapRef, CapTable},
-};
 use qapi::caps::CapId;
 
-use crate::{caps::Resources, core_local::CORE_LOCAL_CURRENT_THREAD, kmem::KPtr};
+use crate::arch::exec::ExecState;
+use crate::arch::mem::Addrspace;
+use crate::arch::{ArchSystem, System};
+use crate::caps::{CapRef, CapTable, Resources};
+use crate::core_local::CORE_LOCAL_CURRENT_THREAD;
+use crate::kmem::KPtr;
 
 pub type CurrentThread = RefCell<Option<KPtr<Thread<ArchSystem>>>>;
 

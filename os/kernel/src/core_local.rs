@@ -1,11 +1,11 @@
 use core::mem::{align_of, size_of};
 
-use crate::arch::{
-    mem::{core_local::CoreLocalData, Page},
-    system, System,
-};
-
-use crate::{pmo::PhysAddrExt, retyping::KernelFrame, thread::CurrentThread};
+use crate::arch::mem::core_local::CoreLocalData;
+use crate::arch::mem::Page;
+use crate::arch::{system, System};
+use crate::pmo::PhysAddrExt;
+use crate::retyping::KernelFrame;
+use crate::thread::CurrentThread;
 
 #[derive(Default)]
 #[repr(C)]

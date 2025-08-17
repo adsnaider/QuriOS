@@ -2,26 +2,18 @@
 use core::sync::atomic::{AtomicU64, Ordering};
 
 use bitflags::Flags;
-use qapi::{
-    caps::{CapError, PositiveIsize},
-    syscall::{SyscallArgs, SyscallArgsInit},
-};
-use x86_64::{
-    instructions::tlb,
-    registers::control::Cr3,
-    structures::paging::{PageTableFlags, PhysFrame},
-};
+use qapi::caps::{CapError, PositiveIsize};
+use qapi::syscall::{SyscallArgs, SyscallArgsInit};
+use x86_64::instructions::tlb;
+use x86_64::registers::control::Cr3;
+use x86_64::structures::paging::{PageTableFlags, PhysFrame};
 
-use crate::{
-    arch::{
-        mem::{
-            Addrspace, Flusher, Frame, FrameAllocator, MapPageError, Page, PageFlags, PhysAddr,
-            Pmo, VirtAddr,
-        },
-        x86_64_impl::X64Sys,
-    },
-    retyping::{FrameExt, KernelFrame},
+use crate::arch::mem::{
+    Addrspace, Flusher, Frame, FrameAllocator, MapPageError, Page, PageFlags, PhysAddr, Pmo,
+    VirtAddr,
 };
+use crate::arch::x86_64_impl::X64Sys;
+use crate::retyping::{FrameExt, KernelFrame};
 
 #[derive(Debug)]
 pub struct X64Addrspace {

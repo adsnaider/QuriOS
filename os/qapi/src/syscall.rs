@@ -1,6 +1,7 @@
 pub mod ops;
 
-use core::{marker::PhantomData, mem::MaybeUninit};
+use core::marker::PhantomData;
+use core::mem::MaybeUninit;
 
 use derive_more::{Debug, TryFrom};
 

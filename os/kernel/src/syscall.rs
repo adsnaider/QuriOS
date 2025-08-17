@@ -1,18 +1,14 @@
-use crate::arch::{exec::ExecState, ArchSystem, System};
 use cap_table::{cap_table_cons, cap_table_copy, cap_table_drop, cap_table_link, cap_table_unlink};
-use qapi::{
-    caps::{CapError, PositiveIsize},
-    syscall::{
-        ops::{
-            ctable::{ConsOp, CopyOp, DropOp, LinkOp, UnlinkOp},
-            retype::RetypeOp,
-            thread::DispatchOp,
-        },
-        SyscallArgs, SyscallArgsInit, SyscallOp, SyscallRequest as _,
-    },
-};
+use qapi::caps::{CapError, PositiveIsize};
+use qapi::syscall::ops::ctable::{ConsOp, CopyOp, DropOp, LinkOp, UnlinkOp};
+use qapi::syscall::ops::retype::RetypeOp;
+use qapi::syscall::ops::thread::DispatchOp;
+use qapi::syscall::{SyscallArgs, SyscallArgsInit, SyscallOp, SyscallRequest as _};
 use retyping::retype;
 use thread::dispatch;
+
+use crate::arch::exec::ExecState;
+use crate::arch::{ArchSystem, System};
 
 mod cap_table;
 mod retyping;

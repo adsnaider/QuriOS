@@ -1,15 +1,13 @@
 //! Kernel-owned memory utilities
 
+use core::mem::ManuallyDrop;
 use core::ops::Deref;
 use core::ptr::NonNull;
-use core::sync::atomic::Ordering;
-use core::{mem::ManuallyDrop, sync::atomic::fence};
+use core::sync::atomic::{fence, Ordering};
 
 use crate::arch::mem::{Frame, Page, VirtAddr};
-use crate::{
-    pmo::{PhysAddrExt as _, VirtAddrExt as _},
-    retyping::{AsUnusedKernelError, FrameExt, KernelFrame},
-};
+use crate::pmo::{PhysAddrExt as _, VirtAddrExt as _};
+use crate::retyping::{AsUnusedKernelError, FrameExt, KernelFrame};
 
 /// A "kernel" pointer to any page-aligned resource.
 ///

@@ -1,10 +1,9 @@
 pub mod phys;
 pub mod virt;
 
+use bitflags::bitflags;
 pub use phys::Frame;
 pub use virt::Page;
-
-use bitflags::bitflags;
 
 bitflags! {
     #[derive(Debug, Copy, Clone, PartialEq, Eq)]

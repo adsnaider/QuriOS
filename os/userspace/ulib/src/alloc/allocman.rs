@@ -1,18 +1,14 @@
-use core::{
-    alloc::{GlobalAlloc, Layout},
-    marker::PhantomPinned,
-    ptr::NonNull,
-};
+use core::alloc::{GlobalAlloc, Layout};
+use core::marker::PhantomPinned;
+use core::ptr::NonNull;
 
 use allocator_api2::alloc::{AllocError, Allocator};
 use derive_more::{Deref, DerefMut, Display, Error};
 use linked_list_allocator::{Heap, LockedHeap};
 
-use super::{
-    caps::{CAllocError, CapNode, CapabilityMan},
-    phys::FrameAllocator,
-    virt::Addrspace,
-};
+use super::caps::{CAllocError, CapNode, CapabilityMan};
+use super::phys::FrameAllocator;
+use super::virt::Addrspace;
 
 #[derive(Deref, DerefMut)]
 pub struct ALockedMan<F: FrameAllocator>(spin::Mutex<Option<Allocman<F>>>);

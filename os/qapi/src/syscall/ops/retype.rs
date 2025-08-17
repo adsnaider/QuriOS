@@ -3,10 +3,8 @@ use core::mem::MaybeUninit;
 use cfg_if::cfg_if;
 use derive_more::TryFrom;
 
-use crate::{
-    caps::CapError,
-    syscall::{InitSyscallParams, SYSCALL_ARGS, SyscallRequest, UninitSyscallParams},
-};
+use crate::caps::CapError;
+use crate::syscall::{InitSyscallParams, SYSCALL_ARGS, SyscallRequest, UninitSyscallParams};
 
 #[repr(usize)]
 #[derive(Debug, Copy, Clone, Eq, PartialEq, TryFrom)]

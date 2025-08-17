@@ -1,34 +1,27 @@
 pub mod trie;
 
-use core::{convert::Infallible, marker::PhantomData, mem::MaybeUninit, ops::Deref};
+use core::convert::Infallible;
+use core::marker::PhantomData;
+use core::mem::MaybeUninit;
+use core::ops::Deref;
 
-use crate::{
-    arch::{
-        mem::{phys::BadAddress, user_buffer_read, Addrspace, Page, VirtAddr},
-        ArchCaps as _, ArchSystem, System,
-    },
-    retyping::AsUnusedKernelError,
-};
 use derive_more::Deref;
 use derive_where::derive_where;
 use extend::ext;
-use qapi::{
-    caps::{
-        slotid::{NUM_SLOTS, SLOT_SIZE},
-        CapError,
-    },
-    types::UserPtr,
-};
+use qapi::caps::slotid::{NUM_SLOTS, SLOT_SIZE};
+use qapi::caps::CapError;
+use qapi::types::UserPtr;
 use trie::{Trie, TrieBlock, TrieRef, TrieSetError};
 use zerocopy::{FromBytes, Immutable, KnownLayout};
 
-use crate::{
-    kmem::KPtr,
-    retyping::FrameExt,
-    sync_call::{SyncCall, SyncRet},
-    thread::Thread,
-    PMO,
-};
+use crate::arch::mem::phys::BadAddress;
+use crate::arch::mem::{user_buffer_read, Addrspace, Page, VirtAddr};
+use crate::arch::{ArchCaps as _, ArchSystem, System};
+use crate::kmem::KPtr;
+use crate::retyping::{AsUnusedKernelError, FrameExt};
+use crate::sync_call::{SyncCall, SyncRet};
+use crate::thread::Thread;
+use crate::PMO;
 
 const _EXPECTED_SLOT_SIZE: () = {
     assert!(SLOT_SIZE == CapTable::<ArchSystem>::slot_size().next_power_of_two());

@@ -1,21 +1,23 @@
-use core::{arch::asm, borrow::Borrow};
+use core::arch::asm;
+use core::borrow::Borrow;
 
-use crate::arch::Addrspace as _;
 use exec::ExecCtx;
 use mem_impl::page_table::{AnyPageTable, X64Addrspace};
 use qapi::caps::CapError;
-use x86_64::{instructions::interrupts, registers::model_specific::GsBase};
+use x86_64::instructions::interrupts;
+use x86_64::registers::model_specific::GsBase;
+
+use crate::arch::Addrspace as _;
 
 mod exec;
 mod gdt;
 mod idt;
 mod mem_impl;
 
-use crate::{
-    arch::{mem::VirtAddr, System},
-    kmem::KPtr,
-    PMO,
-};
+use crate::arch::mem::VirtAddr;
+use crate::arch::System;
+use crate::kmem::KPtr;
+use crate::PMO;
 
 #[derive(Debug)]
 pub struct X64Sys {}

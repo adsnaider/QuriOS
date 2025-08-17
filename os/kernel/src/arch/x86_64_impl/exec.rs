@@ -1,26 +1,23 @@
 //! x86-64 execution context.
 #![allow(unused)]
 
-use core::{
-    arch::naked_asm, cell::Cell, convert::Infallible, marker::PhantomData, mem::MaybeUninit,
-};
+use core::arch::naked_asm;
+use core::cell::Cell;
+use core::convert::Infallible;
+use core::marker::PhantomData;
+use core::mem::MaybeUninit;
 
 use derive_more::Debug;
-
 use qapi::init::{BootArgs, EntryFn};
 use sealed::sealed;
-use x86_64::{
-    registers::rflags::RFlags,
-    structures::idt::{
-        DivergingHandlerFunc, DivergingHandlerFuncWithErrCode, Entry, HandlerFunc,
-        HandlerFuncWithErrCode, InterruptStackFrame, InterruptStackFrameValue,
-        PageFaultHandlerFunc,
-    },
+use x86_64::registers::rflags::RFlags;
+use x86_64::structures::idt::{
+    DivergingHandlerFunc, DivergingHandlerFuncWithErrCode, Entry, HandlerFunc,
+    HandlerFuncWithErrCode, InterruptStackFrame, InterruptStackFrameValue, PageFaultHandlerFunc,
 };
 
-use crate::arch::exec::ExecState;
-
 use super::gdt;
+use crate::arch::exec::ExecState;
 
 pub struct Exception;
 pub struct Interrupt;

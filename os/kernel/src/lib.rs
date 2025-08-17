@@ -14,25 +14,25 @@ pub(crate) mod hint;
 
 mod boot;
 
-use crate::arch::{
-    mem::{core_local::CoreLocalData, Pmo, VirtAddr},
-    system, ArchSystem,
-};
-use arch::ArchCaps;
-use arch::System;
-use boot::{bump_alloc::BumpFrameAllocator, Process};
-use caps::{trie::TrieSlotPayload, CapBlock, CapTable, Capability, Resources};
+use arch::{ArchCaps, System};
+use boot::bump_alloc::BumpFrameAllocator;
+use boot::Process;
+use caps::trie::TrieSlotPayload;
+use caps::{CapBlock, CapTable, Capability, Resources};
 use core_local::CoreLocalDataKernelLocalStoreExt as _;
 use kmem::KPtr;
-use limine::{
-    request::{HhdmRequest, MemoryMapRequest, ModuleRequest, StackSizeRequest},
-    BaseRevision,
-};
+use limine::request::{HhdmRequest, MemoryMapRequest, ModuleRequest, StackSizeRequest};
+use limine::BaseRevision;
 use qapi::caps::SysSlot;
-use sync::{cell::AtomicLazyCell, singleton::Singleton};
+use sync::cell::AtomicLazyCell;
+use sync::singleton::Singleton;
 use tap::TapFallible;
 use tar_no_std::TarArchiveRef;
 use thread::Thread;
+
+use crate::arch::mem::core_local::CoreLocalData;
+use crate::arch::mem::{Pmo, VirtAddr};
+use crate::arch::{system, ArchSystem};
 
 static BASE_REVISION: BaseRevision = BaseRevision::new();
 static MEMORY_MAP: Singleton<MemoryMapRequest> = Singleton::new(MemoryMapRequest::new());

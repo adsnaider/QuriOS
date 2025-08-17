@@ -1,24 +1,19 @@
 mod handlers;
 
 use handlers::{save_all_and_ret_syscall, Isr, PanicHandler};
-use qapi::syscall::SyscallArgs;
-use qapi::{caps::CapResult as _, syscall::SyscallOp};
+use qapi::caps::CapResult as _;
+use qapi::syscall::{SyscallArgs, SyscallOp};
 use sync::cell::AtomicLazyCell;
-use x86_64::{
-    registers::control::Cr2,
-    structures::idt::{InterruptDescriptorTable, PageFaultErrorCode},
-    PrivilegeLevel, VirtAddr as VirtAddrImpl,
-};
-
-use crate::arch::mem::{user_buffer_read_page_fault_call_gate, MemorySegment, VirtAddr};
-use crate::arch::x86_64_impl::{
-    exec::{Exception, ExceptionCtx},
-    gdt,
-};
-use crate::core_local::CORE_LOCAL_SAFE_BUFFER_LOCK;
-use crate::syscall::syscall_handler;
+use x86_64::registers::control::Cr2;
+use x86_64::structures::idt::{InterruptDescriptorTable, PageFaultErrorCode};
+use x86_64::{PrivilegeLevel, VirtAddr as VirtAddrImpl};
 
 use super::exec::Interrupt;
+use crate::arch::mem::{user_buffer_read_page_fault_call_gate, MemorySegment, VirtAddr};
+use crate::arch::x86_64_impl::exec::{Exception, ExceptionCtx};
+use crate::arch::x86_64_impl::gdt;
+use crate::core_local::CORE_LOCAL_SAFE_BUFFER_LOCK;
+use crate::syscall::syscall_handler;
 
 const SYSCALL_INT: u8 = 0x80;
 

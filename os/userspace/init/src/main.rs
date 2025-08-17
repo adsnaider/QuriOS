@@ -4,12 +4,10 @@
 use allocator_api2::boxed::Box;
 use entry::entry;
 use qapi::init::{BootArgs, BootCaps};
-use ulib::alloc::{
-    allocman::{ALockedMan, Allocman, ReservedHeap},
-    caps::CapabilityMan,
-    phys::bitmap_allocator::BitmapAllocator,
-    virt::Addrspace,
-};
+use ulib::alloc::allocman::{ALockedMan, Allocman, ReservedHeap};
+use ulib::alloc::caps::CapabilityMan;
+use ulib::alloc::phys::bitmap_allocator::BitmapAllocator;
+use ulib::alloc::virt::Addrspace;
 
 #[global_allocator]
 static ALLOCATOR: ALockedMan<BitmapAllocator> = ALockedMan::uninit();

@@ -1,8 +1,6 @@
-use core::{
-    cell::UnsafeCell,
-    mem::MaybeUninit,
-    sync::atomic::{AtomicBool, Ordering},
-};
+use core::cell::UnsafeCell;
+use core::mem::MaybeUninit;
+use core::sync::atomic::{AtomicBool, Ordering};
 
 /// The inverse of a once cell, starts with a value that gets taken.
 pub struct Singleton<T> {

@@ -2,10 +2,11 @@ use core::sync::atomic::AtomicU16;
 
 use zerocopy::{Immutable, IntoBytes, KnownLayout};
 
-use crate::{
-    caps::{CapId, SysSlot, ctable::CapTableCap, thread::ThreadCap, vmtable::PageTableCap},
-    types::CSlice,
-};
+use crate::caps::ctable::CapTableCap;
+use crate::caps::thread::ThreadCap;
+use crate::caps::vmtable::PageTableCap;
+use crate::caps::{CapId, SysSlot};
+use crate::types::CSlice;
 
 pub type EntryFn = extern "C" fn(args: &'static BootArgs) -> !;
 

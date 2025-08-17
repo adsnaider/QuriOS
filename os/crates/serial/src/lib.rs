@@ -2,7 +2,8 @@
 #![no_std]
 
 use log_impl::LOG_LEVEL;
-use sync::{cell::AtomicLazyCell, spin};
+use sync::cell::AtomicLazyCell;
+use sync::spin;
 use uart_16550::SerialPort;
 
 /// Initializes serial port and logger. sprint! and log macros after this.

@@ -1,7 +1,7 @@
-use crate::arch::System;
 use derive_where::derive_where;
 use qapi::types::UserPtr;
 
+use crate::arch::System;
 use crate::caps::Resources;
 
 #[derive_where(Debug, Clone)]

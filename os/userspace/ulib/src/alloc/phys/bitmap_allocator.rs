@@ -1,13 +1,10 @@
 use derive_more::{Display, Error};
-use qapi::{
-    init::{RetypeEntry, RetypeState},
-    mem::Frame,
-    syscall::ops::retype::RetypeKind,
-};
-
-use crate::sysops::FrameExt as _;
+use qapi::init::{RetypeEntry, RetypeState};
+use qapi::mem::Frame;
+use qapi::syscall::ops::retype::RetypeKind;
 
 use super::FrameAllocator;
+use crate::sysops::FrameExt as _;
 
 pub struct BitmapAllocator {
     // addrspace: PageTableCap,

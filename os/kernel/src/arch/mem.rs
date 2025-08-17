@@ -4,16 +4,17 @@ pub mod virt;
 
 pub mod core_local;
 
-use core::{arch::naked_asm, marker::PhantomData};
+use core::arch::naked_asm;
+use core::marker::PhantomData;
 
 use bitflags::bitflags;
-
 use derive_more::{Display, Error, From};
 pub use phys::{Frame, PhysAddr};
 pub use pmo::Pmo;
 pub use virt::{MemorySegment, Page, VirtAddr};
 
-use crate::{core_local::CORE_LOCAL_SAFE_BUFFER_LOCK_OFF, retyping::KernelFrame};
+use crate::core_local::CORE_LOCAL_SAFE_BUFFER_LOCK_OFF;
+use crate::retyping::KernelFrame;
 
 pub const UNTYPED_MEMORY_OFFSET: usize = 0x0000_7000_0000_0000;
 pub const HIGHER_HALF: usize = 0xFFFF_8000_0000_0000;

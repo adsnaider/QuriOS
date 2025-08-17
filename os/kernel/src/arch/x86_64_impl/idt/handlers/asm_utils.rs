@@ -57,7 +57,4 @@ macro_rules! pop_preserved {
             "#
     };
 }
-pub(crate) use pop_preserved;
-pub(crate) use pop_scratch;
-pub(crate) use push_preserved;
-pub(crate) use push_scratch;
+pub(crate) use {pop_preserved, pop_scratch, push_preserved, push_scratch};

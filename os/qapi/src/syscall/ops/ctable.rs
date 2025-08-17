@@ -2,10 +2,10 @@ use derive_more::TryFrom;
 use qapi_macros::SyscallRequest;
 use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout};
 
-use crate::{
-    caps::{CapId, SysSlot, ctable::CapTableCap, vmtable::PageTableCap},
-    types::UserPtr,
-};
+use crate::caps::ctable::CapTableCap;
+use crate::caps::vmtable::PageTableCap;
+use crate::caps::{CapId, SysSlot};
+use crate::types::UserPtr;
 
 #[derive(Debug, Copy, Clone, SyscallRequest)]
 pub struct ConsOp {

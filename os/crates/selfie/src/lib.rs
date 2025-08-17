@@ -17,11 +17,11 @@ impl<T: 'static> SelfLife<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::uninit::{DeferInit, Init, InitState, Uninit};
     use core::marker::PhantomPinned;
     use core::pin::Pin;
 
     use super::*;
+    use crate::uninit::{DeferInit, Init, InitState, Uninit};
 
     struct Foo<State: InitState = Init> {
         a: u32,

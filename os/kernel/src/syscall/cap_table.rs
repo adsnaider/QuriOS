@@ -1,20 +1,14 @@
-use crate::{
-    arch::{
-        exec::ExecState,
-        mem::{Frame, PhysAddr},
-        ArchSystem, System,
-    },
-    caps::{trie::TrieSlotPayload, CapBlock, Capability},
-    thread::Thread,
-};
-use crate::{
-    caps::{CapTable, Resources, UserPtrTExt as _},
-    kmem::KPtr,
-};
 use qapi::caps::{CapError, PositiveIsize};
 use qapi::syscall::ops::ctable::{ConsKind, ConsOp, CopyOp, DropOp, LinkOp, ThreadCons, UnlinkOp};
 
 use super::SyscallResp;
+use crate::arch::exec::ExecState;
+use crate::arch::mem::{Frame, PhysAddr};
+use crate::arch::{ArchSystem, System};
+use crate::caps::trie::TrieSlotPayload;
+use crate::caps::{CapBlock, CapTable, Capability, Resources, UserPtrTExt as _};
+use crate::kmem::KPtr;
+use crate::thread::Thread;
 
 pub fn cap_table_cons(opts: ConsOp) -> SyscallResp {
     let ctable = Thread::get_cap(opts.table_cap.cap()).ok_or(CapError::CapNotFound)?;

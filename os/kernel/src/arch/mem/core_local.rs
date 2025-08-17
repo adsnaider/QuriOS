@@ -1,4 +1,6 @@
-use core::{arch::asm, marker::PhantomData, ops::Deref};
+use core::arch::asm;
+use core::marker::PhantomData;
+use core::ops::Deref;
 
 pub struct CoreLocal<const BYTE_OFF: usize, T> {
     _data: PhantomData<*mut T>,

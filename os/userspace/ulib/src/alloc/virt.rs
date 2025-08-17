@@ -1,15 +1,13 @@
 use allocator_api2::alloc::Allocator;
 use derive_more::{Display, Error, From};
 use hashbrown::{DefaultHashBuilder, HashMap};
-use qapi::{
-    caps::{CapError, vmtable::PageTableCap},
-    mem::{
-        Frame, Page, PageFlags,
-        virt::{PageTableLevel, PageTableOffset},
-    },
-};
+use qapi::caps::CapError;
+use qapi::caps::vmtable::PageTableCap;
+use qapi::mem::virt::{PageTableLevel, PageTableOffset};
+use qapi::mem::{Frame, Page, PageFlags};
 
-use super::{caps::CapAlloc, phys::FrameAllocator};
+use super::caps::CapAlloc;
+use super::phys::FrameAllocator;
 
 enum EntryPayload {
     Link(PageTableCap),

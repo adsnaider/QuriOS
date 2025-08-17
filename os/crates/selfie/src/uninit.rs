@@ -1,9 +1,7 @@
-use core::{
-    any::TypeId,
-    marker::PhantomData,
-    mem::MaybeUninit,
-    ops::{Deref, DerefMut},
-};
+use core::any::TypeId;
+use core::marker::PhantomData;
+use core::mem::MaybeUninit;
+use core::ops::{Deref, DerefMut};
 
 use sealed::sealed;
 

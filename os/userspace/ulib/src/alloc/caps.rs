@@ -2,7 +2,8 @@ use core::marker::PhantomData;
 
 use allocator_api2::alloc::Allocator;
 use derive_more::{Display, Error};
-use qapi::caps::{SysSlot, ctable::CapTableCap};
+use qapi::caps::SysSlot;
+use qapi::caps::ctable::CapTableCap;
 
 pub struct CapNode;
 

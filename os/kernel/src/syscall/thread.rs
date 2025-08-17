@@ -1,12 +1,9 @@
-use qapi::{
-    caps::{CapError, PositiveIsize},
-    syscall::ops::thread::DispatchOp,
-};
+use qapi::caps::{CapError, PositiveIsize};
+use qapi::syscall::ops::thread::DispatchOp;
 
-use crate::{
-    arch::{exec::ExecState, ArchSystem, System},
-    thread::Thread,
-};
+use crate::arch::exec::ExecState;
+use crate::arch::{ArchSystem, System};
+use crate::thread::Thread;
 
 pub fn dispatch(
     DispatchOp { thread_cap }: DispatchOp,

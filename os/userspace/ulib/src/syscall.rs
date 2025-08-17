@@ -1,9 +1,8 @@
-use qapi::{
-    caps::{CapError, CapResult, PositiveIsize},
-    syscall::SyscallStruct,
-};
+use core::arch::naked_asm;
+use core::mem::MaybeUninit;
 
-use core::{arch::naked_asm, mem::MaybeUninit};
+use qapi::caps::{CapError, CapResult, PositiveIsize};
+use qapi::syscall::SyscallStruct;
 
 #[unsafe(naked)]
 pub extern "C" fn syscall_raw(
