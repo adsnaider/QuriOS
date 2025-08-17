@@ -28,7 +28,7 @@ use limine::{
     request::{HhdmRequest, MemoryMapRequest, ModuleRequest, StackSizeRequest},
     BaseRevision,
 };
-use qapi::caps::SlotId;
+use qapi::caps::SysSlot;
 use sync::{cell::AtomicLazyCell, singleton::Singleton};
 use tap::TapFallible;
 use tar_no_std::TarArchiveRef;
@@ -126,7 +126,7 @@ pub fn uinit() -> ! {
     CapBlock::at(
         // SAFETY: It's okay to cast a cap table to cap block.
         unsafe { thread.active_comp().cap_table().cast_ref() },
-        SlotId::new(0).unwrap(),
+        SysSlot::new(0).unwrap(),
     )
     .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::CapBlock(
         // SAFETY: It's okay to cast a cap table to cap block.
@@ -136,7 +136,7 @@ pub fn uinit() -> ! {
     CapBlock::at(
         // SAFETY: It's okay to cast a cap table to cap block.
         unsafe { thread.active_comp().cap_table().cast_ref() },
-        SlotId::new(1).unwrap(),
+        SysSlot::new(1).unwrap(),
     )
     .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::Arch(
         <ArchSystem as System>::ArchCaps::new_addrspace(&*thread.active_comp().addrspace()),
@@ -145,7 +145,7 @@ pub fn uinit() -> ! {
     CapBlock::at(
         // SAFETY: It's okay to cast a cap table to cap block.
         unsafe { thread.active_comp().cap_table().cast_ref() },
-        SlotId::new(2).unwrap(),
+        SysSlot::new(2).unwrap(),
     )
     .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::Thread(
         KPtr::clone(&thread),

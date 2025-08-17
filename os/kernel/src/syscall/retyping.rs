@@ -1,6 +1,6 @@
 use qapi::{
     caps::{CapError, PositiveIsize},
-    mem::phys::{RetypeKind, RetypeOp},
+    syscall::ops::retype::{RetypeKind, RetypeOp},
 };
 
 use crate::{

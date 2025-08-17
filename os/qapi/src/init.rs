@@ -3,9 +3,7 @@ use core::sync::atomic::AtomicU16;
 use zerocopy::{Immutable, IntoBytes, KnownLayout};
 
 use crate::{
-    caps::{
-        CapId, NUM_SLOTS, SlotId, cap_table::CapTableCap, page_table::PageTableCap, thread::Thread,
-    },
+    caps::{CapId, SysSlot, ctable::CapTableCap, thread::ThreadCap, vmtable::PageTableCap},
     types::CSlice,
 };
 
@@ -37,7 +35,7 @@ impl BootArgs {
 pub struct BootCaps {
     pub self_caps: CapTableCap,
     pub self_addrspace: PageTableCap,
-    pub self_thread: Thread,
+    pub self_thread: ThreadCap,
 }
 
 impl Default for BootCaps {
@@ -51,12 +49,12 @@ impl BootCaps {
         Self {
             self_caps: CapTableCap::new(CapId::new(0)),
             self_addrspace: PageTableCap::new(CapId::new(1)),
-            self_thread: Thread::new(CapId::new(2)),
+            self_thread: ThreadCap::new(CapId::new(2)),
         }
     }
 
-    pub const fn next_free() -> SlotId<NUM_SLOTS> {
-        match SlotId::new(3) {
+    pub const fn next_free() -> SysSlot {
+        match SysSlot::new(3) {
             Ok(s) => s,
             Err(_) => unreachable!(),
         }

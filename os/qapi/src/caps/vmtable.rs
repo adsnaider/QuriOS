@@ -1,4 +1,4 @@
 use super::new_cap_macro::ctype;
 ctype!(
-    pub struct ThreadCap;
+    pub struct PageTableCap;
 );

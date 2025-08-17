@@ -1,8 +1,3 @@
-use qapi::caps::{
-    cap_table::{ConsKind, ConsOp, ThreadCons},
-    CapError, PositiveIsize,
-};
-
 use crate::{
     arch::{
         exec::ExecState,
@@ -16,9 +11,13 @@ use crate::{
     caps::{CapTable, Resources, UserPtrTExt as _},
     kmem::KPtr,
 };
+use qapi::caps::{CapError, PositiveIsize};
+use qapi::syscall::ops::ctable::{ConsKind, ConsOp, CopyOp, DropOp, LinkOp, ThreadCons, UnlinkOp};
 
-pub fn cap_table_cons(opts: ConsOp) -> Result<PositiveIsize, CapError> {
-    let ctable = Thread::get_cap(opts.table_cap).ok_or(CapError::CapNotFound)?;
+use super::SyscallResp;
+
+pub fn cap_table_cons(opts: ConsOp) -> SyscallResp {
+    let ctable = Thread::get_cap(opts.table_cap.cap()).ok_or(CapError::CapNotFound)?;
     let ctable = ctable.as_ctable()?;
 
     match opts.kind {
@@ -55,4 +54,20 @@ pub fn cap_table_cons(opts: ConsOp) -> Result<PositiveIsize, CapError> {
         ConsKind::SyncCall => todo!(),
         ConsKind::SyncRet => todo!(),
     }
+}
+
+pub fn cap_table_copy(opts: CopyOp) -> SyscallResp {
+    todo!();
+}
+
+pub fn cap_table_drop(opts: DropOp) -> SyscallResp {
+    todo!();
+}
+
+pub fn cap_table_link(opts: LinkOp) -> SyscallResp {
+    todo!();
+}
+
+pub fn cap_table_unlink(opts: UnlinkOp) -> SyscallResp {
+    todo!();
 }

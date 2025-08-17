@@ -1,6 +1,4 @@
 pub mod phys;
-#[cfg(feature = "userspace")]
-pub mod ulib;
 pub mod virt;
 
 pub use phys::Frame;

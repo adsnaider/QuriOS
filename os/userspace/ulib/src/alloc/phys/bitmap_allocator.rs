@@ -1,8 +1,11 @@
 use derive_more::{Display, Error};
 use qapi::{
     init::{RetypeEntry, RetypeState},
-    mem::{Frame, phys::RetypeKind},
+    mem::Frame,
+    syscall::ops::retype::RetypeKind,
 };
+
+use crate::sysops::FrameExt as _;
 
 use super::FrameAllocator;
 

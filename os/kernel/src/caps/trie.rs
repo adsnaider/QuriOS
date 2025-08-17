@@ -6,7 +6,7 @@ use core::sync::atomic::{AtomicU64, Ordering};
 
 use derive_more::{Display, Error};
 use derive_where::derive_where;
-use qapi::caps::SlotId;
+use qapi::caps::slotid::SlotId;
 use tailcall::tailcall;
 
 use crate::kmem::KPtr;

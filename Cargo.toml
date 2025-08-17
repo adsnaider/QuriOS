@@ -1,5 +1,12 @@
 [workspace]
-members = ["os/kernel", "os/crates/*", "os/userspace/init", "os/qapi"]
+members = [
+  "os/kernel",
+  "os/crates/*",
+  "os/userspace/init",
+  "os/userspace/ulib",
+  "os/qapi",
+  "os/qapi-macros",
+]
 resolver = "2"
 
 [workspace.dependencies]
@@ -9,7 +16,7 @@ entry = { path = "os/crates/entry" }
 loader = { path = "os/crates/loader" }
 selfie = { path = "os/crates/selfie" }
 qapi = { path = "os/qapi" }
-ulib = { path = "os/crates/ulib" }
+ulib = { path = "os/userspace/ulib" }
 
 hashbrown = "0.15.5"
 zerocopy = { version = "0.8.26", features = ["derive"] }

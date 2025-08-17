@@ -2,7 +2,7 @@ use allocator_api2::alloc::Allocator;
 use derive_more::{Display, Error, From};
 use hashbrown::{DefaultHashBuilder, HashMap};
 use qapi::{
-    caps::{CapError, page_table::PageTableCap},
+    caps::{CapError, vmtable::PageTableCap},
     mem::{
         Frame, Page, PageFlags,
         virt::{PageTableLevel, PageTableOffset},

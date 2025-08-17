@@ -8,6 +8,7 @@ pub struct UserPtr<T> {
     addr: usize,
     _phantom: PhantomData<*const T>,
 }
+
 impl<T> UserPtr<T> {
     pub fn new(ptr: *const T) -> Self {
         Self {
@@ -122,5 +123,17 @@ impl<'a, T> CSlice<'a, T> {
     pub fn as_slice(&self) -> &'a [T] {
         // SAFETY: CSlice must be valid from precondition at construction
         unsafe { core::slice::from_raw_parts(self.ptr(), self.len()) }
+    }
+}
+
+impl<T> From<UserPtr<T>> for usize {
+    fn from(value: UserPtr<T>) -> Self {
+        value.addr()
+    }
+}
+
+impl<T> From<usize> for UserPtr<T> {
+    fn from(value: usize) -> Self {
+        Self::from_addr(value)
     }
 }

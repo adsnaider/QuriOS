@@ -13,7 +13,10 @@ use derive_more::Deref;
 use derive_where::derive_where;
 use extend::ext;
 use qapi::{
-    caps::{CapError, NUM_SLOTS, SLOT_SIZE},
+    caps::{
+        slotid::{NUM_SLOTS, SLOT_SIZE},
+        CapError,
+    },
     types::UserPtr,
 };
 use trie::{Trie, TrieBlock, TrieRef, TrieSetError};

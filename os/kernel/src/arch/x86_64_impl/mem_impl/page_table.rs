@@ -3,7 +3,7 @@ use core::sync::atomic::{AtomicU64, Ordering};
 
 use bitflags::Flags;
 use qapi::{
-    caps::{CapError, CapabilityKind, PositiveIsize},
+    caps::{CapError, PositiveIsize},
     syscall::{SyscallArgs, SyscallArgsInit},
 };
 use x86_64::{
