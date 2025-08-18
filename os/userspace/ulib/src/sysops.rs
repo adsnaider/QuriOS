@@ -1,14 +1,18 @@
+use core::arch::asm;
+use core::mem::MaybeUninit;
+
 use extend::ext;
 use qapi::caps::ctable::CapTableCap;
 use qapi::caps::thread::ThreadCap;
 use qapi::caps::vmtable::PageTableCap;
-use qapi::caps::{CapError, SysSlot};
+use qapi::caps::{CapError, CapId, SysSlot};
 use qapi::mem::Frame;
 use qapi::syscall::ops::ctable::{ConsArgs, ConsKind, ConsOp, ThreadCons};
+use qapi::syscall::ops::introspect::{IntrospectOp, IntrospectResult};
 use qapi::syscall::ops::retype::{RetypeKind, RetypeOp};
 use qapi::syscall::ops::thread::DispatchOp;
 use qapi::syscall::{SyscallArgs, SyscallOp, SyscallRequest as _};
-use qapi::types::UserPtr;
+use qapi::types::{UserPtr, UserPtrMut};
 use zerocopy::IntoBytes as _;
 
 use crate::syscall::syscall;
@@ -81,5 +85,22 @@ pub impl CapTableCap {
             args.into_args(),
         ))
         .map(|_| ())
+    }
+}
+
+#[ext]
+pub impl CapId {
+    fn introspect(&self) -> Result<IntrospectResult, CapError> {
+        let mut out = MaybeUninit::uninit();
+        let op = IntrospectOp {
+            cap: *self,
+            write_buf: UserPtrMut::new(&mut out as *mut MaybeUninit<IntrospectResult>),
+        };
+        syscall(SyscallArgs::new_with_args(
+            SyscallOp::Introspect,
+            op.into_args(),
+        ))
+        // SAFETY: If the syscall is successful, the kernel can be trusted to set reasonable bytes
+        .map(|_| unsafe { out.assume_init() })
     }
 }

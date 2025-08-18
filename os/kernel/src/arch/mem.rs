@@ -115,6 +115,13 @@ impl PageFlags {
     }
 }
 
+impl From<qapi::mem::PageFlags> for PageFlags {
+    fn from(value: qapi::mem::PageFlags) -> Self {
+        // These are from userspace caps so they only involve user memory
+        Self::from_bits(value.bits() as u64).unwrap() | Self::USER_ACCESSIBLE
+    }
+}
+
 impl From<loader::MemFlags> for PageFlags {
     fn from(rwx: loader::MemFlags) -> Self {
         let mut pflags = PageFlags::PRESENT | PageFlags::USER_ACCESSIBLE;
@@ -139,11 +146,7 @@ impl From<loader::MemFlags> for PageFlags {
 /// size, etc.). These constraints are left to higher-level abstractions to check.
 #[unsafe(naked)]
 #[must_use]
-pub unsafe extern "C" fn user_buffer_read(
-    kernel_buffer: *mut u8,
-    user_buffer: *const u8,
-    length: usize,
-) -> bool {
+pub unsafe extern "C" fn user_buffer_copy(dest: *mut u8, source: *const u8, length: usize) -> bool {
     // Compiled a simple optimized rust function that performs the copy and translated it into inline assembly
     // SAFETY: This function requires no stack usage or internal calls as the page fault will direclty unwind
     // into `user_buffer_read_page_fault_call_gate`.

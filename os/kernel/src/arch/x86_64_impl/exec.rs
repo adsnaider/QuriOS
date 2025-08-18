@@ -4,6 +4,7 @@
 use core::arch::naked_asm;
 use core::cell::Cell;
 use core::convert::Infallible;
+use core::fmt::{Octal, UpperHex};
 use core::marker::PhantomData;
 use core::mem::MaybeUninit;
 
@@ -23,11 +24,23 @@ pub struct Exception;
 pub struct Interrupt;
 
 #[repr(transparent)]
-#[derive(Debug)]
-#[debug("{:?}", self.interrupt_stack_frame())]
 pub struct ExceptionCtx<Kind> {
     stack_top: u64,
     _kind: PhantomData<Kind>,
+}
+impl<Kind> Copy for ExceptionCtx<Kind> {}
+impl<Kind> Clone for ExceptionCtx<Kind> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+impl<Kind> core::fmt::Debug for ExceptionCtx<Kind> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("ExceptionCtx")
+            .field("stack_top", &format_args!("{:#X}", self.stack_top))
+            .field("frame", self.interrupt_stack_frame())
+            .finish()
+    }
 }
 
 impl<Kind> ExceptionCtx<Kind> {

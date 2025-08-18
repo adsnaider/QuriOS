@@ -1,6 +1,7 @@
-use derive_more::{Display, Error};
+use derive_more::{Debug, Display, Error};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, PartialOrd, Ord)]
+#[debug("Page({:#X})", self.base)]
 pub struct Page {
     base: usize,
 }
@@ -42,7 +43,10 @@ impl Page {
 pub use x86_64::*;
 #[cfg(target_arch = "x86_64")]
 mod x86_64 {
-    use super::*;
+    use derive_more::Into;
+
+    use super::Page;
+
     impl Page {
         /// Returns the 9-bit level 1 page table index.
         #[inline]
@@ -75,7 +79,7 @@ mod x86_64 {
         }
     }
 
-    #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+    #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Into)]
     pub struct PageTableOffset(u16);
 
     #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -155,6 +159,12 @@ mod x86_64 {
 
         pub const fn new_truncate(addr: u16) -> Self {
             Self(addr % 512)
+        }
+    }
+
+    impl From<PageTableOffset> for usize {
+        fn from(value: PageTableOffset) -> Self {
+            value.0 as usize
         }
     }
 }

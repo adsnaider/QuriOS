@@ -267,6 +267,10 @@ impl<const COUNT: usize, T> TrieRef<COUNT, T> {
         }
     }
 
+    pub fn payload(&self) -> &TrieSlotPayload<COUNT, T> {
+        unsafe { (*self.slot().payload.get()).assume_init_ref() }
+    }
+
     fn slot(&self) -> &TrieSlot<COUNT, T> {
         // SAFETY: The ownership of a TrieRef guarantees read-access to the slot.
         unsafe { self.slot.as_ref() }

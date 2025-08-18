@@ -1,18 +1,24 @@
-use cap_table::{cap_table_cons, cap_table_copy, cap_table_drop, cap_table_link};
+use ctable::{cap_table_cons, cap_table_copy, cap_table_drop, cap_table_link};
+use introspect::introspect;
 use qapi::caps::{CapError, PositiveIsize};
 use qapi::syscall::ops::ctable::{ConsOp, CopyOp, DropOp, LinkOp};
+use qapi::syscall::ops::introspect::IntrospectOp;
 use qapi::syscall::ops::retype::RetypeOp;
 use qapi::syscall::ops::thread::DispatchOp;
-use qapi::syscall::{SyscallArgs, SyscallArgsInit, SyscallOp, SyscallRequest as _};
+use qapi::syscall::ops::vmtable::{VMLinkOp, VMSetAttr, VMUnlinkOp};
+use qapi::syscall::{SyscallArgs, SyscallArgsInit, SyscallOp, SyscallRequest};
 use retyping::retype;
 use thread::dispatch;
+use vmtable::{vm_link, vm_set_attr, vm_unlink};
 
 use crate::arch::exec::ExecState;
 use crate::arch::{ArchSystem, System};
 
-mod cap_table;
+mod ctable;
+mod introspect;
 mod retyping;
 mod thread;
+mod vmtable;
 
 pub type SyscallResp = Result<PositiveIsize, CapError>;
 
@@ -21,9 +27,10 @@ pub fn syscall_handler(
     ctx: <<ArchSystem as System>::ExecState as ExecState>::RegCtx,
 ) -> SyscallResp {
     // SAFETY: We are allowed to get a mutable reference at the start of the syscall. It will get dropped
-    log::trace!("Handling syscall: {args:?} {ctx:#?}");
+    log::trace!("Syscall ctx: {ctx:#?}");
 
     let op = args.op()?;
+    log::debug!("Sys Op: {op:?}");
     match op {
         SyscallOp::CapCons => cap_table_cons(ConsOp::try_from_args(args.args())?),
         SyscallOp::CapDrop => cap_table_drop(DropOp::try_from_args(args.args())?),
@@ -31,12 +38,12 @@ pub fn syscall_handler(
         SyscallOp::CapLink => cap_table_link(LinkOp::try_from_args(args.args())?),
         SyscallOp::Retype => retype(RetypeOp::try_from_args(args.args())?),
         SyscallOp::ThreadDispatch => dispatch(DispatchOp::try_from_args(args.args())?, &ctx),
-        SyscallOp::PageTableLink => todo!(),
-        SyscallOp::PageTableUnlink => todo!(),
-        SyscallOp::PageTableUpdateFlags => todo!(),
+        SyscallOp::VMLink => vm_link(VMLinkOp::try_from_args(args.args())?),
+        SyscallOp::VMUnlink => vm_unlink(VMUnlinkOp::try_from_args(args.args())?),
+        SyscallOp::VMSetAttr => vm_set_attr(VMSetAttr::try_from_args(args.args())?),
         SyscallOp::SyncInvoke => todo!(),
         SyscallOp::SyncRet => todo!(),
-        SyscallOp::Introspect => todo!(),
+        SyscallOp::Introspect => introspect(IntrospectOp::try_from_args(args.args())?),
         _ => Err(CapError::SyscallNotImplemented),
     }
 }

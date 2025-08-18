@@ -9,6 +9,13 @@ pub struct UserPtr<T> {
     _phantom: PhantomData<*const T>,
 }
 
+#[repr(transparent)]
+#[derive(IntoBytes, KnownLayout, Immutable)]
+pub struct UserPtrMut<T> {
+    addr: usize,
+    _phantom: PhantomData<*mut T>,
+}
+
 impl<T> UserPtr<T> {
     pub fn new(ptr: *const T) -> Self {
         Self {
@@ -37,6 +44,37 @@ impl<T> UserPtr<T> {
 
     pub fn as_ptr(&self) -> *const T {
         self.addr as *const T
+    }
+}
+
+impl<T> UserPtrMut<T> {
+    pub fn new(ptr: *mut T) -> Self {
+        Self {
+            addr: ptr.addr(),
+            _phantom: PhantomData,
+        }
+    }
+
+    pub fn from_addr(addr: usize) -> Self {
+        Self {
+            addr,
+            _phantom: PhantomData,
+        }
+    }
+
+    pub fn addr(&self) -> usize {
+        self.addr
+    }
+
+    pub fn cast<U>(self) -> UserPtr<U> {
+        UserPtr {
+            addr: self.addr,
+            _phantom: PhantomData,
+        }
+    }
+
+    pub fn as_ptr(&self) -> *mut T {
+        self.addr as *mut T
     }
 }
 
@@ -72,6 +110,19 @@ impl<T> Clone for UserPtr<T> {
     }
 }
 impl<T> core::fmt::Debug for UserPtr<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("OrphanPtr")
+            .field("addr", &self.addr)
+            .finish()
+    }
+}
+impl<T> Copy for UserPtrMut<T> {}
+impl<T> Clone for UserPtrMut<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+impl<T> core::fmt::Debug for UserPtrMut<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("OrphanPtr")
             .field("addr", &self.addr)
@@ -133,6 +184,18 @@ impl<T> From<UserPtr<T>> for usize {
 }
 
 impl<T> From<usize> for UserPtr<T> {
+    fn from(value: usize) -> Self {
+        Self::from_addr(value)
+    }
+}
+
+impl<T> From<UserPtrMut<T>> for usize {
+    fn from(value: UserPtrMut<T>) -> Self {
+        value.addr()
+    }
+}
+
+impl<T> From<usize> for UserPtrMut<T> {
     fn from(value: usize) -> Self {
         Self::from_addr(value)
     }

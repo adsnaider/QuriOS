@@ -3,11 +3,13 @@
 
 use allocator_api2::boxed::Box;
 use entry::entry;
+use qapi::caps::CapId;
 use qapi::init::{BootArgs, BootCaps};
 use ulib::alloc::allocman::{ALockedMan, Allocman, ReservedHeap};
 use ulib::alloc::caps::CapabilityMan;
 use ulib::alloc::phys::bitmap_allocator::BitmapAllocator;
 use ulib::alloc::virt::Addrspace;
+use ulib::sysops::CapIdExt;
 
 #[global_allocator]
 static ALLOCATOR: ALockedMan<BitmapAllocator> = ALockedMan::uninit();
@@ -18,6 +20,14 @@ fn main(args: &'static BootArgs) -> ! {
     log::info!("Landed on userspace init");
     let bootcaps = BootCaps::new();
     let cspace = CapabilityMan::new_starting_at(bootcaps.self_caps, BootCaps::next_free());
+
+    for i in 0..BootCaps::next_free().as_usize() {
+        log::info!(
+            "Introspecting capability ({i}): {:#?}",
+            CapId::new(i as u32).introspect()
+        )
+    }
+
     let falloc = BitmapAllocator::new(
         // bootcaps.self_addrspace,
         args.memory_map.as_slice(),

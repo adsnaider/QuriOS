@@ -2,11 +2,14 @@ use core::borrow::Borrow;
 use core::fmt::Debug;
 
 use exec::ExecState;
-use mem::{Addrspace, VirtAddr};
-use qapi::caps::CapError;
+use mem::{Addrspace, PageFlags, VirtAddr};
+use qapi::{
+    caps::CapError,
+    syscall::ops::{introspect::IntrospectResult, vmtable::PaddedPageTableOffset},
+};
 use sync::cell::AtomicOnceCell;
 
-use crate::kmem::KPtr;
+use crate::{kmem::KPtr, syscall::SyscallResp};
 
 #[cfg(target_arch = "x86_64")]
 mod x86_64_impl;
@@ -53,6 +56,9 @@ pub unsafe trait System: Sized {
     /// Initializes the architecture-specific subsystem
     fn init() -> Self;
 
+    /// Perform any post-initialization steps that require further system boot.
+    fn post_init(&self);
+
     /// Returns a valid pointer to the currently active address space
     fn addrspace(&self) -> Self::Addrspace;
 
@@ -66,4 +72,19 @@ pub trait ArchCaps<S: System> {
         A: Borrow<S::Addrspace>;
 
     fn as_addrspace(&self) -> Result<&KPtr<S::PageTable>, CapError>;
+    fn as_vmtable(&self) -> Result<&KPtr<S::PageTable>, CapError>;
+    fn vm_link(
+        top_table: &Self,
+        slot: PaddedPageTableOffset,
+        bottom_table: &Self,
+        page_flags: PageFlags,
+    ) -> SyscallResp;
+    fn vm_unlink(table: &Self, slot: PaddedPageTableOffset) -> SyscallResp;
+    fn vm_set_attributes(
+        table: &Self,
+        slot: PaddedPageTableOffset,
+        attributes: PageFlags,
+    ) -> SyscallResp;
+
+    fn introspect(&self) -> IntrospectResult;
 }

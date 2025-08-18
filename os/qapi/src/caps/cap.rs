@@ -94,6 +94,12 @@ pub enum CapError {
     FrameRefsExist = -15,
     #[display("Frame exceeds the system's physical memory range")]
     FrameOffAvailableMemoryRange = -16,
+    #[display(
+        "Virtual memory tables can only be linked in a linear fashion to prevent recursive mappings"
+    )]
+    VMLinkNotFlat = -17,
+    #[display("SOme capability in the arguments doesn't match the expected type for the operation")]
+    InvalidCapType = -18,
 }
 
 impl CapError {

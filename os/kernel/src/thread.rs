@@ -1,6 +1,7 @@
 use core::cell::RefCell;
 
 use qapi::caps::CapId;
+use qapi::syscall::ops::introspect::{self, IntrospectResult};
 
 use crate::arch::exec::ExecState;
 use crate::arch::mem::Addrspace;
@@ -90,5 +91,9 @@ impl<S: System> Thread<S> {
 
     pub fn active_comp(&self) -> &Resources<S> {
         &self.resources
+    }
+
+    pub fn introspect(&self) -> introspect::Thread {
+        introspect::Thread
     }
 }

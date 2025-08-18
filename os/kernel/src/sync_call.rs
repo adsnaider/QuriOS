@@ -1,4 +1,5 @@
 use derive_where::derive_where;
+use qapi::syscall::ops::introspect::IntrospectResult;
 use qapi::types::UserPtr;
 
 use crate::arch::System;
@@ -13,3 +14,15 @@ pub struct SyncCall<S: System> {
 
 #[derive(Debug, Clone)]
 pub struct SyncRet;
+
+impl SyncRet {
+    pub fn introspect(&self) -> IntrospectResult {
+        IntrospectResult::SyncRet
+    }
+}
+
+impl<S: System> SyncCall<S> {
+    pub fn introspect(&self) -> IntrospectResult {
+        IntrospectResult::SyncCall
+    }
+}

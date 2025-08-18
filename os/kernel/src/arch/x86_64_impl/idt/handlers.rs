@@ -201,6 +201,20 @@ pub(super) extern "C" fn save_all_and_ret_syscall() {
     // SAFETY: Sticking with ISR calling convention. Preserved registers are pushed on
     // call to sysv64 ABI.
     unsafe {
-        naked_asm!("swapgs", push_scratch!(), push_preserved!(), "lea rdi, [rsp + 8*15]", "call {inner}", pop_preserved!(), pop_scratch!(), "swapgs", "iretq", inner = sym syscall_int);
+        naked_asm!(
+            "swapgs",
+            push_scratch!(),
+            push_preserved!(),
+            "lea rax, [rsp + 8*15]",
+            "sub rsp, 8",
+            "push rax",
+            "call {inner}",
+            "add rsp, 16",
+            pop_preserved!(),
+            pop_scratch!(),
+            "swapgs",
+            "iretq",
+            inner = sym syscall_int
+        );
     }
 }

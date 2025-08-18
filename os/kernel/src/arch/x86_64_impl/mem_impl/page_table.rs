@@ -4,6 +4,7 @@ use core::sync::atomic::{AtomicU64, Ordering};
 use bitflags::Flags;
 use qapi::caps::{CapError, PositiveIsize};
 use qapi::syscall::{SyscallArgs, SyscallArgsInit};
+use serial::sdbg;
 use x86_64::instructions::tlb;
 use x86_64::registers::control::Cr3;
 use x86_64::structures::paging::{PageTableFlags, PhysFrame};
@@ -61,6 +62,19 @@ impl X64Addrspace {
             l4_frame: frame
                 .try_as_kernel()
                 .expect("Current L4 frame is not typed as kernel!"),
+        }
+    }
+
+    pub fn obscure_top_half(&self) {
+        for i in 256..512 {
+            let offset = PageTableOffset::new(i).unwrap();
+            if let Some((_, flags)) = self.l4_table().get(offset).get() {
+                let flags = sdbg!(flags.difference(PageTableFlags::USER_ACCESSIBLE));
+                // SAFETY: This operation should be safe to do as it only affects userspace
+                unsafe {
+                    self.l4_table().get(offset).set_flags(flags);
+                }
+            }
         }
     }
 
@@ -366,6 +380,9 @@ impl PageTableEntry {
     pub const fn new() -> Self {
         Self(AtomicU64::new(0))
     }
+    pub fn get_raw(&self) -> u64 {
+        self.0.load(Ordering::Relaxed)
+    }
 
     pub fn get(&self) -> Option<(Frame, PageTableFlags)> {
         let value = self.0.load(Ordering::Relaxed);
@@ -544,6 +561,14 @@ impl TryFrom<usize> for PageTableOffset {
 
     fn try_from(value: usize) -> Result<Self, Self::Error> {
         Self::new(u16::try_from(value).map_err(|_| PageTableOffsetError::OutOfBounds)?)
+    }
+}
+
+impl From<PageTableOffsetError> for CapError {
+    fn from(value: PageTableOffsetError) -> Self {
+        match value {
+            PageTableOffsetError::OutOfBounds => CapError::InvalidArg,
+        }
     }
 }
 

@@ -2,7 +2,7 @@ pub mod trie;
 
 use core::convert::Infallible;
 use core::marker::PhantomData;
-use core::mem::MaybeUninit;
+use core::mem::{ManuallyDrop, MaybeUninit};
 use core::ops::Deref;
 
 use derive_more::Deref;
@@ -10,12 +10,13 @@ use derive_where::derive_where;
 use extend::ext;
 use qapi::caps::slotid::{NUM_SLOTS, SLOT_SIZE};
 use qapi::caps::CapError;
-use qapi::types::UserPtr;
+use qapi::syscall::ops::introspect::{self, IntrospectResult};
+use qapi::types::{UserPtr, UserPtrMut};
 use trie::{Trie, TrieBlock, TrieRef, TrieSetError};
 use zerocopy::{FromBytes, Immutable, KnownLayout};
 
 use crate::arch::mem::phys::BadAddress;
-use crate::arch::mem::{user_buffer_read, Addrspace, Page, VirtAddr};
+use crate::arch::mem::{user_buffer_copy, Addrspace, Page, VirtAddr};
 use crate::arch::{ArchCaps as _, ArchSystem, System};
 use crate::kmem::KPtr;
 use crate::retyping::{AsUnusedKernelError, FrameExt};
@@ -45,10 +46,26 @@ impl<S: System> CapRef<S> {
         }
     }
 
+    pub fn as_arch_cap(&self) -> Result<&<S as System>::ArchCaps, CapError> {
+        let data = self.data().ok_or(CapError::CapNotFound)?;
+        match data {
+            Capability::Arch(cap) => Ok(cap),
+            _ => Err(CapError::InvalidArg),
+        }
+    }
+
     pub fn as_addrspace(&self) -> Result<&KPtr<S::PageTable>, CapError> {
         let data = self.data().ok_or(CapError::CapNotFound)?;
         match data {
             Capability::Arch(arch_caps) => Ok(arch_caps.as_addrspace()?),
+            _ => Err(CapError::InvalidArg),
+        }
+    }
+
+    pub fn as_vmtable(&self) -> Result<&KPtr<S::PageTable>, CapError> {
+        let data = self.data().ok_or(CapError::CapNotFound)?;
+        match data {
+            Capability::Arch(arch_caps) => Ok(arch_caps.as_vmtable()?),
             _ => Err(CapError::InvalidArg),
         }
     }
@@ -59,6 +76,12 @@ impl<S: System> CapRef<S> {
             Capability::Thread(kptr) => Ok(kptr),
             _ => Err(CapError::InvalidArg),
         }
+    }
+}
+
+impl<S: System> CapBlock<S> {
+    pub fn introspect(_this: &KPtr<Self>) -> introspect::CBlock {
+        introspect::CBlock
     }
 }
 
@@ -126,21 +149,13 @@ impl<T> UnwrapInfallible<T> for Result<T, Infallible> {
     }
 }
 
-#[derive_where(Debug, Default, Clone)]
+#[derive_where(Debug, Clone)]
 pub enum Capability<S: System> {
-    #[derive_where(default)]
-    Empty,
     Thread(KPtr<Thread<S>>),
     CapBlock(KPtr<CapBlock<S>>),
     SyncCall(SyncCall<S>),
     SyncRet(SyncRet),
     Arch(S::ArchCaps),
-}
-
-impl<S: System> Capability<S> {
-    pub const fn empty() -> Self {
-        Self::Empty
-    }
 }
 
 #[ext]
@@ -150,7 +165,14 @@ pub impl<T> UserPtr<T> {
     }
 }
 
-pub struct TrustedUserPtr<T>(*mut T);
+#[ext]
+pub impl<T> UserPtrMut<T> {
+    fn verify(self) -> Result<TrustedUserPtrMut<T>, CapError> {
+        TrustedUserPtrMut::try_from(self)
+    }
+}
+
+pub struct TrustedUserPtr<T>(*const T);
 impl<T> TryFrom<UserPtr<T>> for TrustedUserPtr<T> {
     type Error = CapError;
 
@@ -178,7 +200,7 @@ where
         // SAFETY: TrustedUserPtr construction verifies the validity of the pointer itself and the routine guarantees proper
         // handling of page fault to return false.
         let success = unsafe {
-            user_buffer_read(
+            user_buffer_copy(
                 result.as_mut_ptr() as *mut u8,
                 self.0 as *const u8,
                 size_of::<T>(),
@@ -190,6 +212,72 @@ where
             // guarantees that the only failure cases are 1. misaligned pointer (checked at
             // construction), or size error (assumed at construction).
             Ok(unsafe { result.assume_init() })
+        } else {
+            Err(CapError::BadUserMemory)
+        }
+    }
+}
+
+pub struct TrustedUserPtrMut<T>(*mut T);
+impl<T> TryFrom<UserPtrMut<T>> for TrustedUserPtrMut<T> {
+    type Error = CapError;
+
+    fn try_from(value: UserPtrMut<T>) -> Result<Self, Self::Error> {
+        let start = value.addr();
+        let end = value
+            .addr()
+            .checked_add(size_of::<T>())
+            .ok_or(CapError::BadUserMemory)?;
+        let start_ptr = VirtAddr::try_new(start).map_err(|_| CapError::BadUserMemory)?;
+        let end_ptr = VirtAddr::try_new(end).map_err(|_| CapError::BadUserMemory)?;
+        if !start_ptr.is_user() || !end_ptr.is_user() {
+            return Err(CapError::BadUserMemory);
+        }
+        Ok(Self(start as *mut T))
+    }
+}
+
+impl<T> TrustedUserPtrMut<T> {
+    pub fn safe_read(&self) -> Result<T, CapError>
+    where
+        T: FromBytes + KnownLayout + Immutable + Copy,
+    {
+        let mut result = MaybeUninit::<T>::uninit();
+        // SAFETY: TrustedUserPtr construction verifies the validity of the pointer itself and the routine guarantees proper
+        // handling of page fault to return false.
+        let success = unsafe {
+            user_buffer_copy(
+                result.as_mut_ptr() as *mut u8,
+                self.0 as *const u8,
+                size_of::<T>(),
+            )
+        };
+        if success {
+            // SAFETY: `user_buffer_read` guarantees that true is returned if the copy was
+            // successful. Since T implements FromBytes + KnownLayout + Imuutable, we have
+            // guarantees that the only failure cases are 1. misaligned pointer (checked at
+            // construction), or size error (assumed at construction).
+            Ok(unsafe { result.assume_init() })
+        } else {
+            Err(CapError::BadUserMemory)
+        }
+    }
+
+    pub fn safe_write(&self, data: T) -> Result<(), CapError>
+    where
+        T: Copy,
+    {
+        // SAFETY: TrustedUserPtr construction verifies the validity of the pointer itself and the routine guarantees proper
+        // handling of page fault to return false.
+        let success = unsafe {
+            user_buffer_copy(
+                self.0 as *mut u8,
+                &data as *const _ as *const u8,
+                size_of::<T>(),
+            )
+        };
+        if success {
+            Ok(())
         } else {
             Err(CapError::BadUserMemory)
         }

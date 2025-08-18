@@ -1,8 +1,9 @@
-use derive_more::{Display, Error};
+use derive_more::{Debug, Display, Error};
 use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout};
 
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, PartialEq, KnownLayout, Immutable, IntoBytes, FromBytes)]
+#[debug("Frame({:#X})", self.base)]
 pub struct Frame {
     base: u64,
 }

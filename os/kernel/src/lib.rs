@@ -68,6 +68,7 @@ pub fn kinit() {
         .entries_mut();
     // SAFETY: Memory map can be trusted to be correct
     unsafe { retyping::init(memory_map).expect("Error initializing retype table") }
+    system().post_init();
 }
 
 /// Initializes the `init` userspace process
