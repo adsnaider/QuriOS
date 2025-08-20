@@ -25,6 +25,7 @@ serial.workspace = true
 spin = { version = "0.10.0", default-features = false }
 sync.workspace = true
 ulib.workspace = true
+stack_list.workspace = true
 
 [lints]
 workspace = true

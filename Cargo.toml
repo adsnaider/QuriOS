@@ -17,6 +17,7 @@ loader = { path = "os/crates/loader" }
 selfie = { path = "os/crates/selfie" }
 qapi = { path = "os/qapi" }
 ulib = { path = "os/userspace/ulib" }
+stack_list = { path = "os/crates/stack_list" }
 
 hashbrown = "0.15.5"
 zerocopy = { version = "0.8.26", features = ["derive"] }

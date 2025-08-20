@@ -1,13 +1,16 @@
 use qapi::caps::{CapError, PositiveIsize};
-use qapi::syscall::ops::ctable::{ConsKind, ConsOp, CopyOp, DropOp, LinkOp, ThreadCons};
+use qapi::syscall::ops::ctable::{
+    ConsKind, ConsOp, CopyOp, DropOp, LinkOp, SyncCallCons, ThreadCons,
+};
 
 use super::SyscallResp;
 use crate::arch::exec::ExecState;
 use crate::arch::mem::{Frame, PhysAddr};
 use crate::arch::{ArchSystem, System};
 use crate::caps::trie::TrieSlotPayload;
-use crate::caps::{CapBlock, CapTable, Capability, Resources, UserPtrTExt as _};
+use crate::caps::{CapBlock, CapTable, Capability, Resources, UserPtrTExt};
 use crate::kmem::KPtr;
+use crate::sync_call::SyncCall;
 use crate::thread::Thread;
 
 pub fn cap_table_cons(opts: ConsOp) -> SyscallResp {
@@ -42,11 +45,31 @@ pub fn cap_table_cons(opts: ConsOp) -> SyscallResp {
                 .try_set(TrieSlotPayload::Data(Capability::Thread(thread)))?;
             Ok(PositiveIsize::zero())
         }
-        ConsKind::CapTable => todo!(),
-        ConsKind::TranscientPageTable => todo!(),
-        ConsKind::Addrspace => todo!(),
-        ConsKind::SyncCall => todo!(),
-        ConsKind::SyncRet => todo!(),
+        ConsKind::CTable => todo!(),
+        ConsKind::VMTable => todo!(),
+        ConsKind::SyncCall => {
+            let SyncCallCons {
+                entry,
+                cspace,
+                vmspace,
+            } = opts
+                .cons_args
+                .cast::<SyncCallCons>()
+                .verify()?
+                .safe_read()?;
+            let cspace = Thread::get_cap(cspace.cap()).ok_or(CapError::CapNotFound)?;
+            // SAFETY: Casting a ctable to cspace is fine.
+            let cspace: &KPtr<CapTable<ArchSystem>> = unsafe { cspace.as_ctable()?.cast_ref() };
+            let vmspace = Thread::get_cap(vmspace.cap()).ok_or(CapError::CapNotFound)?;
+            let vmspace = vmspace.as_addrspace()?;
+            CapBlock::at(ctable, opts.slot_id).try_set(TrieSlotPayload::Data(
+                Capability::SyncCall(SyncCall::new(
+                    Resources::from_parts(vmspace.clone(), cspace.clone()),
+                    entry,
+                )),
+            ))?;
+            Ok(PositiveIsize::zero())
+        }
     }
 }
 

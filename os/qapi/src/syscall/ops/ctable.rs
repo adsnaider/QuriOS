@@ -2,14 +2,14 @@ use derive_more::TryFrom;
 use qapi_macros::SyscallRequest;
 use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout};
 
-use crate::caps::ctable::CapTableCap;
-use crate::caps::vmtable::PageTableCap;
+use crate::caps::ctable::CTableCap;
+use crate::caps::vmtable::VMTableCap;
 use crate::caps::{CapId, SysSlot};
 use crate::types::UserPtr;
 
 #[derive(Debug, Copy, Clone, SyscallRequest)]
 pub struct ConsOp {
-    pub table_cap: CapTableCap,
+    pub table_cap: CTableCap,
     pub slot_id: SysSlot,
     pub kind: ConsKind,
     pub cons_args: UserPtr<()>,
@@ -17,21 +17,21 @@ pub struct ConsOp {
 
 #[derive(Debug, Copy, Clone, SyscallRequest)]
 pub struct DropOp {
-    pub table_cap: CapTableCap,
+    pub table_cap: CTableCap,
     pub slot_id: SysSlot,
 }
 
 #[derive(Debug, Copy, Clone, SyscallRequest)]
 pub struct LinkOp {
-    pub top_table: CapTableCap,
+    pub top_table: CTableCap,
     pub slot_id: SysSlot,
-    pub bottom_table: CapTableCap,
+    pub bottom_table: CTableCap,
 }
 
 #[derive(Debug, Copy, Clone, SyscallRequest)]
 pub struct CopyOp {
     pub from_cap: CapId,
-    pub to_table: CapTableCap,
+    pub to_table: CTableCap,
     pub to_slot: SysSlot,
 }
 
@@ -39,10 +39,8 @@ pub struct CopyOp {
 #[derive(Debug, Copy, Clone)]
 pub enum ConsArgs {
     Thread(ThreadCons),
-    TranscientPageTable(PageTableCons),
-    Addrspace(AddrspaceCons),
+    VMTable(VMTableCons),
     SyncCall(SyncCallCons),
-    SyncRet(SyncRetCons),
     CapTable(CapTableCons),
 }
 
@@ -51,24 +49,24 @@ pub enum ConsArgs {
 pub struct ThreadCons {
     pub entry: usize,
     pub rsp: usize,
-    pub addrspace: PageTableCap,
-    pub caps: CapTableCap,
+    pub addrspace: VMTableCap,
+    pub caps: CTableCap,
     pub frame: u64,
     pub arg0: usize,
 }
 
 #[derive(KnownLayout, IntoBytes, FromBytes, Immutable, Debug, Copy, Clone)]
 #[repr(C)]
-pub struct PageTableCons {}
+pub struct VMTableCons {}
+
 #[derive(KnownLayout, IntoBytes, FromBytes, Immutable, Debug, Copy, Clone)]
 #[repr(C)]
-pub struct AddrspaceCons {}
-#[derive(KnownLayout, IntoBytes, FromBytes, Immutable, Debug, Copy, Clone)]
-#[repr(C)]
-pub struct SyncCallCons {}
-#[derive(KnownLayout, IntoBytes, FromBytes, Immutable, Debug, Copy, Clone)]
-#[repr(C)]
-pub struct SyncRetCons {}
+pub struct SyncCallCons {
+    pub entry: usize,
+    pub cspace: CTableCap,
+    pub vmspace: VMTableCap,
+}
+
 #[derive(KnownLayout, IntoBytes, FromBytes, Immutable, Debug, Copy, Clone)]
 #[repr(C)]
 pub struct CapTableCons {}
@@ -78,11 +76,9 @@ pub struct CapTableCons {}
 #[try_from(repr)]
 pub enum ConsKind {
     Thread = 0,
-    CapTable,
-    TranscientPageTable,
-    Addrspace,
+    CTable,
+    VMTable,
     SyncCall,
-    SyncRet,
 }
 
 impl From<ConsKind> for usize {

@@ -3,7 +3,7 @@ use core::marker::PhantomData;
 use allocator_api2::alloc::Allocator;
 use derive_more::{Display, Error};
 use qapi::caps::SysSlot;
-use qapi::caps::ctable::CapTableCap;
+use qapi::caps::ctable::CTableCap;
 
 pub struct CapNode;
 
@@ -17,12 +17,12 @@ pub trait CapAlloc {
 
 pub struct CapabilityMan<A: Allocator> {
     next_cap: SysSlot,
-    root: CapTableCap,
+    root: CTableCap,
     _alloc: PhantomData<A>,
 }
 
 impl<A: Allocator> CapabilityMan<A> {
-    pub fn new(caps: CapTableCap, allocator: A) -> Self {
+    pub fn new(caps: CTableCap, allocator: A) -> Self {
         Self {
             root: caps,
             next_cap: SysSlot::new(0).unwrap(),
@@ -38,7 +38,7 @@ impl<A: Allocator> CapabilityMan<A> {
         todo!();
     }
 
-    pub const fn new_starting_at(caps: CapTableCap, first_free: SysSlot) -> Self {
+    pub const fn new_starting_at(caps: CTableCap, first_free: SysSlot) -> Self {
         Self {
             next_cap: first_free,
             root: caps,

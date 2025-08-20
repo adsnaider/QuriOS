@@ -2,7 +2,7 @@ use derive_more::{Display, Error, Into};
 use qapi_macros::SyscallRequest;
 
 use crate::{
-    caps::{CapError, vmtable::PageTableCap},
+    caps::{CapError, vmtable::VMTableCap},
     mem::{
         PageFlags,
         virt::{PageTableOffset, PageTableOffsetError},
@@ -46,21 +46,21 @@ impl From<PageTableOffsetError> for BadVMOffset {
 
 #[derive(Debug, Copy, Clone, SyscallRequest)]
 pub struct VMLinkOp {
-    pub top_table: PageTableCap,
+    pub top_table: VMTableCap,
     pub offset: PaddedPageTableOffset,
-    pub bottom_table: PageTableCap,
+    pub bottom_table: VMTableCap,
     pub flags: PageFlags,
 }
 
 #[derive(Debug, Copy, Clone, SyscallRequest)]
 pub struct VMUnlinkOp {
-    pub table: PageTableCap,
+    pub table: VMTableCap,
     pub offset: PaddedPageTableOffset,
 }
 
 #[derive(Debug, Copy, Clone, SyscallRequest)]
 pub struct VMSetAttr {
-    pub table: PageTableCap,
+    pub table: VMTableCap,
     pub offset: PaddedPageTableOffset,
     pub flags: PageFlags,
 }

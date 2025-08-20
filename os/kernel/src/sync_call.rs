@@ -8,7 +8,7 @@ use crate::caps::Resources;
 #[derive_where(Debug, Clone)]
 pub struct SyncCall<S: System> {
     comp: Resources<S>,
-    entry: UserPtr<()>,
+    entry: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -21,6 +21,10 @@ impl SyncRet {
 }
 
 impl<S: System> SyncCall<S> {
+    pub const fn new(comp: Resources<S>, entry: usize) -> Self {
+        Self { comp, entry }
+    }
+
     pub fn introspect(&self) -> IntrospectResult {
         IntrospectResult::SyncCall
     }
@@ -29,7 +33,7 @@ impl<S: System> SyncCall<S> {
         &self.comp
     }
 
-    pub const fn entry(&self) -> UserPtr<()> {
+    pub const fn entry(&self) -> usize {
         self.entry
     }
 }

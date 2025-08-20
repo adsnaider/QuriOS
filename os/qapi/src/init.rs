@@ -2,9 +2,9 @@ use core::sync::atomic::AtomicU16;
 
 use zerocopy::{Immutable, IntoBytes, KnownLayout};
 
-use crate::caps::ctable::CapTableCap;
+use crate::caps::ctable::CTableCap;
 use crate::caps::thread::ThreadCap;
-use crate::caps::vmtable::PageTableCap;
+use crate::caps::vmtable::VMTableCap;
 use crate::caps::{CapId, SysSlot};
 use crate::types::CSlice;
 
@@ -34,8 +34,8 @@ impl BootArgs {
 
 #[derive(Debug, Copy, Clone)]
 pub struct BootCaps {
-    pub self_caps: CapTableCap,
-    pub self_addrspace: PageTableCap,
+    pub self_caps: CTableCap,
+    pub self_addrspace: VMTableCap,
     pub self_thread: ThreadCap,
 }
 
@@ -48,8 +48,8 @@ impl Default for BootCaps {
 impl BootCaps {
     pub const fn new() -> Self {
         Self {
-            self_caps: CapTableCap::new(CapId::new(0)),
-            self_addrspace: PageTableCap::new(CapId::new(1)),
+            self_caps: CTableCap::new(CapId::new(0)),
+            self_addrspace: VMTableCap::new(CapId::new(1)),
             self_thread: ThreadCap::new(CapId::new(2)),
         }
     }

@@ -1,18 +1,18 @@
 use core::mem::MaybeUninit;
 
 use crate::{
-    caps::{CapError, PositiveIsize, sync_ipc::SyncCap},
+    caps::{CapError, PositiveIsize, sync_ipc::SyncInvokeCap},
     syscall::{InitSyscallParams, SYSCALL_ARGS, SyscallRequest, UninitSyscallParams},
 };
 
 pub const SYNC_CALL_ARGS: usize = SYSCALL_ARGS - 1;
 pub const SYNC_CALL_RETS: usize = 2;
 
-pub type SyncCall = fn(args: [MaybeUninit<usize>; SYNC_CALL_ARGS]) -> PositiveIsize;
+pub type SyncCallFun = extern "C" fn(a: usize, b: usize, c: usize, d: usize) -> PositiveIsize;
 
 #[derive(Debug, Copy, Clone)]
 pub struct SyncInvokeOp {
-    pub cap: SyncCap,
+    pub cap: SyncInvokeCap,
     pub args: [MaybeUninit<usize>; SYNC_CALL_ARGS],
 }
 

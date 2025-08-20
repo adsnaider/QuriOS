@@ -50,26 +50,32 @@ impl Thread<ArchSystem> {
         )
     }
     pub fn dispatch_diverging(to: KPtr<Self>) -> ! {
-        to.active_comp().addrspace().activate();
-        // TODO: Remove lint allow once type alias impl trait works and ArchSystem uses it.
-        #[allow(clippy::clone_on_copy)]
-        let exec_state = to.current_ctx().exec_state.clone();
-        assert!(Self::replace_current(to).is_none());
-        log::info!("Set the active thread");
+        let exec_state = {
+            to.active_comp().addrspace().activate();
+            // TODO: Remove lint allow once type alias impl trait works and ArchSystem uses it.
+            #[allow(clippy::clone_on_copy)]
+            let exec_state = to.current_ctx().exec_state.clone();
+            assert!(Self::replace_current(to).is_none());
+            log::info!("Set the active thread");
+            exec_state
+        };
         exec_state.dispatch();
     }
 
     pub fn sync_ret(args: SyncRetOp) -> Result<Infallible, CapError> {
-        let curr_ctx = CORE_LOCAL_CURRENT_THREAD.borrow();
-        let mut curr_ctx = curr_ctx.as_ref().unwrap().ctx.borrow_mut();
-        if curr_ctx.len() <= 1 {
-            return Err(CapError::SyncRetLimit);
-        }
-        let _prev_ctx = curr_ctx.pop().unwrap();
-        let ret_ctx = curr_ctx.last().unwrap();
-        ret_ctx.resources.addrspace().activate();
-        ret_ctx.exec_state.update_sync_ret(args.resp);
-        ret_ctx.exec_state.dispatch();
+        let exec_state = {
+            let curr_ctx = CORE_LOCAL_CURRENT_THREAD.borrow();
+            let mut curr_ctx = curr_ctx.as_ref().unwrap().ctx.borrow_mut();
+            if curr_ctx.len() <= 1 {
+                return Err(CapError::SyncRetLimit);
+            }
+            let _prev_ctx = curr_ctx.pop().unwrap();
+            let ret_ctx = curr_ctx.last().unwrap();
+            ret_ctx.resources.addrspace().activate();
+            ret_ctx.exec_state.update_sync_ret(args.resp);
+            ret_ctx.exec_state.clone()
+        };
+        exec_state.dispatch();
     }
 
     pub fn sync_invoke(
@@ -77,26 +83,28 @@ impl Thread<ArchSystem> {
         args: [MaybeUninit<usize>; SYNC_CALL_ARGS],
         ctx: <<ArchSystem as System>::ExecState as ExecState>::RegCtx,
     ) -> Result<Infallible, CapError> {
-        let xstate =
-            <ArchSystem as System>::ExecState::new_invocation(sync_call.entry().addr(), args);
-        let sync_ctx = ThreadCtx {
-            resources: sync_call.resources().clone(),
-            exec_state: xstate,
-        };
+        let exec_state = {
+            let xstate = <ArchSystem as System>::ExecState::new_invocation(sync_call.entry(), args);
+            let sync_ctx = ThreadCtx {
+                resources: sync_call.resources().clone(),
+                exec_state: xstate,
+            };
 
-        let curr_ctx = CORE_LOCAL_CURRENT_THREAD.borrow();
-        let mut curr_ctx = curr_ctx.as_ref().unwrap().ctx.borrow_mut();
-        curr_ctx
-            .last()
-            .as_mut()
-            .expect("There should always be at least 1 execution context on a thread")
-            .exec_state
-            .save(&ctx);
-        curr_ctx
-            .push(sync_ctx.clone())
-            .map_err(|_| CapError::SyncInvokeLimit)?;
-        sync_ctx.resources.addrspace().activate();
-        sync_ctx.exec_state.dispatch();
+            let curr_ctx = CORE_LOCAL_CURRENT_THREAD.borrow();
+            let mut curr_ctx = curr_ctx.as_ref().unwrap().ctx.borrow_mut();
+            curr_ctx
+                .last()
+                .as_mut()
+                .expect("There should always be at least 1 execution context on a thread")
+                .exec_state
+                .save(&ctx);
+            curr_ctx
+                .push(sync_ctx.clone())
+                .map_err(|_| CapError::SyncInvokeLimit)?;
+            sync_ctx.resources.addrspace().activate();
+            sync_ctx.exec_state.clone()
+        };
+        exec_state.dispatch();
     }
 
     pub fn dispatch(
@@ -120,17 +128,20 @@ impl Thread<ArchSystem> {
         // 2. rflags register needs to be valid (interrupts enabled, ring 3 execution, etc.)
         // 3. stack register needs to be whatever it was before syscall
         // 4. All callee-saved registers need to be set back (done in userspace)
-        this.active_comp().addrspace().activate();
-        // TODO: Remove lint allow once type alias impl trait works and ArchSystem uses it.
-        #[allow(clippy::clone_on_copy)]
-        let exec_state = this.current_ctx().exec_state.clone();
-        {
-            let previous = Self::replace_current(this);
-            if let Some(previous) = &previous {
-                previous.current_ctx().exec_state.save(&ctx);
+        let exec_state = {
+            this.active_comp().addrspace().activate();
+            // TODO: Remove lint allow once type alias impl trait works and ArchSystem uses it.
+            #[allow(clippy::clone_on_copy)]
+            let exec_state = this.current_ctx().exec_state.clone();
+            {
+                let previous = Self::replace_current(this);
+                if let Some(previous) = &previous {
+                    previous.current_ctx().exec_state.save(&ctx);
+                }
             }
-        }
-        log::info!("Set the active thread");
+            log::info!("Set the active thread");
+            exec_state
+        };
         exec_state.dispatch();
     }
 }

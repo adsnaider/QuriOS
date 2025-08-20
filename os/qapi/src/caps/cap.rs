@@ -120,7 +120,7 @@ impl From<CapError> for isize {
     }
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Into)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Into, Display)]
 #[repr(transparent)]
 pub struct PositiveIsize(isize);
 

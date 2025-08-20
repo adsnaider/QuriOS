@@ -2,7 +2,7 @@ use allocator_api2::alloc::Allocator;
 use derive_more::{Display, Error, From};
 use hashbrown::{DefaultHashBuilder, HashMap};
 use qapi::caps::CapError;
-use qapi::caps::vmtable::PageTableCap;
+use qapi::caps::vmtable::VMTableCap;
 use qapi::mem::virt::{PageTableLevel, PageTableOffset};
 use qapi::mem::{Frame, Page, PageFlags};
 
@@ -10,13 +10,13 @@ use super::caps::CapAlloc;
 use super::phys::FrameAllocator;
 
 enum EntryPayload {
-    Link(PageTableCap),
+    Link(VMTableCap),
     Page((Frame, PageFlags)),
 }
 
 pub struct Addrspace<A: Allocator> {
-    root: PageTableCap,
-    entries: HashMap<(PageTableCap, PageTableOffset), EntryPayload, DefaultHashBuilder, A>,
+    root: VMTableCap,
+    entries: HashMap<(VMTableCap, PageTableOffset), EntryPayload, DefaultHashBuilder, A>,
 }
 
 #[derive(Debug, Display, Error, From)]
@@ -27,7 +27,7 @@ pub enum MapError {
 }
 
 impl<A: Allocator> Addrspace<A> {
-    pub fn new(root: PageTableCap, allocator: A) -> Self {
+    pub fn new(root: VMTableCap, allocator: A) -> Self {
         Self {
             root,
             entries: HashMap::new_in(allocator),

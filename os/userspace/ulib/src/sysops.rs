@@ -1,17 +1,18 @@
-use core::arch::asm;
 use core::mem::MaybeUninit;
 
 use extend::ext;
-use qapi::caps::ctable::CapTableCap;
+use qapi::caps::ctable::CTableCap;
+use qapi::caps::sync_ipc::SyncInvokeCap;
 use qapi::caps::thread::ThreadCap;
-use qapi::caps::vmtable::PageTableCap;
-use qapi::caps::{CapError, CapId, SysSlot};
+use qapi::caps::vmtable::VMTableCap;
+use qapi::caps::{CapError, CapId, PositiveIsize, SysSlot};
 use qapi::mem::Frame;
-use qapi::syscall::ops::ctable::{ConsArgs, ConsKind, ConsOp, ThreadCons};
+use qapi::syscall::ops::ctable::{ConsArgs, ConsKind, ConsOp, SyncCallCons, ThreadCons};
 use qapi::syscall::ops::introspect::{IntrospectOp, IntrospectResult};
 use qapi::syscall::ops::retype::{RetypeKind, RetypeOp};
+use qapi::syscall::ops::sync_ipc::{SYNC_CALL_ARGS, SyncCallFun, SyncInvokeOp};
 use qapi::syscall::ops::thread::DispatchOp;
-use qapi::syscall::{SyscallArgs, SyscallOp, SyscallRequest as _};
+use qapi::syscall::{self, SyscallArgs, SyscallOp, SyscallRequest};
 use qapi::types::{UserPtr, UserPtrMut};
 use zerocopy::IntoBytes as _;
 
@@ -39,15 +40,15 @@ pub impl ThreadCap {
 }
 
 #[ext]
-pub impl CapTableCap {
+pub impl CTableCap {
     #[allow(clippy::too_many_arguments)]
     fn make_thread(
         &self,
         slot: SysSlot,
         entry: extern "C" fn(usize) -> !,
         stack_top: *mut (),
-        addrspace: PageTableCap,
-        caps: CapTableCap,
+        addrspace: VMTableCap,
+        caps: CTableCap,
         frame: Frame,
         arg0: usize,
     ) -> Result<(), CapError> {
@@ -64,13 +65,28 @@ pub impl CapTableCap {
         )
     }
 
+    fn make_sync_call(
+        &self,
+        slot: SysSlot,
+        fun: SyncCallFun,
+        vmspace: VMTableCap,
+        cspace: CTableCap,
+    ) -> Result<(), CapError> {
+        self.construct(
+            ConsArgs::SyncCall(SyncCallCons {
+                entry: fun as usize,
+                cspace,
+                vmspace,
+            }),
+            slot,
+        )
+    }
+
     fn construct(&self, args: ConsArgs, slot: SysSlot) -> Result<(), CapError> {
         let (kind, args_bytes) = match &args {
             ConsArgs::Thread(thread_cons) => (ConsKind::Thread, thread_cons.as_bytes()),
-            ConsArgs::TranscientPageTable(_page_table_cons) => todo!(),
-            ConsArgs::Addrspace(_addrspace_cons) => todo!(),
-            ConsArgs::SyncCall(_sync_call_cons) => todo!(),
-            ConsArgs::SyncRet(_sync_ret_cons) => todo!(),
+            ConsArgs::VMTable(_vm_cons) => todo!(),
+            ConsArgs::SyncCall(sync_call_cons) => (ConsKind::SyncCall, sync_call_cons.as_bytes()),
             ConsArgs::CapTable(_cap_table_cons) => todo!(),
         };
 
@@ -85,6 +101,20 @@ pub impl CapTableCap {
             args.into_args(),
         ))
         .map(|_| ())
+    }
+}
+
+#[ext]
+pub impl SyncInvokeCap {
+    fn invoke(
+        &self,
+        args: [MaybeUninit<usize>; SYNC_CALL_ARGS],
+    ) -> Result<PositiveIsize, CapError> {
+        let args = SyncInvokeOp { cap: *self, args };
+        syscall(SyscallArgs::new_with_args(
+            SyscallOp::SyncInvoke,
+            args.into_args(),
+        ))
     }
 }
 
