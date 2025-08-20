@@ -158,6 +158,26 @@ impl ExecState for ExecCtx {
             regs: Cell::new(regs),
         }
     }
+
+    fn new_invocation(entry: usize, args: [MaybeUninit<usize>; 4]) -> Self {
+        let mut regs = Regs::default();
+        regs.control.rip = entry as u64;
+        regs.control.rsp = 0;
+        // SAFETY: We can assume these are either initialized by userspace or not but that should
+        // be okay for kernel code.
+        unsafe {
+            regs.scratch.rdi = args[0].assume_init() as u64;
+            regs.scratch.rsi = args[1].assume_init() as u64;
+            regs.scratch.rdx = args[2].assume_init() as u64;
+            regs.scratch.rcx = args[3].assume_init() as u64;
+        }
+        // TODO: Maybe don't give access to all hardware here but it's good for debugging.
+        regs.control.rflags =
+            (RFlags::INTERRUPT_FLAG | RFlags::IOPL_HIGH | RFlags::IOPL_LOW).bits();
+        Self {
+            regs: Cell::new(regs),
+        }
+    }
 }
 
 impl ExecCtx {

@@ -98,8 +98,10 @@ pub enum CapError {
         "Virtual memory tables can only be linked in a linear fashion to prevent recursive mappings"
     )]
     VMLinkNotFlat = -17,
-    #[display("SOme capability in the arguments doesn't match the expected type for the operation")]
+    #[display("Some capability in the arguments doesn't match the expected type for the operation")]
     InvalidCapType = -18,
+    #[display("Reached the static sysnchronous invocation stack limit")]
+    SyncInvokeLimit = -19,
 }
 
 impl CapError {

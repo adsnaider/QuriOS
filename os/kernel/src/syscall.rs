@@ -4,10 +4,12 @@ use qapi::caps::{CapError, PositiveIsize};
 use qapi::syscall::ops::ctable::{ConsOp, CopyOp, DropOp, LinkOp};
 use qapi::syscall::ops::introspect::IntrospectOp;
 use qapi::syscall::ops::retype::RetypeOp;
+use qapi::syscall::ops::sync_ipc::SyncInvokeOp;
 use qapi::syscall::ops::thread::DispatchOp;
 use qapi::syscall::ops::vmtable::{VMLinkOp, VMSetAttr, VMUnlinkOp};
 use qapi::syscall::{SyscallArgs, SyscallArgsInit, SyscallOp, SyscallRequest};
 use retyping::retype;
+use sync_ipc::sync_invoke;
 use thread::dispatch;
 use vmtable::{vm_link, vm_set_attr, vm_unlink};
 
@@ -17,6 +19,7 @@ use crate::arch::{ArchSystem, System};
 mod ctable;
 mod introspect;
 mod retyping;
+mod sync_ipc;
 mod thread;
 mod vmtable;
 
@@ -41,7 +44,7 @@ pub fn syscall_handler(
         SyscallOp::VMLink => vm_link(VMLinkOp::try_from_args(args.args())?),
         SyscallOp::VMUnlink => vm_unlink(VMUnlinkOp::try_from_args(args.args())?),
         SyscallOp::VMSetAttr => vm_set_attr(VMSetAttr::try_from_args(args.args())?),
-        SyscallOp::SyncInvoke => todo!(),
+        SyscallOp::SyncInvoke => sync_invoke(SyncInvokeOp::try_from_args(args.args())?, ctx),
         SyscallOp::SyncRet => todo!(),
         SyscallOp::Introspect => introspect(IntrospectOp::try_from_args(args.args())?),
         _ => Err(CapError::SyscallNotImplemented),

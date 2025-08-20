@@ -2,7 +2,7 @@ pub mod trie;
 
 use core::convert::Infallible;
 use core::marker::PhantomData;
-use core::mem::{ManuallyDrop, MaybeUninit};
+use core::mem::MaybeUninit;
 use core::ops::Deref;
 
 use derive_more::Deref;
@@ -10,7 +10,7 @@ use derive_where::derive_where;
 use extend::ext;
 use qapi::caps::slotid::{NUM_SLOTS, SLOT_SIZE};
 use qapi::caps::CapError;
-use qapi::syscall::ops::introspect::{self, IntrospectResult};
+use qapi::syscall::ops::introspect::{self};
 use qapi::types::{UserPtr, UserPtrMut};
 use trie::{Trie, TrieBlock, TrieRef, TrieSetError};
 use zerocopy::{FromBytes, Immutable, KnownLayout};
@@ -42,6 +42,14 @@ impl<S: System> CapRef<S> {
         let data = self.data().ok_or(CapError::CapNotFound)?;
         match data {
             Capability::CapBlock(kptr) => Ok(kptr),
+            _ => Err(CapError::InvalidArg),
+        }
+    }
+
+    pub fn as_synccall(&self) -> Result<&SyncCall<S>, CapError> {
+        let data = self.data().ok_or(CapError::CapNotFound)?;
+        match data {
+            Capability::SyncCall(scall) => Ok(scall),
             _ => Err(CapError::InvalidArg),
         }
     }
