@@ -1,3 +1,5 @@
+pub mod sync_endpoint;
+
 use core::mem::MaybeUninit;
 
 use extend::ext;
@@ -134,3 +136,5 @@ pub impl CapId {
         .map(|_| unsafe { out.assume_init() })
     }
 }
+
+pub use crate::make_sync_call;
