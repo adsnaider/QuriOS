@@ -4,12 +4,12 @@ use qapi::caps::{CapError, PositiveIsize};
 use qapi::syscall::ops::ctable::{ConsOp, CopyOp, DropOp, LinkOp};
 use qapi::syscall::ops::introspect::IntrospectOp;
 use qapi::syscall::ops::retype::RetypeOp;
-use qapi::syscall::ops::sync_ipc::SyncInvokeOp;
+use qapi::syscall::ops::sync_ipc::{SyncInvokeOp, SyncRetOp};
 use qapi::syscall::ops::thread::DispatchOp;
 use qapi::syscall::ops::vmtable::{VMLinkOp, VMSetAttr, VMUnlinkOp};
 use qapi::syscall::{SyscallArgs, SyscallArgsInit, SyscallOp, SyscallRequest};
 use retyping::retype;
-use sync_ipc::sync_invoke;
+use sync_ipc::{sync_invoke, sync_ret};
 use thread::dispatch;
 use vmtable::{vm_link, vm_set_attr, vm_unlink};
 
@@ -40,12 +40,12 @@ pub fn syscall_handler(
         SyscallOp::CapCopy => cap_table_copy(CopyOp::try_from_args(args.args())?),
         SyscallOp::CapLink => cap_table_link(LinkOp::try_from_args(args.args())?),
         SyscallOp::Retype => retype(RetypeOp::try_from_args(args.args())?),
-        SyscallOp::ThreadDispatch => dispatch(DispatchOp::try_from_args(args.args())?, &ctx),
+        SyscallOp::ThreadDispatch => dispatch(DispatchOp::try_from_args(args.args())?, ctx),
         SyscallOp::VMLink => vm_link(VMLinkOp::try_from_args(args.args())?),
         SyscallOp::VMUnlink => vm_unlink(VMUnlinkOp::try_from_args(args.args())?),
         SyscallOp::VMSetAttr => vm_set_attr(VMSetAttr::try_from_args(args.args())?),
         SyscallOp::SyncInvoke => sync_invoke(SyncInvokeOp::try_from_args(args.args())?, ctx),
-        SyscallOp::SyncRet => todo!(),
+        SyscallOp::SyncRet => sync_ret(SyncRetOp::try_from_args(args.args())?),
         SyscallOp::Introspect => introspect(IntrospectOp::try_from_args(args.args())?),
         _ => Err(CapError::SyscallNotImplemented),
     }

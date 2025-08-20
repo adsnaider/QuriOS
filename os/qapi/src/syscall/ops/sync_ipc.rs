@@ -1,7 +1,7 @@
 use core::mem::MaybeUninit;
 
 use crate::{
-    caps::{PositiveIsize, sync_ipc::SyncCap},
+    caps::{CapError, PositiveIsize, sync_ipc::SyncCap},
     syscall::{InitSyscallParams, SYSCALL_ARGS, SyscallRequest, UninitSyscallParams},
 };
 
@@ -26,7 +26,7 @@ impl SyscallRequest for SyncInvokeOp {
         args
     }
 
-    fn try_from_args(args: &InitSyscallParams) -> Result<Self, crate::caps::CapError> {
+    fn try_from_args(args: &InitSyscallParams) -> Result<Self, CapError> {
         let cap = args[0].try_into()?;
         let mut callargs = [MaybeUninit::uninit(); SYNC_CALL_ARGS];
         for i in 1..SYSCALL_ARGS {
@@ -35,6 +35,25 @@ impl SyscallRequest for SyncInvokeOp {
         Ok(Self {
             cap,
             args: callargs,
+        })
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct SyncRetOp {
+    pub resp: PositiveIsize,
+}
+
+impl SyscallRequest for SyncRetOp {
+    fn into_args(self) -> UninitSyscallParams {
+        let mut args = [MaybeUninit::uninit(); SYSCALL_ARGS];
+        args[0] = MaybeUninit::new(self.resp.into());
+        args
+    }
+
+    fn try_from_args(args: &InitSyscallParams) -> Result<Self, CapError> {
+        Ok(Self {
+            resp: args[0].try_into()?,
         })
     }
 }

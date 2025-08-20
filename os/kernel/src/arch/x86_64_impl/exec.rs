@@ -9,6 +9,7 @@ use core::marker::PhantomData;
 use core::mem::MaybeUninit;
 
 use derive_more::Debug;
+use qapi::caps::PositiveIsize;
 use qapi::init::{BootArgs, EntryFn};
 use sealed::sealed;
 use x86_64::registers::rflags::RFlags;
@@ -177,6 +178,12 @@ impl ExecState for ExecCtx {
         Self {
             regs: Cell::new(regs),
         }
+    }
+    fn update_sync_ret(&self, resp: PositiveIsize) {
+        self.regs.update(|mut regs| {
+            regs.scratch.rax = usize::from(resp) as u64;
+            regs
+        });
     }
 }
 

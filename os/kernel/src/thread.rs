@@ -4,9 +4,9 @@ use core::mem::MaybeUninit;
 
 use derive_where::derive_where;
 use heapless::Vec;
-use qapi::caps::{CapError, CapId, PositiveIsize};
+use qapi::caps::{CapError, CapId};
 use qapi::syscall::ops::introspect;
-use qapi::syscall::ops::sync_ipc::SYNC_CALL_ARGS;
+use qapi::syscall::ops::sync_ipc::{SyncRetOp, SYNC_CALL_ARGS};
 
 use crate::arch::exec::ExecState;
 use crate::arch::mem::Addrspace;
@@ -15,7 +15,6 @@ use crate::caps::{CapRef, CapTable, Resources};
 use crate::core_local::CORE_LOCAL_CURRENT_THREAD;
 use crate::kmem::KPtr;
 use crate::sync_call::SyncCall;
-use crate::syscall::SyscallResp;
 
 pub type CurrentThread = RefCell<Option<KPtr<Thread<ArchSystem>>>>;
 
@@ -60,10 +59,23 @@ impl Thread<ArchSystem> {
         exec_state.dispatch();
     }
 
+    pub fn sync_ret(args: SyncRetOp) -> Result<Infallible, CapError> {
+        let curr_ctx = CORE_LOCAL_CURRENT_THREAD.borrow();
+        let mut curr_ctx = curr_ctx.as_ref().unwrap().ctx.borrow_mut();
+        if curr_ctx.len() <= 1 {
+            return Err(CapError::SyncRetLimit);
+        }
+        let _prev_ctx = curr_ctx.pop().unwrap();
+        let ret_ctx = curr_ctx.last().unwrap();
+        ret_ctx.resources.addrspace().activate();
+        ret_ctx.exec_state.update_sync_ret(args.resp);
+        ret_ctx.exec_state.dispatch();
+    }
+
     pub fn sync_invoke(
         sync_call: &SyncCall<ArchSystem>,
         args: [MaybeUninit<usize>; SYNC_CALL_ARGS],
-        ctx: &<<ArchSystem as System>::ExecState as ExecState>::RegCtx,
+        ctx: <<ArchSystem as System>::ExecState as ExecState>::RegCtx,
     ) -> Result<Infallible, CapError> {
         let xstate =
             <ArchSystem as System>::ExecState::new_invocation(sync_call.entry().addr(), args);
@@ -79,7 +91,7 @@ impl Thread<ArchSystem> {
             .as_mut()
             .expect("There should always be at least 1 execution context on a thread")
             .exec_state
-            .save(ctx);
+            .save(&ctx);
         curr_ctx
             .push(sync_ctx.clone())
             .map_err(|_| CapError::SyncInvokeLimit)?;
@@ -89,7 +101,7 @@ impl Thread<ArchSystem> {
 
     pub fn dispatch(
         this: KPtr<Self>,
-        ctx: &<<ArchSystem as System>::ExecState as ExecState>::RegCtx,
+        ctx: <<ArchSystem as System>::ExecState as ExecState>::RegCtx,
     ) -> ! {
         // Our kernel is non-preemptive which makes every other case really
         // simple as it's a completely synchronous call-response. However, thread
@@ -115,7 +127,7 @@ impl Thread<ArchSystem> {
         {
             let previous = Self::replace_current(this);
             if let Some(previous) = &previous {
-                previous.current_ctx().exec_state.save(ctx);
+                previous.current_ctx().exec_state.save(&ctx);
             }
         }
         log::info!("Set the active thread");

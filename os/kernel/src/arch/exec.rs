@@ -1,6 +1,9 @@
 use core::mem::MaybeUninit;
 
-use qapi::init::{BootArgs, EntryFn};
+use qapi::{
+    caps::PositiveIsize,
+    init::{BootArgs, EntryFn},
+};
 
 pub trait ExecState: core::fmt::Debug {
     type RegCtx;
@@ -10,4 +13,5 @@ pub trait ExecState: core::fmt::Debug {
     fn for_init_comp(entry_fun: EntryFn, stack_top: *const (), arg0: *const BootArgs) -> Self;
     fn save(&self, ctx: &Self::RegCtx);
     fn dispatch(&self) -> !;
+    fn update_sync_ret(&self, resp: PositiveIsize);
 }

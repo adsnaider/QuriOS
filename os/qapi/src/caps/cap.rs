@@ -102,6 +102,10 @@ pub enum CapError {
     InvalidCapType = -18,
     #[display("Reached the static sysnchronous invocation stack limit")]
     SyncInvokeLimit = -19,
+    #[display(
+        "Failure to return from synchronous invocation since this is the bottom of the sync call stack"
+    )]
+    SyncRetLimit = -20,
 }
 
 impl CapError {
@@ -135,6 +139,21 @@ impl TryFrom<isize> for PositiveIsize {
         } else {
             Err(PositiveIsizeUnderflow)
         }
+    }
+}
+
+impl From<PositiveIsize> for usize {
+    fn from(value: PositiveIsize) -> Self {
+        value.0 as usize
+    }
+}
+
+impl TryFrom<usize> for PositiveIsize {
+    type Error = CapError;
+
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        let value = isize::try_from(value).map_err(|_| CapError::InvalidArg)?;
+        Ok(Self(value))
     }
 }
 
