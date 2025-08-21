@@ -9,12 +9,14 @@ use qapi::caps::thread::ThreadCap;
 use qapi::caps::vmtable::VMTableCap;
 use qapi::caps::{CapError, CapId, PositiveIsize, SysSlot};
 use qapi::mem::Frame;
-use qapi::syscall::ops::ctable::{ConsArgs, ConsKind, ConsOp, SyncCallCons, ThreadCons};
+use qapi::syscall::ops::ctable::{
+    CTableCons, ConsArgs, ConsKind, ConsOp, SyncCallCons, ThreadCons,
+};
 use qapi::syscall::ops::introspect::{IntrospectOp, IntrospectResult};
 use qapi::syscall::ops::retype::{RetypeKind, RetypeOp};
 use qapi::syscall::ops::sync_ipc::{SYNC_CALL_ARGS, SyncCallFun, SyncInvokeOp};
 use qapi::syscall::ops::thread::DispatchOp;
-use qapi::syscall::{self, SyscallArgs, SyscallOp, SyscallRequest};
+use qapi::syscall::{SyscallArgs, SyscallOp, SyscallRequest};
 use qapi::types::{UserPtr, UserPtrMut};
 use zerocopy::IntoBytes as _;
 
@@ -60,7 +62,7 @@ pub impl CTableCap {
                 rsp: stack_top as usize,
                 addrspace,
                 caps,
-                frame: frame.base(),
+                frame,
                 arg0,
             }),
             slot,
@@ -84,12 +86,29 @@ pub impl CTableCap {
         )
     }
 
+    fn make_ctable(&self, slot: SysSlot, frame: Frame) -> Result<(), CapError> {
+        self.construct(ConsArgs::CapTable(CTableCons { frame }), slot)
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    fn make_vmtable(&self, slot: SysSlot, frame: Frame, level: u8) -> Result<(), CapError> {
+        use qapi::syscall::ops::ctable::VMTableCons;
+
+        self.construct(
+            ConsArgs::VMTable(VMTableCons {
+                frame,
+                level: level.into(),
+            }),
+            slot,
+        )
+    }
+
     fn construct(&self, args: ConsArgs, slot: SysSlot) -> Result<(), CapError> {
         let (kind, args_bytes) = match &args {
             ConsArgs::Thread(thread_cons) => (ConsKind::Thread, thread_cons.as_bytes()),
-            ConsArgs::VMTable(_vm_cons) => todo!(),
+            ConsArgs::VMTable(vm_cons) => (ConsKind::VMTable, vm_cons.as_bytes()),
             ConsArgs::SyncCall(sync_call_cons) => (ConsKind::SyncCall, sync_call_cons.as_bytes()),
-            ConsArgs::CapTable(_cap_table_cons) => todo!(),
+            ConsArgs::CapTable(cap_table_cons) => (ConsKind::CTable, cap_table_cons.as_bytes()),
         };
 
         let args = ConsOp {

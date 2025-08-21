@@ -106,6 +106,8 @@ pub enum CapError {
         "Failure to return from synchronous invocation since this is the bottom of the sync call stack"
     )]
     SyncRetLimit = -20,
+    #[display("The VM Table level provided is not valid for this architecture")]
+    InvalidVMTableLevel = -21,
 }
 
 impl CapError {

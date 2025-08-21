@@ -19,9 +19,7 @@ pub struct TrieBlock<const COUNT: usize, T> {
 
 impl<const COUNT: usize, T> Default for TrieBlock<COUNT, T> {
     fn default() -> Self {
-        Self {
-            slots: [const { TrieSlot::new() }; COUNT],
-        }
+        Self::empty()
     }
 }
 
@@ -116,6 +114,11 @@ impl<const COUNT: usize, T> Trie<COUNT, T> {
 }
 
 impl<const COUNT: usize, T> TrieBlock<COUNT, T> {
+    pub const fn empty() -> Self {
+        Self {
+            slots: [const { TrieSlot::new() }; COUNT],
+        }
+    }
     pub fn at(this: &KPtr<Self>, id: SlotId<COUNT>) -> BlockRef<'_, COUNT, T> {
         let slot = &this.slots[id.as_usize()];
         BlockRef {

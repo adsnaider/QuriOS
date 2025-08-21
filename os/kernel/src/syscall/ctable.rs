@@ -1,11 +1,12 @@
 use qapi::caps::{CapError, PositiveIsize};
 use qapi::syscall::ops::ctable::{
-    ConsKind, ConsOp, CopyOp, DropOp, LinkOp, SyncCallCons, ThreadCons,
+    CTableCons, ConsKind, ConsOp, CopyOp, DropOp, LinkOp, SyncCallCons, ThreadCons, VMTableCons,
 };
 
 use super::SyscallResp;
 use crate::arch::exec::ExecState;
-use crate::arch::mem::{Frame, PhysAddr};
+use crate::arch::mem::PhysAddr;
+use crate::arch::ArchCaps as _;
 use crate::arch::{ArchSystem, System};
 use crate::caps::trie::TrieSlotPayload;
 use crate::caps::{CapBlock, CapTable, Capability, Resources, UserPtrTExt};
@@ -39,14 +40,26 @@ pub fn cap_table_cons(opts: ConsOp) -> SyscallResp {
                     comp.cast_ref::<CapTable<ArchSystem>>().clone()
                 }),
             );
-            let frame = Frame::try_from_start_address(PhysAddr::try_new(frame)?)?;
-            let thread = KPtr::new(frame, thread)?;
+            let thread = KPtr::new(frame.into(), thread)?;
             CapBlock::at(ctable, opts.slot_id)
                 .try_set(TrieSlotPayload::Data(Capability::Thread(thread)))?;
             Ok(PositiveIsize::zero())
         }
-        ConsKind::CTable => todo!(),
-        ConsKind::VMTable => todo!(),
+        ConsKind::CTable => {
+            let CTableCons { frame } = opts.cons_args.cast::<CTableCons>().verify()?.safe_read()?;
+            let new_ctable = CapBlock::empty();
+            let new_ctable = KPtr::new(frame.into(), new_ctable)?;
+            CapBlock::at(ctable, opts.slot_id)
+                .try_set(TrieSlotPayload::Data(Capability::CapBlock(new_ctable)))?;
+            Ok(PositiveIsize::zero())
+        }
+        ConsKind::VMTable => {
+            let args = opts.cons_args.cast::<VMTableCons>().verify()?.safe_read()?;
+            let acap = <ArchSystem as System>::ArchCaps::new_vmtable(args)?;
+            CapBlock::at(ctable, opts.slot_id)
+                .try_set(TrieSlotPayload::Data(Capability::Arch(acap)))?;
+            Ok(PositiveIsize::zero())
+        }
         ConsKind::SyncCall => {
             let SyncCallCons {
                 entry,

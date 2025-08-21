@@ -2,10 +2,12 @@ use core::borrow::Borrow;
 use core::fmt::Debug;
 
 use exec::ExecState;
-use mem::{Addrspace, PageFlags, VirtAddr};
+use mem::{Addrspace, Frame, PageFlags, VirtAddr};
 use qapi::{
     caps::CapError,
-    syscall::ops::{introspect::IntrospectResult, vmtable::PaddedPageTableOffset},
+    syscall::ops::{
+        ctable::VMTableCons, introspect::IntrospectResult, vmtable::PaddedPageTableOffset,
+    },
 };
 use sync::cell::AtomicOnceCell;
 
@@ -66,7 +68,8 @@ pub unsafe trait System: Sized {
     fn set_core_data(&self, addr: VirtAddr);
 }
 
-pub trait ArchCaps<S: System> {
+pub trait ArchCaps<S: System>: Sized {
+    fn new_vmtable(args: VMTableCons) -> Result<Self, CapError>;
     fn new_addrspace<A>(addrspace: A) -> Self
     where
         A: Borrow<S::Addrspace>;

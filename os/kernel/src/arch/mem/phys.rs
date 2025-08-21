@@ -90,3 +90,9 @@ impl From<Frame> for PhysFrame {
         unsafe { core::mem::transmute(value) }
     }
 }
+
+impl From<qapi::mem::Frame> for Frame {
+    fn from(value: qapi::mem::Frame) -> Self {
+        Self::from_start_address(PhysAddr::new(value.base()))
+    }
+}

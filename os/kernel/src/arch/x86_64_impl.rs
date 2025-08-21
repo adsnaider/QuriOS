@@ -5,6 +5,7 @@ use exec::ExecCtx;
 use mem_impl::page_table::{AnyPageTable, PageTableOffset, X64Addrspace};
 use qapi::caps::{CapError, PositiveIsize};
 use qapi::mem::vmtable::VMTableEntry;
+use qapi::syscall::ops::ctable::VMTableCons;
 use qapi::syscall::ops::introspect::{IntrospectResult, VMTable};
 use qapi::syscall::ops::vmtable::PaddedPageTableOffset;
 use x86_64::instructions::interrupts;
@@ -92,6 +93,17 @@ pub enum ArchCaps {
 
 #[allow(unreachable_patterns)]
 impl super::ArchCaps<X64Sys> for ArchCaps {
+    fn new_vmtable(args: VMTableCons) -> Result<Self, CapError> {
+        let table = KPtr::new(args.frame.into(), AnyPageTable::new())?;
+        let cap = match args.level {
+            1 => Self::L1(table),
+            2 => Self::L2(table),
+            3 => Self::L3(table),
+            4 => Self::L4(table),
+            _ => return Err(CapError::InvalidVMTableLevel),
+        };
+        Ok(cap)
+    }
     fn new_addrspace<A>(addrspace: A) -> Self
     where
         A: Borrow<X64Addrspace>,

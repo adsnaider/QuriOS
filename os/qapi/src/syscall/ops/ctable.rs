@@ -5,6 +5,7 @@ use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout};
 use crate::caps::ctable::CTableCap;
 use crate::caps::vmtable::VMTableCap;
 use crate::caps::{CapId, SysSlot};
+use crate::mem::Frame;
 use crate::types::UserPtr;
 
 #[derive(Debug, Copy, Clone, SyscallRequest)]
@@ -41,7 +42,7 @@ pub enum ConsArgs {
     Thread(ThreadCons),
     VMTable(VMTableCons),
     SyncCall(SyncCallCons),
-    CapTable(CapTableCons),
+    CapTable(CTableCons),
 }
 
 #[derive(KnownLayout, IntoBytes, FromBytes, Immutable, Debug, Copy, Clone)]
@@ -51,13 +52,17 @@ pub struct ThreadCons {
     pub rsp: usize,
     pub addrspace: VMTableCap,
     pub caps: CTableCap,
-    pub frame: u64,
+    pub frame: Frame,
     pub arg0: usize,
 }
 
+#[cfg(target_arch = "x86_64")]
 #[derive(KnownLayout, IntoBytes, FromBytes, Immutable, Debug, Copy, Clone)]
 #[repr(C)]
-pub struct VMTableCons {}
+pub struct VMTableCons {
+    pub frame: Frame,
+    pub level: u64,
+}
 
 #[derive(KnownLayout, IntoBytes, FromBytes, Immutable, Debug, Copy, Clone)]
 #[repr(C)]
@@ -69,7 +74,9 @@ pub struct SyncCallCons {
 
 #[derive(KnownLayout, IntoBytes, FromBytes, Immutable, Debug, Copy, Clone)]
 #[repr(C)]
-pub struct CapTableCons {}
+pub struct CTableCons {
+    pub frame: Frame,
+}
 
 #[repr(usize)]
 #[derive(Debug, Copy, Clone, TryFrom)]
