@@ -74,18 +74,26 @@ impl<Kind> ExceptionCtx<Kind> {
         unsafe { &mut *(self.stack_top as usize as *mut InterruptStackFrameValue) }
     }
 
-    pub fn preserved_regs(&self) -> PreservedRegs {
+    pub fn preserved_regs(&self) -> &PreservedRegs {
         // SAFETY: Preserved regs are pushed after scratch registers. Should be safe to read this.
         unsafe {
-            let preserved = (self.stack_top as *const ScratchRegs).add(1) as *const PreservedRegs;
-            core::ptr::read(preserved)
+            let preserved = (self.stack_top as usize
+                - size_of::<PreservedRegs>()
+                - size_of::<ScratchRegs>()) as *const PreservedRegs;
+            &*preserved
         }
     }
 
-    pub fn scratch_regs(&self) -> ScratchRegs {
-        let scratch = self.stack_top as *const ScratchRegs;
+    pub fn scratch_regs(&self) -> &ScratchRegs {
+        let scratch = (self.stack_top as usize - size_of::<ScratchRegs>()) as *const ScratchRegs;
         // SAFETY: Scratch registers are pushed first before, so should be here.
-        unsafe { core::ptr::read(scratch) }
+        unsafe { &*scratch }
+    }
+
+    pub unsafe fn scratch_regs_mut(&self) -> &mut ScratchRegs {
+        let scratch = (self.stack_top as usize - size_of::<ScratchRegs>()) as *mut ScratchRegs;
+        // SAFETY: Scratch registers are pushed first before, so should be here.
+        unsafe { &mut *scratch }
     }
 
     pub fn current_control(&self) -> ControlRegs {
@@ -128,8 +136,8 @@ impl ExecState for ExecCtx {
 
     fn save(&self, ctx: &Self::RegCtx) {
         let regs = Regs {
-            scratch: ctx.scratch_regs(),
-            preserved: ctx.preserved_regs(),
+            scratch: *ctx.scratch_regs(),
+            preserved: *ctx.preserved_regs(),
             control: ctx.current_control(),
         };
         self.regs.set(regs);

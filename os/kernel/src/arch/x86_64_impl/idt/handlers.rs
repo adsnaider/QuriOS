@@ -10,7 +10,6 @@ use x86_64::structures::idt::{
 };
 
 use crate::arch::x86_64_impl::exec::{Exception, ExceptionCtx, Interrupt};
-use crate::arch::x86_64_impl::idt::syscall_int;
 
 pub trait IsrHandler<Kind, Ret> {
     extern "sysv64" fn call(_ctx: ExceptionCtx<Kind>) -> Ret;
@@ -194,30 +193,5 @@ extern "C" fn save_some_with_err_code_and_diverge_isr<F: IsrHandler<Exception, I
     // call to sysv64 ABI.
     unsafe {
         naked_asm!("swapgs", "lea rdi, [rsp]", "call {inner}", "ud2", inner = sym F::call);
-    }
-}
-
-// SAFETY: Not actually extern "C". This is more of a x86_interrupt abi
-#[unsafe(naked)]
-pub(super) extern "C" fn save_all_and_ret_syscall() {
-    #[allow(unused_unsafe)]
-    // SAFETY: Sticking with ISR calling convention. Preserved registers are pushed on
-    // call to sysv64 ABI.
-    unsafe {
-        naked_asm!(
-            "swapgs",
-            push_scratch!(),
-            push_preserved!(),
-            "lea rax, [rsp + 8*15]",
-            "sub rsp, 8",
-            "push rax",
-            "call {inner}",
-            "add rsp, 16",
-            pop_preserved!(),
-            pop_scratch!(),
-            "swapgs",
-            "iretq",
-            inner = sym syscall_int
-        );
     }
 }

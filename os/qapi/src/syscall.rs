@@ -101,6 +101,15 @@ impl SyscallArgs<SyscallArgsInit> {
         }
     }
 
+    pub fn new_raw(op: usize, args: InitSyscallParams) -> Self {
+        Self {
+            op,
+            // SAFETY: MaybeUninit uses repr transparent.
+            args: unsafe { core::mem::transmute::<InitSyscallParams, UninitSyscallParams>(args) },
+            _phantom: PhantomData,
+        }
+    }
+
     pub fn args(&self) -> &InitSyscallParams {
         // SAFETY: Type state guarantees this is valid.
         unsafe { core::mem::transmute(&self.args) }

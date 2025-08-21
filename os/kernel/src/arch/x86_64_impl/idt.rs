@@ -1,7 +1,7 @@
 mod handlers;
 
-use handlers::{save_all_and_ret_syscall, Isr, IsrHandler, PanicHandler};
-use qapi::caps::CapResult as _;
+use handlers::{Isr, IsrHandler, PanicHandler};
+use qapi::caps::CapResult;
 use qapi::exception::ExceptionKind;
 use qapi::syscall::{SyscallArgs, SyscallOp};
 use sync::cell::AtomicLazyCell;
@@ -50,6 +50,34 @@ impl<const ID: usize> IsrHandler<Exception, ()> for ForwardRing3Exceptions<ID> {
                 Some(ctx.error_code() as usize),
                 ctx.downcast(),
             ),
+        }
+    }
+}
+pub struct SyscallHandler;
+impl IsrHandler<Interrupt, ()> for SyscallHandler {
+    extern "sysv64" fn call(ctx: ExceptionCtx<Interrupt>) {
+        match ctx.interrupt_stack_frame().code_segment.rpl() {
+            PrivilegeLevel::Ring0 => panic!("Unexpected syscall within kernel code\n{ctx:#?}"),
+            PrivilegeLevel::Ring1 | PrivilegeLevel::Ring2 => {
+                unreachable!("Unexpected ring usage in dual mode processor use")
+            }
+            PrivilegeLevel::Ring3 => {
+                let regs = ctx.scratch_regs();
+                let args = SyscallArgs::new_raw(
+                    regs.rdi as usize,
+                    [
+                        regs.rsi as usize,
+                        regs.rdx as usize,
+                        regs.rcx as usize,
+                        regs.r8 as usize,
+                        regs.r9 as usize,
+                    ],
+                );
+                let res = syscall_handler(args, ctx);
+                log::info!("Syscall response: {res:?}");
+                // SAFETY: Done handling syscall so we have exclusive asccess to the interrupt stack frame
+                unsafe { ctx.scratch_regs_mut().rax = res.into_isize() as u64 };
+            }
         }
     }
 }
@@ -111,13 +139,9 @@ fn init_idt() {
                 .set_stack_index(gdt::PAGE_FAULT_IST_INDEX);
         }
         // SAFETY: The address provided will match the syscall ABI
-        unsafe {
-            idt[SYSCALL_INT]
-                .set_handler_addr(VirtAddrImpl::from_ptr(
-                    save_all_and_ret_syscall as *const (),
-                ))
-                .set_privilege_level(PrivilegeLevel::Ring3)
-        };
+        idt[SYSCALL_INT]
+            .register(SyscallHandler)
+            .set_privilege_level(PrivilegeLevel::Ring3);
         idt
     });
     IDT.load();
@@ -156,18 +180,4 @@ fn page_fault_handler(mut ctx: ExceptionCtx<Exception>) {
             ctx.downcast(),
         ),
     }
-}
-
-extern "C" fn syscall_int(
-    op: SyscallOp,
-    a: usize,
-    b: usize,
-    c: usize,
-    d: usize,
-    e: usize,
-    ctx: ExceptionCtx<Interrupt>,
-) -> isize {
-    // SAFETY: It would be impossible to get to this interrupt handler
-    // without having first initialized the IDT with arch::init
-    syscall_handler(SyscallArgs::new(op, [a, b, c, d, e]), ctx).into_isize()
 }
