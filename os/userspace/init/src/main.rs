@@ -40,8 +40,7 @@ fn main(args: &'static BootArgs) -> ! {
         .make_sync_call(
             SlotId::new(10).unwrap(),
             sync_invoke,
-            bootcaps.self_addrspace,
-            bootcaps.self_caps,
+            bootcaps.self_resources,
         )
         .unwrap();
 

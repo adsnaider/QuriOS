@@ -4,10 +4,11 @@ use qapi::types::UserPtr;
 
 use crate::arch::System;
 use crate::caps::Resources;
+use crate::kmem::KPtr;
 
 #[derive_where(Debug, Clone)]
 pub struct SyncCall<S: System> {
-    comp: Resources<S>,
+    comp: KPtr<Resources<S>>,
     entry: usize,
 }
 
@@ -21,7 +22,7 @@ impl SyncRet {
 }
 
 impl<S: System> SyncCall<S> {
-    pub const fn new(comp: Resources<S>, entry: usize) -> Self {
+    pub const fn new(comp: KPtr<Resources<S>>, entry: usize) -> Self {
         Self { comp, entry }
     }
 
@@ -29,7 +30,7 @@ impl<S: System> SyncCall<S> {
         IntrospectResult::SyncCall
     }
 
-    pub const fn resources(&self) -> &Resources<S> {
+    pub const fn resources(&self) -> &KPtr<Resources<S>> {
         &self.comp
     }
 

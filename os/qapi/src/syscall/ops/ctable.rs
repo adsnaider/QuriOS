@@ -3,6 +3,7 @@ use qapi_macros::SyscallRequest;
 use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout};
 
 use crate::caps::ctable::CTableCap;
+use crate::caps::resources::ResourcesCap;
 use crate::caps::vmtable::VMTableCap;
 use crate::caps::{CapId, SysSlot};
 use crate::mem::Frame;
@@ -50,13 +51,12 @@ pub enum ConsArgs {
 pub struct ThreadCons {
     pub entry: usize,
     pub rsp: usize,
-    pub addrspace: VMTableCap,
-    pub caps: CTableCap,
     pub frame: Frame,
     pub arg0: usize,
+    pub resources: ResourcesCap,
+    pub _padding: u32,
 }
 
-#[cfg(target_arch = "x86_64")]
 #[derive(KnownLayout, IntoBytes, FromBytes, Immutable, Debug, Copy, Clone)]
 #[repr(C)]
 pub struct VMTableCons {
@@ -68,8 +68,8 @@ pub struct VMTableCons {
 #[repr(C)]
 pub struct SyncCallCons {
     pub entry: usize,
-    pub cspace: CTableCap,
-    pub vmspace: VMTableCap,
+    pub resources: ResourcesCap,
+    pub _padding: u32,
 }
 
 #[derive(KnownLayout, IntoBytes, FromBytes, Immutable, Debug, Copy, Clone)]

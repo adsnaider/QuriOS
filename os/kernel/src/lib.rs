@@ -117,7 +117,12 @@ pub fn uinit() -> ! {
     // SAFETY: The kernel frame is unused
     let cap_table = unsafe { KPtr::new_unchecked(frame, cap_table) };
     let resources = Resources::new(init.addrspace, cap_table.clone());
-    let thread = Thread::new(init.exec, resources);
+    let resources_frame = fallocator
+        .alloc_kernel_frame()
+        .expect("Out of memory during initialization");
+    // SAFETY: The kernel frame is unused
+    let resources = unsafe { KPtr::new_unchecked(resources_frame, resources) };
+    let thread = Thread::new(init.exec, resources.clone());
     let thread_frame = fallocator
         .alloc_kernel_frame()
         .expect("Out of memory error during initialization");
@@ -129,6 +134,15 @@ pub fn uinit() -> ! {
         unsafe { thread.active_comp().cap_table().cast_ref() },
         SysSlot::new(0).unwrap(),
     )
+    .try_set(TrieSlotPayload::Data(
+        Capability::<ArchSystem>::CompResource(resources),
+    ))
+    .expect("Unable to set boot capabilities");
+    CapBlock::at(
+        // SAFETY: It's okay to cast a cap table to cap block.
+        unsafe { thread.active_comp().cap_table().cast_ref() },
+        SysSlot::new(1).unwrap(),
+    )
     .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::CapBlock(
         // SAFETY: It's okay to cast a cap table to cap block.
         unsafe { cap_table.cast() },
@@ -137,7 +151,7 @@ pub fn uinit() -> ! {
     CapBlock::at(
         // SAFETY: It's okay to cast a cap table to cap block.
         unsafe { thread.active_comp().cap_table().cast_ref() },
-        SysSlot::new(1).unwrap(),
+        SysSlot::new(2).unwrap(),
     )
     .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::Arch(
         <ArchSystem as System>::ArchCaps::new_addrspace(&*thread.active_comp().addrspace()),
@@ -146,7 +160,7 @@ pub fn uinit() -> ! {
     CapBlock::at(
         // SAFETY: It's okay to cast a cap table to cap block.
         unsafe { thread.active_comp().cap_table().cast_ref() },
-        SysSlot::new(2).unwrap(),
+        SysSlot::new(3).unwrap(),
     )
     .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::Thread(
         KPtr::clone(&thread),

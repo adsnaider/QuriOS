@@ -32,6 +32,7 @@ pub enum IntrospectResult {
     },
     SyncCall,
     SyncRet,
+    Resources,
     #[cfg(target_arch = "x86_64")]
     VMTable(VMTable),
 }

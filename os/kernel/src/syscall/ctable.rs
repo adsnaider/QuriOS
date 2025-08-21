@@ -5,7 +5,6 @@ use qapi::syscall::ops::ctable::{
 
 use super::SyscallResp;
 use crate::arch::exec::ExecState;
-use crate::arch::mem::PhysAddr;
 use crate::arch::ArchCaps as _;
 use crate::arch::{ArchSystem, System};
 use crate::caps::trie::TrieSlotPayload;
@@ -23,22 +22,18 @@ pub fn cap_table_cons(opts: ConsOp) -> SyscallResp {
             let ThreadCons {
                 entry,
                 rsp,
-                addrspace,
-                caps,
+                resources,
                 frame,
                 arg0,
+                ..
             } = opts.cons_args.cast::<ThreadCons>().verify()?.safe_read()?;
-            let comp = Thread::get_cap(caps.cap()).ok_or(CapError::CapNotFound)?;
-            let comp = comp.as_ctable()?;
-            let addrspace = Thread::get_cap(addrspace.cap()).ok_or(CapError::CapNotFound)?;
-            let addrspace = addrspace.as_addrspace()?;
+            let resources = Thread::get_cap(resources.cap()).ok_or(CapError::CapNotFound)?;
+            let resources = resources.as_resources()?;
 
             let thread = Thread::new(
                 <ArchSystem as System>::ExecState::new_thread(entry, rsp, arg0),
                 // SAFETY: It's okay to cast a CapBlock to a CapTable
-                Resources::from_parts(addrspace.clone(), unsafe {
-                    comp.cast_ref::<CapTable<ArchSystem>>().clone()
-                }),
+                resources.clone(),
             );
             let thread = KPtr::new(frame.into(), thread)?;
             CapBlock::at(ctable, opts.slot_id)
@@ -62,24 +57,17 @@ pub fn cap_table_cons(opts: ConsOp) -> SyscallResp {
         }
         ConsKind::SyncCall => {
             let SyncCallCons {
-                entry,
-                cspace,
-                vmspace,
+                entry, resources, ..
             } = opts
                 .cons_args
                 .cast::<SyncCallCons>()
                 .verify()?
                 .safe_read()?;
-            let cspace = Thread::get_cap(cspace.cap()).ok_or(CapError::CapNotFound)?;
-            // SAFETY: Casting a ctable to cspace is fine.
-            let cspace: &KPtr<CapTable<ArchSystem>> = unsafe { cspace.as_ctable()?.cast_ref() };
-            let vmspace = Thread::get_cap(vmspace.cap()).ok_or(CapError::CapNotFound)?;
-            let vmspace = vmspace.as_addrspace()?;
+            let resources = Thread::get_cap(resources.cap()).ok_or(CapError::CapNotFound)?;
+            // SAFETY: Casting a ctable to resources is fine.
+            let resources = resources.as_resources()?;
             CapBlock::at(ctable, opts.slot_id).try_set(TrieSlotPayload::Data(
-                Capability::SyncCall(SyncCall::new(
-                    Resources::from_parts(vmspace.clone(), cspace.clone()),
-                    entry,
-                )),
+                Capability::SyncCall(SyncCall::new(resources.clone(), entry)),
             ))?;
             Ok(PositiveIsize::zero())
         }

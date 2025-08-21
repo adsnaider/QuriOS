@@ -5,6 +5,7 @@ use core::mem::MaybeUninit;
 
 use extend::ext;
 use qapi::caps::ctable::CTableCap;
+use qapi::caps::resources::ResourcesCap;
 use qapi::caps::sync_ipc::SyncInvokeCap;
 use qapi::caps::thread::ThreadCap;
 use qapi::caps::vmtable::VMTableCap;
@@ -53,8 +54,7 @@ pub impl CTableCap {
         slot: SysSlot,
         entry: extern "C" fn(usize) -> !,
         stack_top: *mut (),
-        addrspace: VMTableCap,
-        caps: CTableCap,
+        resources: ResourcesCap,
         frame: Frame,
         arg0: usize,
     ) -> Result<(), CapError> {
@@ -62,10 +62,10 @@ pub impl CTableCap {
             ConsArgs::Thread(ThreadCons {
                 entry: entry as usize,
                 rsp: stack_top as usize,
-                addrspace,
-                caps,
+                resources,
                 frame,
                 arg0,
+                _padding: 0,
             }),
             slot,
         )
@@ -75,14 +75,13 @@ pub impl CTableCap {
         &self,
         slot: SysSlot,
         fun: SyncCallFun,
-        vmspace: VMTableCap,
-        cspace: CTableCap,
+        resources: ResourcesCap,
     ) -> Result<(), CapError> {
         self.construct(
             ConsArgs::SyncCall(SyncCallCons {
                 entry: fun as usize,
-                cspace,
-                vmspace,
+                resources,
+                _padding: 0,
             }),
             slot,
         )

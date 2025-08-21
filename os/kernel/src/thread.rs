@@ -22,7 +22,7 @@ pub type CurrentThread = RefCell<Option<KPtr<Thread<ArchSystem>>>>;
 #[derive_where(Debug, Clone)]
 struct ThreadCtx<S: System> {
     exec_state: S::ExecState,
-    resources: Resources<S>,
+    resources: KPtr<Resources<S>>,
 }
 
 unsafe impl<S: System> Send for Thread<S> {}
@@ -147,7 +147,7 @@ impl Thread<ArchSystem> {
 }
 
 impl<S: System> Thread<S> {
-    pub fn new(exec_state: S::ExecState, comp: Resources<S>) -> Self {
+    pub fn new(exec_state: S::ExecState, comp: KPtr<Resources<S>>) -> Self {
         let mut ctx = Vec::new();
         ctx.push(ThreadCtx {
             exec_state,
@@ -159,7 +159,7 @@ impl<S: System> Thread<S> {
         }
     }
 
-    pub fn active_comp(&self) -> Ref<Resources<S>> {
+    pub fn active_comp(&self) -> Ref<KPtr<Resources<S>>> {
         Ref::map(self.current_ctx(), |ctx| &ctx.resources)
     }
 

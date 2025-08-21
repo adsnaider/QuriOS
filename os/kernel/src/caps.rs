@@ -10,7 +10,7 @@ use derive_where::derive_where;
 use extend::ext;
 use qapi::caps::slotid::{NUM_SLOTS, SLOT_SIZE};
 use qapi::caps::CapError;
-use qapi::syscall::ops::introspect::{self};
+use qapi::syscall::ops::introspect::{self, IntrospectResult};
 use qapi::types::{UserPtr, UserPtrMut};
 use trie::{Trie, TrieBlock, TrieRef, TrieSetError};
 use zerocopy::{FromBytes, Immutable, KnownLayout};
@@ -42,6 +42,14 @@ impl<S: System> CapRef<S> {
         let data = self.data().ok_or(CapError::CapNotFound)?;
         match data {
             Capability::CapBlock(kptr) => Ok(kptr),
+            _ => Err(CapError::InvalidArg),
+        }
+    }
+
+    pub fn as_resources(&self) -> Result<&KPtr<Resources<S>>, CapError> {
+        let data = self.data().ok_or(CapError::CapNotFound)?;
+        match data {
+            Capability::CompResource(kptr) => Ok(kptr),
             _ => Err(CapError::InvalidArg),
         }
     }
@@ -97,6 +105,7 @@ impl<S: System> CapBlock<S> {
 pub struct Resources<S: System> {
     addrspace: KPtr<S::PageTable>,
     capabilities: KPtr<CapTable<S>>,
+    exception_handler: Option<SyncCall<S>>,
 }
 
 #[derive(Debug, Deref)]
@@ -113,6 +122,7 @@ impl<S: System> Resources<S> {
         Self {
             addrspace: page_table,
             capabilities,
+            exception_handler: None,
         }
     }
 
@@ -120,6 +130,7 @@ impl<S: System> Resources<S> {
         Self {
             addrspace,
             capabilities,
+            exception_handler: None,
         }
     }
 
@@ -145,6 +156,10 @@ impl<S: System> Resources<S> {
     pub fn cap_table(&self) -> &KPtr<CapTable<S>> {
         &self.capabilities
     }
+
+    pub fn introspect(&self) -> IntrospectResult {
+        IntrospectResult::Resources
+    }
 }
 
 pub trait UnwrapInfallible<T> {
@@ -163,6 +178,7 @@ pub enum Capability<S: System> {
     CapBlock(KPtr<CapBlock<S>>),
     SyncCall(SyncCall<S>),
     SyncRet(SyncRet),
+    CompResource(KPtr<Resources<S>>),
     Arch(S::ArchCaps),
 }
 
