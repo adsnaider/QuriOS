@@ -1,4 +1,5 @@
 pub mod sync_endpoint;
+pub use crate::make_sync_call;
 
 use core::mem::MaybeUninit;
 
@@ -8,14 +9,15 @@ use qapi::caps::sync_ipc::SyncInvokeCap;
 use qapi::caps::thread::ThreadCap;
 use qapi::caps::vmtable::VMTableCap;
 use qapi::caps::{CapError, CapId, PositiveIsize, SysSlot};
-use qapi::mem::Frame;
+use qapi::mem::{Frame, PageFlags};
 use qapi::syscall::ops::ctable::{
-    CTableCons, ConsArgs, ConsKind, ConsOp, SyncCallCons, ThreadCons,
+    CTableCons, ConsArgs, ConsKind, ConsOp, CopyOp, DropOp, LinkOp, SyncCallCons, ThreadCons,
 };
 use qapi::syscall::ops::introspect::{IntrospectOp, IntrospectResult};
 use qapi::syscall::ops::retype::{RetypeKind, RetypeOp};
 use qapi::syscall::ops::sync_ipc::{SYNC_CALL_ARGS, SyncCallFun, SyncInvokeOp};
 use qapi::syscall::ops::thread::DispatchOp;
+use qapi::syscall::ops::vmtable::{PaddedPageTableOffset, VMLinkOp, VMSetAttr, VMUnlinkOp};
 use qapi::syscall::{SyscallArgs, SyscallOp, SyscallRequest};
 use qapi::types::{UserPtr, UserPtrMut};
 use zerocopy::IntoBytes as _;
@@ -87,7 +89,7 @@ pub impl CTableCap {
     }
 
     fn make_ctable(&self, slot: SysSlot, frame: Frame) -> Result<(), CapError> {
-        self.construct(ConsArgs::CapTable(CTableCons { frame }), slot)
+        self.construct(ConsArgs::CTable(CTableCons { frame }), slot)
     }
 
     #[cfg(target_arch = "x86_64")]
@@ -108,7 +110,7 @@ pub impl CTableCap {
             ConsArgs::Thread(thread_cons) => (ConsKind::Thread, thread_cons.as_bytes()),
             ConsArgs::VMTable(vm_cons) => (ConsKind::VMTable, vm_cons.as_bytes()),
             ConsArgs::SyncCall(sync_call_cons) => (ConsKind::SyncCall, sync_call_cons.as_bytes()),
-            ConsArgs::CapTable(cap_table_cons) => (ConsKind::CTable, cap_table_cons.as_bytes()),
+            ConsArgs::CTable(cap_table_cons) => (ConsKind::CTable, cap_table_cons.as_bytes()),
         };
 
         let args = ConsOp {
@@ -122,6 +124,35 @@ pub impl CTableCap {
             args.into_args(),
         ))
         .map(|_| ())
+    }
+
+    fn link_at(&self, slot: SysSlot, cap: CTableCap) -> Result<(), CapError> {
+        let args = LinkOp {
+            top_table: *self,
+            slot_id: slot,
+            bottom_table: cap,
+        };
+        syscall(SyscallArgs::new_with_args(
+            SyscallOp::CapLink,
+            args.into_args(),
+        ))
+        .map(|_| ())
+    }
+
+    fn drop_at(&self, slot: SysSlot) -> Result<(), CapError> {
+        let args = DropOp {
+            table_cap: *self,
+            slot_id: slot,
+        };
+        syscall(SyscallArgs::new_with_args(
+            SyscallOp::CapDrop,
+            args.into_args(),
+        ))
+        .map(|_| ())
+    }
+
+    fn copy_from(&self, slot: SysSlot, cap: CapId) -> Result<(), CapError> {
+        cap.copy_into(*self, slot)
     }
 }
 
@@ -154,6 +185,64 @@ pub impl CapId {
         // SAFETY: If the syscall is successful, the kernel can be trusted to set reasonable bytes
         .map(|_| unsafe { out.assume_init() })
     }
+
+    fn copy_into(&self, to_table: CTableCap, to_slot: SysSlot) -> Result<(), CapError> {
+        let args = CopyOp {
+            from_cap: *self,
+            to_table,
+            to_slot,
+        };
+        syscall(SyscallArgs::new_with_args(
+            SyscallOp::CapCopy,
+            args.into_args(),
+        ))
+        .map(|_| ())
+    }
 }
 
-pub use crate::make_sync_call;
+#[ext]
+pub impl VMTableCap {
+    fn link_at(
+        &self,
+        offset: PaddedPageTableOffset,
+        other: VMTableCap,
+        flags: PageFlags,
+    ) -> Result<(), CapError> {
+        let op = VMLinkOp {
+            top_table: *self,
+            offset,
+            bottom_table: other,
+            flags,
+        };
+        syscall(SyscallArgs::new_with_args(
+            SyscallOp::VMLink,
+            op.into_args(),
+        ))
+        .map(|_| ())
+    }
+
+    fn unlink_at(&self, offset: PaddedPageTableOffset) -> Result<(), CapError> {
+        let op = VMUnlinkOp {
+            table: *self,
+            offset,
+        };
+        syscall(SyscallArgs::new_with_args(
+            SyscallOp::VMUnlink,
+            op.into_args(),
+        ))
+        .map(|_| ())
+    }
+
+    fn set_attr(&self, offset: PaddedPageTableOffset, flags: PageFlags) -> Result<(), CapError> {
+        let op = VMSetAttr {
+            table: *self,
+            offset,
+            flags,
+        };
+        syscall(SyscallArgs::new_with_args(
+            SyscallOp::VMSetAttr,
+            op.into_args(),
+        ))
+        .map(|_| ())
+    }
+}

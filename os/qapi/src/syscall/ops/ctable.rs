@@ -42,7 +42,7 @@ pub enum ConsArgs {
     Thread(ThreadCons),
     VMTable(VMTableCons),
     SyncCall(SyncCallCons),
-    CapTable(CTableCons),
+    CTable(CTableCons),
 }
 
 #[derive(KnownLayout, IntoBytes, FromBytes, Immutable, Debug, Copy, Clone)]
