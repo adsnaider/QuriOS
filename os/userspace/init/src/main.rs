@@ -55,6 +55,10 @@ fn main(args: &'static BootArgs) -> ! {
         .unwrap();
     log::info!("Sync response: {result}");
 
+    unsafe {
+        core::ptr::read_volatile(0xA_F00_BABE as *const u8);
+    }
+
     /*
     let cspace = CapabilityMan::new_starting_at(bootcaps.self_caps, BootCaps::next_free());
 

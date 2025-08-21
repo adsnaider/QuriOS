@@ -3,6 +3,7 @@ use core::arch::naked_asm;
 use core::convert::Infallible;
 
 use asm_utils::{pop_preserved, pop_scratch, push_preserved, push_scratch};
+use qapi::exception::ExceptionKind;
 use x86_64::structures::idt::{
     DivergingHandlerFunc, DivergingHandlerFuncWithErrCode, Entry, EntryOptions, HandlerFunc,
     HandlerFuncWithErrCode, PageFaultHandlerFunc,
@@ -139,14 +140,16 @@ where
 pub struct PanicHandler<const ID: usize>;
 impl<const ID: usize, Ret> IsrHandler<Interrupt, Ret> for PanicHandler<ID> {
     extern "sysv64" fn call(ctx: ExceptionCtx<Interrupt>) -> Ret {
-        panic!("Unhandled interrupt ({ID}) {ctx:#?}")
+        let kind = ExceptionKind::try_from(ID).unwrap();
+        panic!("Unhandled interrupt ({kind}) {ctx:#?}")
     }
 }
 
 impl<const ID: usize, Ret> IsrHandler<Exception, Ret> for PanicHandler<ID> {
     extern "sysv64" fn call(ctx: ExceptionCtx<Exception>) -> Ret {
         let code = ctx.error_code();
-        panic!("Unhandled interrupt ({ID}) - Error code: {code:#X}\n{ctx:#?}")
+        let kind = ExceptionKind::try_from(ID).unwrap();
+        panic!("Unhandled interrupt ({kind}) - Error code: {code:#X}\n{ctx:#?}")
     }
 }
 

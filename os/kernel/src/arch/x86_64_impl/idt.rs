@@ -1,7 +1,8 @@
 mod handlers;
 
-use handlers::{save_all_and_ret_syscall, Isr, PanicHandler};
+use handlers::{save_all_and_ret_syscall, Isr, IsrHandler, PanicHandler};
 use qapi::caps::CapResult as _;
+use qapi::exception::ExceptionKind;
 use qapi::syscall::{SyscallArgs, SyscallOp};
 use sync::cell::AtomicLazyCell;
 use x86_64::registers::control::Cr2;
@@ -13,7 +14,7 @@ use crate::arch::mem::{user_buffer_read_page_fault_call_gate, MemorySegment, Vir
 use crate::arch::x86_64_impl::exec::{Exception, ExceptionCtx};
 use crate::arch::x86_64_impl::gdt;
 use crate::core_local::CORE_LOCAL_SAFE_BUFFER_LOCK;
-use crate::syscall::syscall_handler;
+use crate::syscall::{ring3_exception_handler, syscall_handler};
 
 const SYSCALL_INT: u8 = 0x80;
 
@@ -23,36 +24,87 @@ pub fn init() {
     log::info!("Interrupt tables initialized");
 }
 
+pub struct ForwardRing3Exceptions<const ID: usize>;
+impl<const ID: usize> IsrHandler<Interrupt, ()> for ForwardRing3Exceptions<ID> {
+    extern "sysv64" fn call(ctx: ExceptionCtx<Interrupt>) {
+        match ctx.interrupt_stack_frame().code_segment.rpl() {
+            PrivilegeLevel::Ring0 => panic!("Unexpected exception in kernel code: {ID}\n{ctx:#?}"),
+            PrivilegeLevel::Ring1 | PrivilegeLevel::Ring2 => {
+                unreachable!("Unexpected ring usage in dual mode processor use")
+            }
+            PrivilegeLevel::Ring3 => {
+                ring3_exception_handler(ExceptionKind::try_from(ID).unwrap(), None, ctx)
+            }
+        }
+    }
+}
+impl<const ID: usize> IsrHandler<Exception, ()> for ForwardRing3Exceptions<ID> {
+    extern "sysv64" fn call(ctx: ExceptionCtx<Exception>) {
+        match ctx.interrupt_stack_frame().code_segment.rpl() {
+            PrivilegeLevel::Ring0 => panic!("Unexpected exception in kernel code: {ID}\n{ctx:#?}"),
+            PrivilegeLevel::Ring1 | PrivilegeLevel::Ring2 => {
+                unreachable!("Unexpected ring usage in dual mode processor use")
+            }
+            PrivilegeLevel::Ring3 => ring3_exception_handler(
+                ExceptionKind::try_from(ID).unwrap(),
+                Some(ctx.error_code() as usize),
+                ctx.downcast(),
+            ),
+        }
+    }
+}
+
 /// Initializes the interrupt descriptor table.
 fn init_idt() {
     static IDT: AtomicLazyCell<InterruptDescriptorTable> = AtomicLazyCell::new(|| {
         let mut idt = InterruptDescriptorTable::new();
         // Exceptions.
-        idt.breakpoint.register(PanicHandler::<0>);
-        idt.general_protection_fault.register(PanicHandler::<1>);
-        idt.overflow.register(PanicHandler::<2>);
-        idt.divide_error.register(PanicHandler::<3>);
-        idt.non_maskable_interrupt.register(PanicHandler::<2>);
-        idt.bound_range_exceeded.register(PanicHandler::<3>);
-        idt.debug.register(PanicHandler::<4>);
-        idt.invalid_opcode.register(PanicHandler::<5>);
-        idt.device_not_available.register(PanicHandler::<6>);
-        idt.invalid_tss.register(PanicHandler::<7>);
-        idt.segment_not_present.register(PanicHandler::<8>);
-        idt.stack_segment_fault.register(PanicHandler::<9>);
-        idt.x87_floating_point.register(PanicHandler::<10>);
-        idt.alignment_check.register(PanicHandler::<11>);
-        idt.machine_check.register(PanicHandler::<12>);
-        idt.simd_floating_point.register(PanicHandler::<13>);
-        idt.virtualization.register(PanicHandler::<14>);
-        idt.vmm_communication_exception.register(PanicHandler::<15>);
-        idt.security_exception.register(PanicHandler::<16>);
-        idt.cp_protection_exception.register(PanicHandler::<17>);
-        idt.hv_injection_exception.register(PanicHandler::<18>);
+        idt.breakpoint
+            .register(ForwardRing3Exceptions::<{ ExceptionKind::BREAKPOINT }>);
+        idt.general_protection_fault
+            .register(ForwardRing3Exceptions::<{ ExceptionKind::GENERAL_PROTECTION }>);
+        idt.overflow
+            .register(ForwardRing3Exceptions::<{ ExceptionKind::OVERFLOW }>);
+        idt.divide_error
+            .register(ForwardRing3Exceptions::<{ ExceptionKind::DIVIDE_ERROR }>);
+        idt.non_maskable_interrupt
+            .register(ForwardRing3Exceptions::<{ ExceptionKind::NON_MASKABLE_INTERRUPT }>);
+        idt.bound_range_exceeded
+            .register(ForwardRing3Exceptions::<{ ExceptionKind::BOUND_RANGE_EXCEEDED }>);
+        idt.debug
+            .register(ForwardRing3Exceptions::<{ ExceptionKind::DEBUG }>);
+        idt.invalid_opcode
+            .register(ForwardRing3Exceptions::<{ ExceptionKind::INVALID_OP_CODE }>);
+        idt.device_not_available
+            .register(ForwardRing3Exceptions::<{ ExceptionKind::DEVICE_NOT_AVAILABLE }>);
+        idt.invalid_tss
+            .register(ForwardRing3Exceptions::<{ ExceptionKind::INVALID_TSS }>);
+        idt.segment_not_present
+            .register(ForwardRing3Exceptions::<{ ExceptionKind::SEGMENT_NOT_PRESENT }>);
+        idt.stack_segment_fault
+            .register(ForwardRing3Exceptions::<{ ExceptionKind::STACK_SEGMENT_FAULT }>);
+        idt.x87_floating_point
+            .register(ForwardRing3Exceptions::<{ ExceptionKind::X87_FLOATING_POINT }>);
+        idt.alignment_check
+            .register(ForwardRing3Exceptions::<{ ExceptionKind::ALIGNMENT_CHECK }>);
+        idt.simd_floating_point
+            .register(ForwardRing3Exceptions::<{ ExceptionKind::SIMD_FLOATING_POINT }>);
+        idt.virtualization
+            .register(ForwardRing3Exceptions::<{ ExceptionKind::VIRTUALIZATION }>);
+        idt.vmm_communication_exception
+            .register(ForwardRing3Exceptions::<{ ExceptionKind::VMM_COMMUNICATION_EXCEPTION }>);
+        idt.security_exception
+            .register(ForwardRing3Exceptions::<{ ExceptionKind::SECURITY_EXCEPTION }>);
+        idt.cp_protection_exception
+            .register(ForwardRing3Exceptions::<{ ExceptionKind::CP_PROTECTION_EXCEPTION }>);
+        idt.hv_injection_exception
+            .register(ForwardRing3Exceptions::<{ ExceptionKind::HV_INJECTION_EXCEPTION }>);
+        idt.machine_check
+            .register(PanicHandler::<{ ExceptionKind::MACHINE_CHECK }>);
         // SAFETY: Stack indeces provided are valid and only used for the specific handlers.
         unsafe {
             idt.double_fault
-                .register(PanicHandler::<19>)
+                .register(PanicHandler::<{ ExceptionKind::DOUBLE_FAULT }>)
                 .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
             idt.page_fault
                 .register(page_fault_handler)
@@ -98,7 +150,11 @@ fn page_fault_handler(mut ctx: ExceptionCtx<Exception>) {
         },
         PrivilegeLevel::Ring1 => unreachable!(),
         PrivilegeLevel::Ring2 => unreachable!(),
-        PrivilegeLevel::Ring3 => panic!("PAGE FAULT @ {addr:#X?} - ({code:?}) {ctx:#?}"),
+        PrivilegeLevel::Ring3 => ring3_exception_handler(
+            ExceptionKind::PageFault,
+            Some(ctx.error_code() as usize),
+            ctx.downcast(),
+        ),
     }
 }
 

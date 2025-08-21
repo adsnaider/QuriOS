@@ -1,6 +1,7 @@
 use ctable::{cap_table_cons, cap_table_copy, cap_table_drop, cap_table_link};
 use introspect::introspect;
 use qapi::caps::{CapError, PositiveIsize};
+use qapi::exception::ExceptionKind;
 use qapi::syscall::ops::ctable::{ConsOp, CopyOp, DropOp, LinkOp};
 use qapi::syscall::ops::introspect::IntrospectOp;
 use qapi::syscall::ops::retype::RetypeOp;
@@ -49,4 +50,12 @@ pub fn syscall_handler(
         SyscallOp::Introspect => introspect(IntrospectOp::try_from_args(args.args())?),
         _ => Err(CapError::SyscallNotImplemented),
     }
+}
+
+pub fn ring3_exception_handler(
+    kind: ExceptionKind,
+    code: Option<usize>,
+    ctx: <<ArchSystem as System>::ExecState as ExecState>::RegCtx,
+) -> ! {
+    todo!();
 }

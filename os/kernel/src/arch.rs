@@ -2,7 +2,7 @@ use core::borrow::Borrow;
 use core::fmt::Debug;
 
 use exec::ExecState;
-use mem::{Addrspace, Frame, PageFlags, VirtAddr};
+use mem::{Addrspace, PageFlags, VirtAddr};
 use qapi::{
     caps::CapError,
     syscall::ops::{

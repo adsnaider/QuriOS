@@ -103,6 +103,11 @@ impl ExceptionCtx<Exception> {
         // SAFETY: Stack must contain error code below the interrupt stack frame
         unsafe { core::ptr::read((self.stack_top - 8) as *const u64) }
     }
+
+    pub fn downcast(self) -> ExceptionCtx<Interrupt> {
+        // SAFETY: The Interrupt exception context is just this without the `error_code` method.
+        unsafe { core::mem::transmute(self) }
+    }
 }
 
 trait RegCtx {
