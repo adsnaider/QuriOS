@@ -12,7 +12,6 @@ use qapi::caps::slotid::{NUM_SLOTS, SLOT_SIZE};
 use qapi::caps::CapError;
 use qapi::syscall::ops::introspect::{self, IntrospectResult};
 use qapi::types::{UserPtr, UserPtrMut};
-use sync::cell::AtomicRefCell;
 use trie::{Trie, TrieBlock, TrieRef, TrieSetError};
 use zerocopy::{FromBytes, Immutable, KnownLayout};
 

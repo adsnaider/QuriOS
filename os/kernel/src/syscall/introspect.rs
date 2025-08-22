@@ -14,7 +14,7 @@ use crate::{
 use super::SyscallResp;
 
 pub fn introspect(opts: IntrospectOp) -> SyscallResp {
-    let cap = Thread::get_cap(opts.cap);
+    let cap = Thread::with_current(|thread| thread.get_cap(opts.cap)).unwrap();
     let write_buf = opts.write_buf.verify()?;
     let result = match cap.as_ref().map(|c| c.payload()) {
         Some(TrieSlotPayload::Data(Capability::Thread(thread))) => IntrospectResult::Thread {

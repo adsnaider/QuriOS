@@ -1,5 +1,6 @@
 use core::arch::asm;
 use core::marker::PhantomData;
+use core::mem::offset_of;
 use core::ops::Deref;
 
 pub struct CoreLocal<const BYTE_OFF: usize, T> {
@@ -57,12 +58,16 @@ pub struct CoreLocalData<T> {
 
 impl<T> CoreLocalData<T> {
     pub const fn new(self_addr: *mut Self, data: T) -> Self {
+        debug_assert!(!self_addr.is_null());
         Self {
             self_ptr: self_addr,
             data,
         }
     }
     pub fn get_ptr_mut() -> *mut Self {
+        const {
+            assert!(offset_of!(Self, self_ptr) == 0);
+        }
         let ptr: *mut Self;
         // SAFETY: The first qword in the gs base will be the self-referencing pointer.
         unsafe {

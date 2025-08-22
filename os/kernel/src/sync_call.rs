@@ -1,6 +1,5 @@
 use derive_where::derive_where;
 use qapi::syscall::ops::introspect::IntrospectResult;
-use qapi::types::UserPtr;
 
 use crate::arch::System;
 use crate::caps::Resources;

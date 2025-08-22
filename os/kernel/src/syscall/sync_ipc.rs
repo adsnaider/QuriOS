@@ -14,11 +14,15 @@ pub fn sync_invoke(
     opts: SyncInvokeOp,
     ctx: <<ArchSystem as System>::ExecState as ExecState>::RegCtx,
 ) -> SyscallResp {
-    let cap = Thread::get_cap(opts.cap.cap()).ok_or(CapError::CapNotFound)?;
+    let cap = Thread::with_current(|thread| thread.get_cap(opts.cap.cap()))
+        .unwrap()
+        .ok_or(CapError::CapNotFound)?;
     let sync_call = cap.as_synccall()?;
-    Thread::sync_invoke(sync_call.clone(), opts.args, ctx)?;
+    Thread::with_current(move |thread| {
+        thread.sync_invoke(sync_call.clone(), opts.args, ctx)?;
+    })
 }
 
 pub fn sync_ret(opts: SyncRetOp) -> SyscallResp {
-    Thread::sync_ret(opts)?;
+    Thread::with_current(|thread| thread.sync_ret(opts))?;
 }

@@ -1,3 +1,7 @@
+pub mod core_cell;
+pub use core_cell::CoreCell;
+
+use core::cell::RefCell;
 use core::mem::{align_of, size_of};
 
 use crate::arch::mem::core_local::CoreLocalData;
@@ -7,11 +11,21 @@ use crate::pmo::PhysAddrExt;
 use crate::retyping::KernelFrame;
 use crate::thread::CurrentThread;
 
-#[derive(Default)]
 #[repr(C)]
 pub struct KernelLocalStore {
     current_thread: CurrentThread,
     safe_buffer_lock: bool,
+    core_id: u16,
+}
+
+impl KernelLocalStore {
+    pub const fn new(core_id: u16) -> Self {
+        Self {
+            core_id,
+            current_thread: RefCell::new(None),
+            safe_buffer_lock: false,
+        }
+    }
 }
 
 macro_rules! get_core_local_data_impl {
@@ -27,7 +41,7 @@ macro_rules! get_core_local_data_impl {
 
 #[extend::ext]
 pub impl CoreLocalData<KernelLocalStore> {
-    fn init(frame: KernelFrame) {
+    fn init(frame: KernelFrame, core_id: u16) {
         const {
             assert!(size_of::<Self>() <= Page::SIZE);
             assert!(Page::SIZE % align_of::<Self>() == 0);
@@ -37,7 +51,7 @@ pub impl CoreLocalData<KernelLocalStore> {
         system().set_core_data(addr);
 
         let addr = addr.as_mut_ptr();
-        let this = Self::new(addr, Default::default());
+        let this = Self::new(addr, KernelLocalStore::new(core_id));
         // SAFETY: Address is valid and effectively leaked.
         unsafe { core::ptr::write(addr, this) };
     }
@@ -45,3 +59,4 @@ pub impl CoreLocalData<KernelLocalStore> {
 
 get_core_local_data_impl!(pub current_thread, CurrentThread);
 get_core_local_data_impl!(pub safe_buffer_lock, bool);
+get_core_local_data_impl!(pub core_id, u16);

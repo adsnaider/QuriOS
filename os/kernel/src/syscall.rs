@@ -65,23 +65,25 @@ pub fn ring3_exception_handler(
     ctx: <<ArchSystem as System>::ExecState as ExecState>::RegCtx,
 ) -> ! {
     let exception_handler =
-        Thread::with_current(|thread| thread.active_comp().exception_handler().clone());
+        Thread::with_current(|thread| thread.active_comp().unwrap().exception_handler().clone());
     let sync_call = match exception_handler {
         ExceptionHandler::Within { entry } => {
-            let resources = Thread::with_current(|thread| thread.active_comp().clone());
+            let resources = Thread::with_current(|thread| thread.active_comp().unwrap().clone());
             SyncCall::new(resources, entry.load(Ordering::Relaxed))
         }
     };
     // TODO: If this fails, notifiy a scheduler thread instead...
-    Thread::sync_invoke(
-        sync_call,
-        [
-            MaybeUninit::new(kind as usize),
-            MaybeUninit::new(code.unwrap_or(0)),
-            MaybeUninit::uninit(),
-            MaybeUninit::uninit(),
-        ],
-        ctx,
-    )
+    Thread::with_current(move |thread| {
+        thread.sync_invoke(
+            sync_call,
+            [
+                MaybeUninit::new(kind as usize),
+                MaybeUninit::new(code.unwrap_or(0)),
+                MaybeUninit::uninit(),
+                MaybeUninit::uninit(),
+            ],
+            ctx,
+        )
+    })
     .unwrap();
 }

@@ -151,8 +151,7 @@ pub unsafe extern "C" fn user_buffer_copy(dest: *mut u8, source: *const u8, leng
     // SAFETY: This function requires no stack usage or internal calls as the page fault will direclty unwind
     // into `user_buffer_read_page_fault_call_gate`.
     naked_asm!(
-        "        mov     rax, qword ptr gs:[{user_buffer_lock_gs_offset}] ",
-        "        mov     byte ptr [rax], 1 ",
+        "        mov     byte ptr gs:[{user_buffer_lock_gs_offset}], 1 ",
         "        test    rdx, rdx ",
         "        je      6f",
         "        mov     ecx, edx ",
@@ -200,8 +199,7 @@ pub unsafe extern "C" fn user_buffer_copy(dest: *mut u8, source: *const u8, leng
 #[unsafe(naked)]
 pub(crate) unsafe extern "C" fn user_buffer_read_page_fault_call_gate() {
     naked_asm!(
-        "mov rax, qword ptr gs:[{user_buffer_lock_gs_offset}]",
-        "mov byte ptr [rax], 0 ",
+        "mov byte ptr gs:[{user_buffer_lock_gs_offset}], 0",
         "mov al, 0",
         "ret",
         user_buffer_lock_gs_offset = const CORE_LOCAL_SAFE_BUFFER_LOCK_OFF

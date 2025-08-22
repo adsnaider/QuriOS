@@ -108,6 +108,10 @@ pub enum CapError {
     SyncRetLimit = -20,
     #[display("The VM Table level provided is not valid for this architecture")]
     InvalidVMTableLevel = -21,
+    #[display(
+        "Tried to perform an operation on a thread that is currently bound to a different core"
+    )]
+    ThreadBoundToOtherCore = -22,
 }
 
 impl CapError {

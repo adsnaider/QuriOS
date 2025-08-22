@@ -9,7 +9,7 @@ use qapi::syscall::ops::ctable::VMTableCons;
 use qapi::syscall::ops::introspect::{IntrospectResult, VMTable};
 use qapi::syscall::ops::vmtable::PaddedPageTableOffset;
 use x86_64::instructions::interrupts;
-use x86_64::registers::model_specific::GsBase;
+use x86_64::registers::model_specific::{GsBase, KernelGsBase};
 
 use crate::arch::Addrspace as _;
 
@@ -54,6 +54,7 @@ unsafe impl System for X64Sys {
     }
 
     fn set_core_data(&self, addr: VirtAddr) {
+        debug_assert!(addr.is_higher_half());
         log::info!("Setting GS Base to {addr:?}");
         GsBase::write(addr.into());
     }

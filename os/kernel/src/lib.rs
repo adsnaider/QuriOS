@@ -110,6 +110,7 @@ pub fn uinit() -> ! {
         fallocator
             .alloc_kernel_frame()
             .expect("Out of memory error during initialization"),
+        0,
     );
 
     let init = Process::<ArchSystem>::load(system(), proc, 10, initrd, &mut fallocator)
@@ -139,10 +140,13 @@ pub fn uinit() -> ! {
         .expect("Out of memory error during initialization");
     // SAFETY: The kernel frame is unused
     let thread = unsafe { KPtr::new_unchecked(thread_frame, thread) };
+    thread
+        .set_affinity()
+        .expect("Couldn't set init-thread affinity to core");
 
     CapBlock::at(
         // SAFETY: It's okay to cast a cap table to cap block.
-        unsafe { thread.active_comp().cap_table().cast_ref() },
+        unsafe { thread.active_comp().unwrap().cap_table().cast_ref() },
         SysSlot::new(0).unwrap(),
     )
     .try_set(TrieSlotPayload::Data(
@@ -151,7 +155,7 @@ pub fn uinit() -> ! {
     .expect("Unable to set boot capabilities");
     CapBlock::at(
         // SAFETY: It's okay to cast a cap table to cap block.
-        unsafe { thread.active_comp().cap_table().cast_ref() },
+        unsafe { thread.active_comp().unwrap().cap_table().cast_ref() },
         SysSlot::new(1).unwrap(),
     )
     .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::CapBlock(
@@ -161,21 +165,23 @@ pub fn uinit() -> ! {
     .expect("Unable to set boot capabilities");
     CapBlock::at(
         // SAFETY: It's okay to cast a cap table to cap block.
-        unsafe { thread.active_comp().cap_table().cast_ref() },
+        unsafe { thread.active_comp().unwrap().cap_table().cast_ref() },
         SysSlot::new(2).unwrap(),
     )
     .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::Arch(
-        <ArchSystem as System>::ArchCaps::new_addrspace(&*thread.active_comp().addrspace()),
+        <ArchSystem as System>::ArchCaps::new_addrspace(
+            &*thread.active_comp().unwrap().addrspace(),
+        ),
     )))
     .expect("Unable to set boot capabilities");
     CapBlock::at(
         // SAFETY: It's okay to cast a cap table to cap block.
-        unsafe { thread.active_comp().cap_table().cast_ref() },
+        unsafe { thread.active_comp().unwrap().cap_table().cast_ref() },
         SysSlot::new(3).unwrap(),
     )
     .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::Thread(
         KPtr::clone(&thread),
     )))
     .expect("Unable to set boot capabilities");
-    Thread::dispatch_diverging(thread)
+    Thread::dispatch(thread, None).expect("Thread affinity was set above.");
 }

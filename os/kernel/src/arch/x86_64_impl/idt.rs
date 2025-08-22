@@ -3,7 +3,7 @@ mod handlers;
 use handlers::{Isr, IsrHandler, PanicHandler};
 use qapi::caps::CapResult;
 use qapi::exception::ExceptionKind;
-use qapi::syscall::{SyscallArgs, SyscallOp};
+use qapi::syscall::SyscallArgs;
 use sync::cell::AtomicLazyCell;
 use x86_64::registers::control::Cr2;
 use x86_64::structures::idt::{InterruptDescriptorTable, PageFaultErrorCode};
