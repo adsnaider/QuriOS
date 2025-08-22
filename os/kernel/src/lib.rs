@@ -1,5 +1,7 @@
 #![no_std]
 
+pub(crate) mod never;
+
 pub mod arch;
 pub mod caps;
 pub mod kmem;
@@ -14,6 +16,8 @@ pub(crate) mod hint;
 
 mod boot;
 
+use core::sync::atomic::AtomicUsize;
+
 use arch::{ArchCaps, System};
 use boot::bump_alloc::BumpFrameAllocator;
 use boot::Process;
@@ -26,6 +30,7 @@ use limine::BaseRevision;
 use qapi::caps::SysSlot;
 use sync::cell::AtomicLazyCell;
 use sync::singleton::Singleton;
+use sync_call::SyncCall;
 use tap::TapFallible;
 use tar_no_std::TarArchiveRef;
 use thread::Thread;
@@ -116,7 +121,13 @@ pub fn uinit() -> ! {
     let cap_table = CapTable::default();
     // SAFETY: The kernel frame is unused
     let cap_table = unsafe { KPtr::new_unchecked(frame, cap_table) };
-    let resources = Resources::new(init.addrspace, cap_table.clone());
+    let resources = Resources::new(
+        init.addrspace,
+        cap_table.clone(),
+        caps::ExceptionHandler::Within {
+            entry: AtomicUsize::new(0),
+        },
+    );
     let resources_frame = fallocator
         .alloc_kernel_frame()
         .expect("Out of memory during initialization");

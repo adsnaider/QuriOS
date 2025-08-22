@@ -157,7 +157,6 @@ fn page_fault_handler(mut ctx: ExceptionCtx<Exception>) {
     match isr_stack.code_segment.rpl() {
         PrivilegeLevel::Ring0 => match addr.memory_segment() {
             MemorySegment::User => {
-                // SAFETY: NOT SAFE - TODO CoreLocal
                 if *CORE_LOCAL_SAFE_BUFFER_LOCK.get() {
                     isr_stack.instruction_pointer =
                         VirtAddrImpl::new(user_buffer_read_page_fault_call_gate as usize as u64);
@@ -172,12 +171,16 @@ fn page_fault_handler(mut ctx: ExceptionCtx<Exception>) {
                 panic!("PAGE FAULT @ {addr:#X?} - ({code:?}) {ctx:#?}");
             }
         },
-        PrivilegeLevel::Ring1 => unreachable!(),
-        PrivilegeLevel::Ring2 => unreachable!(),
-        PrivilegeLevel::Ring3 => ring3_exception_handler(
-            ExceptionKind::PageFault,
-            Some(ctx.error_code() as usize),
-            ctx.downcast(),
-        ),
+        PrivilegeLevel::Ring1 | PrivilegeLevel::Ring2 => {
+            unreachable!("Unexpected ring usage in dual mode processor use")
+        }
+        PrivilegeLevel::Ring3 => {
+            log::debug!("Ring3 Page fault handling due to access at @ {addr:#X?}");
+            ring3_exception_handler(
+                ExceptionKind::PageFault,
+                Some(ctx.error_code() as usize),
+                ctx.downcast(),
+            )
+        }
     }
 }

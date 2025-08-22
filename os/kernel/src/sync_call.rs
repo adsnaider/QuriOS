@@ -34,6 +34,11 @@ impl<S: System> SyncCall<S> {
         &self.comp
     }
 
+    pub fn into_parts(self) -> (KPtr<Resources<S>>, usize) {
+        let SyncCall { comp, entry } = self;
+        (comp, entry)
+    }
+
     pub const fn entry(&self) -> usize {
         self.entry
     }

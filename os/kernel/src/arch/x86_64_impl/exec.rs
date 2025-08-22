@@ -3,7 +3,6 @@
 
 use core::arch::naked_asm;
 use core::cell::Cell;
-use core::convert::Infallible;
 use core::fmt::{Octal, UpperHex};
 use core::marker::PhantomData;
 use core::mem::MaybeUninit;

@@ -1,5 +1,4 @@
 use core::cell::{Ref, RefCell};
-use core::convert::Infallible;
 use core::mem::MaybeUninit;
 
 use derive_where::derive_where;
@@ -14,6 +13,7 @@ use crate::arch::{ArchSystem, System};
 use crate::caps::{CapRef, CapTable, Resources};
 use crate::core_local::CORE_LOCAL_CURRENT_THREAD;
 use crate::kmem::KPtr;
+use crate::never::Never;
 use crate::sync_call::SyncCall;
 
 pub type CurrentThread = RefCell<Option<KPtr<Thread<ArchSystem>>>>;
@@ -36,6 +36,15 @@ pub struct Thread<S: System> {
 impl Thread<ArchSystem> {
     fn replace_current(new: KPtr<Self>) -> Option<KPtr<Self>> {
         CORE_LOCAL_CURRENT_THREAD.replace(Some(new))
+    }
+
+    pub fn with_current<F, T>(fun: F) -> T
+    where
+        F: FnOnce(&KPtr<Self>) -> T,
+    {
+        let current = CORE_LOCAL_CURRENT_THREAD.borrow();
+        let current = current.as_ref().unwrap();
+        fun(current)
     }
 
     pub fn get_cap(cap: CapId) -> Option<CapRef<ArchSystem>> {
@@ -62,7 +71,7 @@ impl Thread<ArchSystem> {
         exec_state.dispatch();
     }
 
-    pub fn sync_ret(args: SyncRetOp) -> Result<Infallible, CapError> {
+    pub fn sync_ret(args: SyncRetOp) -> Result<Never, CapError> {
         let exec_state = {
             let curr_ctx = CORE_LOCAL_CURRENT_THREAD.borrow();
             let mut curr_ctx = curr_ctx.as_ref().unwrap().ctx.borrow_mut();
@@ -79,14 +88,15 @@ impl Thread<ArchSystem> {
     }
 
     pub fn sync_invoke(
-        sync_call: &SyncCall<ArchSystem>,
+        sync_call: SyncCall<ArchSystem>,
         args: [MaybeUninit<usize>; SYNC_CALL_ARGS],
         ctx: <<ArchSystem as System>::ExecState as ExecState>::RegCtx,
-    ) -> Result<Infallible, CapError> {
+    ) -> Result<Never, CapError> {
         let exec_state = {
-            let xstate = <ArchSystem as System>::ExecState::new_invocation(sync_call.entry(), args);
+            let (resources, entry) = sync_call.into_parts();
+            let xstate = <ArchSystem as System>::ExecState::new_invocation(entry, args);
             let sync_ctx = ThreadCtx {
-                resources: sync_call.resources().clone(),
+                resources,
                 exec_state: xstate,
             };
 

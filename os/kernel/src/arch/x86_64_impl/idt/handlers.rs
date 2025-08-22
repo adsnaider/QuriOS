@@ -1,6 +1,5 @@
 mod asm_utils;
 use core::arch::naked_asm;
-use core::convert::Infallible;
 
 use asm_utils::{pop_preserved, pop_scratch, push_preserved, push_scratch};
 use qapi::exception::ExceptionKind;
@@ -9,7 +8,10 @@ use x86_64::structures::idt::{
     HandlerFuncWithErrCode, PageFaultHandlerFunc,
 };
 
-use crate::arch::x86_64_impl::exec::{Exception, ExceptionCtx, Interrupt};
+use crate::{
+    arch::x86_64_impl::exec::{Exception, ExceptionCtx, Interrupt},
+    never::Never,
+};
 
 pub trait IsrHandler<Kind, Ret> {
     extern "sysv64" fn call(_ctx: ExceptionCtx<Kind>) -> Ret;
@@ -84,7 +86,7 @@ impl Isr for Entry<PageFaultHandlerFunc> {
 
 impl Isr for Entry<DivergingHandlerFunc> {
     type Kind = Interrupt;
-    type Ret = Infallible;
+    type Ret = Never;
 
     fn register<H>(&mut self, _handler: H) -> &mut EntryOptions
     where
@@ -102,7 +104,7 @@ impl Isr for Entry<DivergingHandlerFunc> {
 
 impl Isr for Entry<DivergingHandlerFuncWithErrCode> {
     type Kind = Exception;
-    type Ret = Infallible;
+    type Ret = Never;
 
     fn register<H>(&mut self, _handler: H) -> &mut EntryOptions
     where
@@ -176,7 +178,7 @@ extern "C" fn save_all_with_err_code_and_ret_isr<F: IsrHandler<Exception, ()>>()
 
 // SAFETY: Not actually extern "C". This is more of a x86_interrupt abi
 #[unsafe(naked)]
-extern "C" fn save_some_and_diverge_isr<F: IsrHandler<Interrupt, Infallible>>() {
+extern "C" fn save_some_and_diverge_isr<F: IsrHandler<Interrupt, Never>>() {
     #[allow(unused_unsafe)]
     // SAFETY: Sticking with ISR calling convention. Preserved registers are pushed on
     // call to sysv64 ABI.
@@ -187,7 +189,7 @@ extern "C" fn save_some_and_diverge_isr<F: IsrHandler<Interrupt, Infallible>>() 
 
 // SAFETY: Not actually extern "C". This is more of a x86_interrupt abi
 #[unsafe(naked)]
-extern "C" fn save_some_with_err_code_and_diverge_isr<F: IsrHandler<Exception, Infallible>>() {
+extern "C" fn save_some_with_err_code_and_diverge_isr<F: IsrHandler<Exception, Never>>() {
     #[allow(unused_unsafe)]
     // SAFETY: Sticking with ISR calling convention. Preserved registers are pushed on
     // call to sysv64 ABI.

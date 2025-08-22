@@ -1,9 +1,9 @@
 pub mod trie;
 
-use core::convert::Infallible;
 use core::marker::PhantomData;
 use core::mem::MaybeUninit;
 use core::ops::Deref;
+use core::sync::atomic::{AtomicUsize, Ordering};
 
 use derive_more::Deref;
 use derive_where::derive_where;
@@ -12,6 +12,7 @@ use qapi::caps::slotid::{NUM_SLOTS, SLOT_SIZE};
 use qapi::caps::CapError;
 use qapi::syscall::ops::introspect::{self, IntrospectResult};
 use qapi::types::{UserPtr, UserPtrMut};
+use sync::cell::AtomicRefCell;
 use trie::{Trie, TrieBlock, TrieRef, TrieSetError};
 use zerocopy::{FromBytes, Immutable, KnownLayout};
 
@@ -19,6 +20,7 @@ use crate::arch::mem::phys::BadAddress;
 use crate::arch::mem::{user_buffer_copy, Addrspace, Page, VirtAddr};
 use crate::arch::{ArchCaps as _, ArchSystem, System};
 use crate::kmem::KPtr;
+use crate::never::Never;
 use crate::retyping::{AsUnusedKernelError, FrameExt};
 use crate::sync_call::{SyncCall, SyncRet};
 use crate::thread::Thread;
@@ -105,7 +107,22 @@ impl<S: System> CapBlock<S> {
 pub struct Resources<S: System> {
     addrspace: KPtr<S::PageTable>,
     capabilities: KPtr<CapTable<S>>,
-    exception_handler: Option<SyncCall<S>>,
+    exception_handler: ExceptionHandler,
+}
+
+#[derive(Debug)]
+pub enum ExceptionHandler {
+    Within { entry: AtomicUsize },
+}
+
+impl Clone for ExceptionHandler {
+    fn clone(&self) -> Self {
+        match self {
+            ExceptionHandler::Within { entry } => Self::Within {
+                entry: AtomicUsize::new(entry.load(Ordering::Relaxed)),
+            },
+        }
+    }
 }
 
 #[derive(Debug, Deref)]
@@ -116,21 +133,29 @@ pub struct RefBound<'a, T> {
 }
 
 impl<S: System> Resources<S> {
-    pub fn new(addrspace: S::Addrspace, capabilities: KPtr<CapTable<S>>) -> Self {
+    pub fn new(
+        addrspace: S::Addrspace,
+        capabilities: KPtr<CapTable<S>>,
+        exception_handler: ExceptionHandler,
+    ) -> Self {
         // SAFETY: Addrspace frame is already a kenrel frame by construction and holds a PageTable type.
         let page_table = unsafe { KPtr::from_frame_unchecked(addrspace.into_frame()) };
         Self {
             addrspace: page_table,
             capabilities,
-            exception_handler: None,
+            exception_handler,
         }
     }
 
-    pub fn from_parts(addrspace: KPtr<S::PageTable>, capabilities: KPtr<CapTable<S>>) -> Self {
+    pub fn from_parts(
+        addrspace: KPtr<S::PageTable>,
+        capabilities: KPtr<CapTable<S>>,
+        exception_handler: ExceptionHandler,
+    ) -> Self {
         Self {
             addrspace,
             capabilities,
-            exception_handler: None,
+            exception_handler,
         }
     }
 
@@ -160,13 +185,17 @@ impl<S: System> Resources<S> {
     pub fn introspect(&self) -> IntrospectResult {
         IntrospectResult::Resources
     }
+
+    pub fn exception_handler(&self) -> &ExceptionHandler {
+        &self.exception_handler
+    }
 }
 
 pub trait UnwrapInfallible<T> {
     fn unwrap_infallible(self) -> T;
 }
 
-impl<T> UnwrapInfallible<T> for Result<T, Infallible> {
+impl<T> UnwrapInfallible<T> for Result<T, Never> {
     fn unwrap_infallible(self) -> T {
         self.unwrap()
     }
