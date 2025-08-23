@@ -148,5 +148,6 @@ pub enum SyscallOp {
     VMSetAttr,
     SyncInvoke,
     SyncRet,
+    SyncRetException,
     Introspect,
 }

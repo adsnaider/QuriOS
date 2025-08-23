@@ -8,7 +8,7 @@ use qapi::caps::{CapError, CapId};
 use qapi::syscall::ops::introspect;
 use qapi::syscall::ops::sync_ipc::{SyncRetOp, SYNC_CALL_ARGS};
 
-use crate::arch::exec::ExecState;
+use crate::arch::exec::{ExecState, InvokeAbi};
 use crate::arch::mem::Addrspace;
 use crate::arch::{ArchSystem, System};
 use crate::caps::{CapRef, CapTable, Resources};
@@ -16,7 +16,7 @@ use crate::core_local::core_cell::{Affinity, BorrowError, ResetAffinityError, Se
 use crate::core_local::{CoreCell, CORE_LOCAL_CORE_ID, CORE_LOCAL_CURRENT_THREAD};
 use crate::kmem::KPtr;
 use crate::never::Never;
-use crate::sync_call::SyncCall;
+use crate::sync_call::{CallAbi, SyncCall};
 
 pub type CurrentThread = RefCell<Option<KPtr<Thread<ArchSystem>>>>;
 
@@ -129,15 +129,17 @@ impl<S: System> Thread<S> {
         Ok(Ref::map(self.ctx.try_borrow()?, |ctx| ctx.last().unwrap()))
     }
 
-    pub fn sync_invoke(
+    pub fn sync_invoke<Abi>(
         &self,
-        sync_call: SyncCall<S>,
-        args: [MaybeUninit<usize>; SYNC_CALL_ARGS],
+        sync_call: SyncCall<S, Abi>,
         ctx: <S::ExecState as ExecState>::RegCtx,
-    ) -> Result<Never, CapError> {
+    ) -> Result<Never, CapError>
+    where
+        Abi: InvokeAbi<System = S>,
+    {
         let exec_state = {
             let (resources, entry) = sync_call.into_parts();
-            let xstate = S::ExecState::new_invocation(entry, args);
+            let xstate = Abi::new_invocation(entry, &ctx);
             let sync_ctx = ThreadCtx {
                 resources,
                 exec_state: xstate,

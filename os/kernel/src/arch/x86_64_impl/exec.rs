@@ -17,8 +17,10 @@ use x86_64::structures::idt::{
     HandlerFuncWithErrCode, InterruptStackFrame, InterruptStackFrameValue, PageFaultHandlerFunc,
 };
 
-use super::gdt;
-use crate::arch::exec::ExecState;
+use super::{gdt, X64Sys};
+use crate::arch::exec::{ExecState, InvokeAbi};
+use crate::arch::System;
+use crate::sync_call::{CallAbi, ExceptionAbi};
 
 pub struct Exception;
 pub struct Interrupt;
@@ -31,7 +33,8 @@ pub struct ExceptionCtx<Kind> {
 impl<Kind> Copy for ExceptionCtx<Kind> {}
 impl<Kind> Clone for ExceptionCtx<Kind> {
     fn clone(&self) -> Self {
-        *self
+        let exception_ctx = *self;
+        exception_ctx
     }
 }
 impl<Kind> core::fmt::Debug for ExceptionCtx<Kind> {
@@ -172,25 +175,6 @@ impl ExecState for ExecCtx {
         }
     }
 
-    fn new_invocation(entry: usize, args: [MaybeUninit<usize>; 4]) -> Self {
-        let mut regs = Regs::default();
-        regs.control.rip = entry as u64;
-        regs.control.rsp = 0;
-        // SAFETY: We can assume these are either initialized by userspace or not but that should
-        // be okay for kernel code.
-        unsafe {
-            regs.scratch.rdi = args[0].assume_init() as u64;
-            regs.scratch.rsi = args[1].assume_init() as u64;
-            regs.scratch.rdx = args[2].assume_init() as u64;
-            regs.scratch.rcx = args[3].assume_init() as u64;
-        }
-        // TODO: Maybe don't give access to all hardware here but it's good for debugging.
-        regs.control.rflags =
-            (RFlags::INTERRUPT_FLAG | RFlags::IOPL_HIGH | RFlags::IOPL_LOW).bits();
-        Self {
-            regs: Cell::new(regs),
-        }
-    }
     fn update_sync_ret(&self, resp: PositiveIsize) {
         self.regs.update(|mut regs| {
             regs.scratch.rax = usize::from(resp) as u64;
@@ -294,4 +278,39 @@ pub struct Regs {
     pub scratch: ScratchRegs,
     pub preserved: PreservedRegs,
     pub control: ControlRegs,
+}
+
+impl InvokeAbi for CallAbi {
+    type System = X64Sys;
+
+    fn new_invocation(
+        entry: usize,
+        ctx: &<<Self::System as System>::ExecState as ExecState>::RegCtx,
+    ) -> <Self::System as System>::ExecState {
+        let mut regs = Regs::default();
+        regs.control.rip = entry as u64;
+        regs.control.rsp = 0;
+        // NOTE: RDI and RSI contain the SyncCallOp and SyncCall cap respectively.
+        regs.scratch.rdi = ctx.scratch_regs().rdx;
+        regs.scratch.rsi = ctx.scratch_regs().rcx;
+        regs.scratch.rdx = ctx.scratch_regs().r8;
+        regs.scratch.rcx = ctx.scratch_regs().r9;
+        // TODO: Maybe don't give access to all hardware here but it's good for debugging.
+        regs.control.rflags =
+            (RFlags::INTERRUPT_FLAG | RFlags::IOPL_HIGH | RFlags::IOPL_LOW).bits();
+        ExecCtx {
+            regs: Cell::new(regs),
+        }
+    }
+}
+
+impl InvokeAbi for ExceptionAbi {
+    type System = X64Sys;
+
+    fn new_invocation(
+        entry: usize,
+        ctx: &<<Self::System as System>::ExecState as ExecState>::RegCtx,
+    ) -> <Self::System as System>::ExecState {
+        todo!();
+    }
 }

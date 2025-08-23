@@ -5,6 +5,7 @@ use qapi::{
 
 use crate::{
     arch::{exec::ExecState, ArchSystem, System},
+    sync_call::CallAbi,
     thread::Thread,
 };
 
@@ -19,7 +20,7 @@ pub fn sync_invoke(
         .ok_or(CapError::CapNotFound)?;
     let sync_call = cap.as_synccall()?;
     Thread::with_current(move |thread| {
-        thread.sync_invoke(sync_call.clone(), opts.args, ctx)?;
+        thread.sync_invoke::<CallAbi>(sync_call.clone(), ctx)?;
     })
 }
 

@@ -1,6 +1,4 @@
-use core::convert::Infallible;
 use core::mem::MaybeUninit;
-use core::sync::atomic::Ordering;
 
 use ctable::{cap_table_cons, cap_table_copy, cap_table_drop, cap_table_link};
 use introspect::introspect;
@@ -21,7 +19,7 @@ use vmtable::{vm_link, vm_set_attr, vm_unlink};
 use crate::arch::exec::ExecState;
 use crate::arch::{ArchSystem, System};
 use crate::caps::ExceptionHandler;
-use crate::sync_call::SyncCall;
+use crate::sync_call::{ExceptionAbi, SyncCall};
 use crate::thread::Thread;
 
 mod ctable;
@@ -66,24 +64,13 @@ pub fn ring3_exception_handler(
 ) -> ! {
     let exception_handler =
         Thread::with_current(|thread| thread.active_comp().unwrap().exception_handler().clone());
-    let sync_call = match exception_handler {
+    let sync_call: SyncCall<ArchSystem, ExceptionAbi> = match exception_handler {
         ExceptionHandler::Within { entry } => {
             let resources = Thread::with_current(|thread| thread.active_comp().unwrap().clone());
             SyncCall::new(resources, entry)
         }
     };
+    todo!();
     // TODO: If this fails, notifiy a scheduler thread instead...
-    Thread::with_current(move |thread| {
-        thread.sync_invoke(
-            sync_call,
-            [
-                MaybeUninit::new(kind as usize),
-                MaybeUninit::new(code.unwrap_or(0)),
-                MaybeUninit::uninit(),
-                MaybeUninit::uninit(),
-            ],
-            ctx,
-        )
-    })
-    .unwrap();
+    Thread::with_current(move |thread| thread.sync_invoke(sync_call, ctx)).unwrap();
 }
