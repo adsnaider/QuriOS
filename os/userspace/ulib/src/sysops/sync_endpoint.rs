@@ -3,14 +3,17 @@ pub use paste::paste;
 
 #[macro_export]
 macro_rules! make_sync_call {
-    ($name:ident, $fun:path, $stacks:path) => {
+    ($name:ident, $fun:path, $stacks:path $(,$attrs:meta)* $(,)?) => {
         $crate::sysops::sync_endpoint::paste! {
             extern "C" fn [<__ $name _inner>](a: usize, b: usize, c: usize, d: usize) -> qapi::caps::PositiveIsize
             {
                 $fun(a, b, c, d)
             }
             #[unsafe(naked)]
-            extern "C" fn $name(a: usize, b: usize, c: usize, d: usize) -> qapi::caps::PositiveIsize
+            $(
+                #[$attrs]
+            )*
+            pub extern "C" fn $name(a: usize, b: usize, c: usize, d: usize) -> qapi::caps::PositiveIsize
             {
 
                 use stack_list::{stack_list_pop, stack_list_push};
@@ -56,6 +59,9 @@ macro_rules! make_sync_call {
                     )
                 }
             }
+
+            #[used]
+            static [<HANDLER_ $name:upper _IS_USED>]: extern "C" fn(usize, usize, usize, usize)  -> ::qapi::caps::PositiveIsize = $name;
         }
     }
 }

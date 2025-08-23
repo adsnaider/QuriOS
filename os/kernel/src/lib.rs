@@ -55,6 +55,8 @@ static PMO: AtomicLazyCell<Pmo> = AtomicLazyCell::new(|| {
 });
 static MODULES_REQUEST: ModuleRequest = ModuleRequest::new();
 
+const BOOTER_EXCEPTION_HANDLER_ADDR: usize = 0x1000;
+
 pub fn kinit() {
     serial::init();
     assert!(BASE_REVISION.is_supported());
@@ -125,7 +127,9 @@ pub fn uinit() -> ! {
     let resources = Resources::new(
         init.addrspace,
         cap_table.clone(),
-        caps::ExceptionHandler::Within { entry: 0 },
+        caps::ExceptionHandler::Within {
+            entry: BOOTER_EXCEPTION_HANDLER_ADDR,
+        },
     );
     let resources_frame = fallocator
         .alloc_kernel_frame()

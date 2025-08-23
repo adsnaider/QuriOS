@@ -47,9 +47,9 @@ setup:
 init: setup
 	#!/usr/bin/env bash
 	set -euo pipefail
-	export RUSTFLAGS="-Clink-arg=-no-pie -Crelocation-model=static"
-	BIN=`cargo build -p init --profile {{profile}} --target {{target}} --message-format=json | {{extractor}}`
-	cp "$BIN" "{{build_dir}}/init"
+	# export RUSTFLAGS="-Clink-arg=-Tos/userspace/linker.ld -Crelocation-model=static"
+	LIB=`cargo build -p init --profile {{profile}} --target {{target}} --message-format=json | {{extractor}}`
+	ld.lld -m "elf_{{arch}}" -T os/userspace/linker.ld -o "{{build_dir}}/init" "$LIB"
 
 initrd: init
 	cd {{build_dir}} && tar -H ustar -cf initrd.tar init
