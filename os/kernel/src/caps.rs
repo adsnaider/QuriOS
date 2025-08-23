@@ -109,19 +109,9 @@ pub struct Resources<S: System> {
     exception_handler: ExceptionHandler,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ExceptionHandler {
-    Within { entry: AtomicUsize },
-}
-
-impl Clone for ExceptionHandler {
-    fn clone(&self) -> Self {
-        match self {
-            ExceptionHandler::Within { entry } => Self::Within {
-                entry: AtomicUsize::new(entry.load(Ordering::Relaxed)),
-            },
-        }
-    }
+    Within { entry: usize },
 }
 
 #[derive(Debug, Deref)]

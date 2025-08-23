@@ -69,7 +69,7 @@ pub fn ring3_exception_handler(
     let sync_call = match exception_handler {
         ExceptionHandler::Within { entry } => {
             let resources = Thread::with_current(|thread| thread.active_comp().unwrap().clone());
-            SyncCall::new(resources, entry.load(Ordering::Relaxed))
+            SyncCall::new(resources, entry)
         }
     };
     // TODO: If this fails, notifiy a scheduler thread instead...

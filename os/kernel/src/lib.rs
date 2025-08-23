@@ -125,9 +125,7 @@ pub fn uinit() -> ! {
     let resources = Resources::new(
         init.addrspace,
         cap_table.clone(),
-        caps::ExceptionHandler::Within {
-            entry: AtomicUsize::new(0),
-        },
+        caps::ExceptionHandler::Within { entry: 0 },
     );
     let resources_frame = fallocator
         .alloc_kernel_frame()
