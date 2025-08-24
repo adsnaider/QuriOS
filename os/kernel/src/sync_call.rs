@@ -1,20 +1,18 @@
-use core::marker::PhantomData;
-
 use derive_where::derive_where;
 use qapi::syscall::ops::introspect::IntrospectResult;
 
-use crate::arch::System;
+use crate::arch::{InvokeAbi, System};
 use crate::caps::Resources;
 use crate::kmem::KPtr;
 
+#[derive(Debug, Default, Copy, Clone)]
 pub struct CallAbi;
-pub struct ExceptionAbi;
 
-#[derive_where(Debug, Clone)]
+#[derive_where(Debug, Clone; Abi)]
 pub struct SyncCall<S: System, Abi = CallAbi> {
     comp: KPtr<Resources<S>>,
     entry: usize,
-    _abi: PhantomData<Abi>,
+    abi: Abi,
 }
 
 #[derive(Debug, Clone)]
@@ -27,12 +25,8 @@ impl SyncRet {
 }
 
 impl<S: System, Abi> SyncCall<S, Abi> {
-    pub const fn new(comp: KPtr<Resources<S>>, entry: usize) -> Self {
-        Self {
-            comp,
-            entry,
-            _abi: PhantomData,
-        }
+    pub const fn new(comp: KPtr<Resources<S>>, entry: usize, abi: Abi) -> Self {
+        Self { comp, entry, abi }
     }
 
     pub fn introspect(&self) -> IntrospectResult {
@@ -43,9 +37,13 @@ impl<S: System, Abi> SyncCall<S, Abi> {
         &self.comp
     }
 
-    pub fn into_parts(self) -> (KPtr<Resources<S>>, usize) {
-        let SyncCall { comp, entry, _abi } = self;
-        (comp, entry)
+    pub fn create_invocation(self, ctx: &S::IrqCtx) -> (KPtr<Resources<S>>, S::ExecState)
+    where
+        Abi: InvokeAbi<S>,
+    {
+        let Self { comp, entry, abi } = self;
+        let xstate = abi.new_invocation(entry, ctx);
+        (comp, xstate)
     }
 
     pub const fn entry(&self) -> usize {

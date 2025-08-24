@@ -1,7 +1,7 @@
 use core::arch::asm;
 use core::borrow::Borrow;
 
-use exec::ExecCtx;
+use exec::{ExceptionAbi, ExecCtx, IrqCtx};
 use mem_impl::page_table::{AnyPageTable, PageTableOffset, X64Addrspace};
 use qapi::caps::{CapError, PositiveIsize};
 use qapi::mem::vmtable::VMTableEntry;
@@ -9,11 +9,12 @@ use qapi::syscall::ops::ctable::VMTableCons;
 use qapi::syscall::ops::introspect::{IntrospectResult, VMTable};
 use qapi::syscall::ops::vmtable::PaddedPageTableOffset;
 use x86_64::instructions::interrupts;
-use x86_64::registers::model_specific::{GsBase, KernelGsBase};
+use x86_64::registers::model_specific::GsBase;
+use x86_64::structures::idt::InterruptStackFrameValue;
 
 use crate::arch::Addrspace as _;
 
-mod exec;
+pub mod exec;
 mod gdt;
 mod idt;
 mod mem_impl;
@@ -35,6 +36,8 @@ unsafe impl System for X64Sys {
     type ExecState = ExecCtx;
     type PageTable = AnyPageTable;
     type ArchCaps = ArchCaps;
+    type IrqCtx = IrqCtx;
+    type ExceptionAbi = ExceptionAbi;
 
     fn addrspace(&self) -> Self::Addrspace {
         // SAFETY: PMO is correct from initialization

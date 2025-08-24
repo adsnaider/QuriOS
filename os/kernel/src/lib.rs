@@ -185,5 +185,5 @@ pub fn uinit() -> ! {
         KPtr::clone(&thread),
     )))
     .expect("Unable to set boot capabilities");
-    Thread::dispatch(thread, None).expect("Thread affinity was set above.");
+    Thread::initial_dispatch(thread).expect("Thread affinity was set above.");
 }

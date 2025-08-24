@@ -1,9 +1,6 @@
-use core::mem::MaybeUninit;
-
 use ctable::{cap_table_cons, cap_table_copy, cap_table_drop, cap_table_link};
 use introspect::introspect;
 use qapi::caps::{CapError, PositiveIsize};
-use qapi::exception::ExceptionKind;
 use qapi::syscall::ops::ctable::{ConsOp, CopyOp, DropOp, LinkOp};
 use qapi::syscall::ops::introspect::IntrospectOp;
 use qapi::syscall::ops::retype::RetypeOp;
@@ -16,10 +13,9 @@ use sync_ipc::{sync_invoke, sync_ret};
 use thread::dispatch;
 use vmtable::{vm_link, vm_set_attr, vm_unlink};
 
-use crate::arch::exec::ExecState;
 use crate::arch::{ArchSystem, System};
 use crate::caps::ExceptionHandler;
-use crate::sync_call::{ExceptionAbi, SyncCall};
+use crate::sync_call::SyncCall;
 use crate::thread::Thread;
 
 mod ctable;
@@ -33,7 +29,7 @@ pub type SyscallResp = Result<PositiveIsize, CapError>;
 
 pub fn syscall_handler(
     args: SyscallArgs<SyscallArgsInit>,
-    ctx: <<ArchSystem as System>::ExecState as ExecState>::RegCtx,
+    ctx: <ArchSystem as System>::IrqCtx,
 ) -> SyscallResp {
     // SAFETY: We are allowed to get a mutable reference at the start of the syscall. It will get dropped
     log::trace!("Syscall ctx: {ctx:#?}");
@@ -58,19 +54,17 @@ pub fn syscall_handler(
 }
 
 pub fn ring3_exception_handler(
-    kind: ExceptionKind,
-    code: Option<usize>,
-    ctx: <<ArchSystem as System>::ExecState as ExecState>::RegCtx,
+    exception: <ArchSystem as System>::ExceptionAbi,
+    ctx: <ArchSystem as System>::IrqCtx,
 ) -> ! {
     let exception_handler =
         Thread::with_current(|thread| thread.active_comp().unwrap().exception_handler().clone());
-    let sync_call: SyncCall<ArchSystem, ExceptionAbi> = match exception_handler {
+    let sync_call: SyncCall<ArchSystem, _> = match exception_handler {
         ExceptionHandler::Within { entry } => {
             let resources = Thread::with_current(|thread| thread.active_comp().unwrap().clone());
-            SyncCall::new(resources, entry)
+            SyncCall::new(resources, entry, exception)
         }
     };
-    todo!();
     // TODO: If this fails, notifiy a scheduler thread instead...
     Thread::with_current(move |thread| thread.sync_invoke(sync_call, ctx)).unwrap();
 }

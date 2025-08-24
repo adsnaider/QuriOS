@@ -12,11 +12,11 @@ use qapi::init::{BootArgs, EntryFn, RetypeEntry};
 use qapi::types::CSlice;
 use zerocopy::IntoBytes as _;
 
-use crate::arch::exec::ExecState;
 use crate::arch::mem::{
     Addrspace, Frame, FrameAllocError, MapPageError, Page, PageFlags, VirtAddr,
     UNTYPED_MEMORY_OFFSET,
 };
+use crate::arch::ExecState;
 use crate::arch::System;
 use crate::pmo::PhysAddrExt as _;
 use crate::retyping::{FrameExt, RetypeTable};

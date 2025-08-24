@@ -9,9 +9,9 @@ use x86_64::registers::control::Cr2;
 use x86_64::structures::idt::{InterruptDescriptorTable, PageFaultErrorCode};
 use x86_64::{PrivilegeLevel, VirtAddr as VirtAddrImpl};
 
-use super::exec::Interrupt;
+use super::exec::{ExceptionAbi, Interrupt};
 use crate::arch::mem::{user_buffer_read_page_fault_call_gate, MemorySegment, VirtAddr};
-use crate::arch::x86_64_impl::exec::{Exception, ExceptionCtx};
+use crate::arch::x86_64_impl::exec::{Exception, ExceptionCtx, IrqCtx};
 use crate::arch::x86_64_impl::gdt;
 use crate::core_local::CORE_LOCAL_SAFE_BUFFER_LOCK;
 use crate::syscall::{ring3_exception_handler, syscall_handler};
@@ -32,9 +32,10 @@ impl<const ID: usize> IsrHandler<Interrupt, ()> for ForwardRing3Exceptions<ID> {
             PrivilegeLevel::Ring1 | PrivilegeLevel::Ring2 => {
                 unreachable!("Unexpected ring usage in dual mode processor use")
             }
-            PrivilegeLevel::Ring3 => {
-                ring3_exception_handler(ExceptionKind::try_from(ID).unwrap(), None, ctx)
-            }
+            PrivilegeLevel::Ring3 => ring3_exception_handler(
+                ExceptionAbi::new(ExceptionKind::try_from(ID).unwrap(), None),
+                IrqCtx::Interrupt(ctx),
+            ),
         }
     }
 }
@@ -46,9 +47,8 @@ impl<const ID: usize> IsrHandler<Exception, ()> for ForwardRing3Exceptions<ID> {
                 unreachable!("Unexpected ring usage in dual mode processor use")
             }
             PrivilegeLevel::Ring3 => ring3_exception_handler(
-                ExceptionKind::try_from(ID).unwrap(),
-                Some(ctx.error_code() as usize),
-                ctx.downcast(),
+                ExceptionAbi::new(ExceptionKind::try_from(ID).unwrap(), Some(ctx.error_code())),
+                IrqCtx::Exception(ctx),
             ),
         }
     }
@@ -73,7 +73,7 @@ impl IsrHandler<Interrupt, ()> for SyscallHandler {
                         regs.r9 as usize,
                     ],
                 );
-                let res = syscall_handler(args, ctx);
+                let res = syscall_handler(args, IrqCtx::Interrupt(ctx));
                 log::info!("Syscall response: {res:?}");
                 // SAFETY: Done handling syscall so we have exclusive asccess to the interrupt stack frame
                 unsafe { ctx.scratch_regs_mut().rax = res.into_isize() as u64 };
@@ -177,9 +177,8 @@ fn page_fault_handler(mut ctx: ExceptionCtx<Exception>) {
         PrivilegeLevel::Ring3 => {
             log::debug!("Ring3 Page fault handling due to access at @ {addr:#X?}");
             ring3_exception_handler(
-                ExceptionKind::PageFault,
-                Some(ctx.error_code() as usize),
-                ctx.downcast(),
+                ExceptionAbi::new(ExceptionKind::PageFault, Some(ctx.error_code())),
+                IrqCtx::Exception(ctx),
             )
         }
     }

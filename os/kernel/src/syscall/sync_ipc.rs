@@ -4,17 +4,14 @@ use qapi::{
 };
 
 use crate::{
-    arch::{exec::ExecState, ArchSystem, System},
+    arch::{ArchSystem, System},
     sync_call::CallAbi,
     thread::Thread,
 };
 
 use super::SyscallResp;
 
-pub fn sync_invoke(
-    opts: SyncInvokeOp,
-    ctx: <<ArchSystem as System>::ExecState as ExecState>::RegCtx,
-) -> SyscallResp {
+pub fn sync_invoke(opts: SyncInvokeOp, ctx: <ArchSystem as System>::IrqCtx) -> SyscallResp {
     let cap = Thread::with_current(|thread| thread.get_cap(opts.cap.cap()))
         .unwrap()
         .ok_or(CapError::CapNotFound)?;

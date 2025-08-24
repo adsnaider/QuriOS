@@ -1,10 +1,15 @@
+#[cfg(target_arch = "x86_64")]
+mod x86_64_impl;
+
+pub mod mem;
+
 use core::borrow::Borrow;
 use core::fmt::Debug;
 
-use exec::ExecState;
 use mem::{Addrspace, PageFlags, VirtAddr};
 use qapi::{
-    caps::CapError,
+    caps::{CapError, PositiveIsize},
+    init::{BootArgs, EntryFn},
     syscall::ops::{
         ctable::VMTableCons, introspect::IntrospectResult, vmtable::PaddedPageTableOffset,
     },
@@ -12,12 +17,6 @@ use qapi::{
 use sync::cell::AtomicOnceCell;
 
 use crate::{kmem::KPtr, syscall::SyscallResp};
-
-#[cfg(target_arch = "x86_64")]
-mod x86_64_impl;
-
-pub mod exec;
-pub mod mem;
 
 cfg_if::cfg_if! {
     if #[cfg(target_arch = "x86_64")] {
@@ -52,8 +51,10 @@ pub fn init() {
 pub unsafe trait System: Sized {
     type Addrspace: Addrspace + Debug;
     type PageTable: Debug + Default;
-    type ExecState: ExecState + Clone;
+    type ExecState: ExecState<Sys = Self> + Clone;
     type ArchCaps: Debug + Clone + ArchCaps<Self>;
+    type ExceptionAbi: Debug + Clone + InvokeAbi<Self>;
+    type IrqCtx: Debug;
 
     /// Initializes the architecture-specific subsystem
     fn init() -> Self;
@@ -90,4 +91,18 @@ pub trait ArchCaps<S: System>: Sized {
     ) -> SyscallResp;
 
     fn introspect(&self) -> IntrospectResult;
+}
+
+pub trait ExecState: Debug {
+    type Sys: System;
+
+    fn new_thread(entry: usize, stack_top: usize, arg0: usize) -> Self;
+    fn for_init_comp(entry_fun: EntryFn, stack_top: *const (), arg0: *const BootArgs) -> Self;
+    fn save(&self, ctx: &<Self::Sys as System>::IrqCtx);
+    fn dispatch(&self) -> !;
+    fn update_sync_ret(&self, resp: PositiveIsize);
+}
+
+pub trait InvokeAbi<Sys: System> {
+    fn new_invocation(self, entry: usize, ctx: &Sys::IrqCtx) -> Sys::ExecState;
 }

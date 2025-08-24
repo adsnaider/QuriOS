@@ -4,8 +4,8 @@ use qapi::syscall::ops::ctable::{
 };
 
 use super::SyscallResp;
-use crate::arch::exec::ExecState;
 use crate::arch::ArchCaps as _;
+use crate::arch::ExecState;
 use crate::arch::{ArchSystem, System};
 use crate::caps::trie::TrieSlotPayload;
 use crate::caps::{CapBlock, Capability, UserPtrTExt};
@@ -73,7 +73,7 @@ pub fn cap_table_cons(opts: ConsOp) -> SyscallResp {
             // SAFETY: Casting a ctable to resources is fine.
             let resources = resources.as_resources()?;
             CapBlock::at(ctable, opts.slot_id).try_set(TrieSlotPayload::Data(
-                Capability::SyncCall(SyncCall::new(resources.clone(), entry)),
+                Capability::SyncCall(SyncCall::new(resources.clone(), entry, Default::default())),
             ))?;
             Ok(PositiveIsize::zero())
         }

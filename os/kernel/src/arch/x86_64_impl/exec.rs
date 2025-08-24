@@ -9,6 +9,7 @@ use core::mem::MaybeUninit;
 
 use derive_more::Debug;
 use qapi::caps::PositiveIsize;
+use qapi::exception::ExceptionKind;
 use qapi::init::{BootArgs, EntryFn};
 use sealed::sealed;
 use x86_64::registers::rflags::RFlags;
@@ -18,12 +19,18 @@ use x86_64::structures::idt::{
 };
 
 use super::{gdt, X64Sys};
-use crate::arch::exec::{ExecState, InvokeAbi};
 use crate::arch::System;
-use crate::sync_call::{CallAbi, ExceptionAbi};
+use crate::arch::{ExecState, InvokeAbi};
+use crate::sync_call::CallAbi;
 
 pub struct Exception;
 pub struct Interrupt;
+
+#[derive(Debug)]
+pub enum IrqCtx {
+    Exception(ExceptionCtx<Exception>),
+    Interrupt(ExceptionCtx<Interrupt>),
+}
 
 #[repr(transparent)]
 pub struct ExceptionCtx<Kind> {
@@ -92,13 +99,14 @@ impl<Kind> ExceptionCtx<Kind> {
         unsafe { &*scratch }
     }
 
+    #[allow(clippy::mut_from_ref)]
     pub unsafe fn scratch_regs_mut(&self) -> &mut ScratchRegs {
         let scratch = (self.stack_top as usize - size_of::<ScratchRegs>()) as *mut ScratchRegs;
         // SAFETY: Scratch registers are pushed first before, so should be here.
         unsafe { &mut *scratch }
     }
 
-    pub fn current_control(&self) -> ControlRegs {
+    pub fn ctrl_regs(&self) -> ControlRegs {
         let isr = self.interrupt_stack_frame();
         ControlRegs {
             rflags: isr.cpu_flags.bits(),
@@ -113,17 +121,18 @@ impl ExceptionCtx<Exception> {
         // SAFETY: Stack must contain error code below the interrupt stack frame
         unsafe { core::ptr::read((self.stack_top - 8) as *const u64) }
     }
-
-    pub fn downcast(self) -> ExceptionCtx<Interrupt> {
-        // SAFETY: The Interrupt exception context is just this without the `error_code` method.
-        unsafe { core::mem::transmute(self) }
-    }
 }
 
-trait RegCtx {
-    fn preserved_regs(&self) -> PreservedRegs;
-    fn scratch_regs(&self) -> ScratchRegs;
-    fn current_control(&self) -> ControlRegs;
+#[derive(Debug, Copy, Clone)]
+pub struct ExceptionAbi {
+    which: ExceptionKind,
+    code: Option<u64>,
+}
+
+impl ExceptionAbi {
+    pub const fn new(which: ExceptionKind, code: Option<u64>) -> Self {
+        Self { which, code }
+    }
 }
 
 /// Execution context that can be dispatched.
@@ -133,15 +142,79 @@ pub struct ExecCtx {
     regs: Cell<Regs>,
 }
 
-impl ExecState for ExecCtx {
-    type RegCtx = ExceptionCtx<Interrupt>;
+impl IrqCtx {
+    /// Returns the interrupt stack frame for this ISR
+    pub fn interrupt_stack_frame(&self) -> &InterruptStackFrameValue {
+        match self {
+            IrqCtx::Exception(ctx) => ctx.interrupt_stack_frame(),
+            IrqCtx::Interrupt(ctx) => ctx.interrupt_stack_frame(),
+        }
+    }
 
-    fn save(&self, ctx: &Self::RegCtx) {
-        let regs = Regs {
-            scratch: *ctx.scratch_regs(),
-            preserved: *ctx.preserved_regs(),
-            control: ctx.current_control(),
-        };
+    /// Returns the interrupt stack frame for this ISR
+    ///
+    /// # Safety
+    ///
+    /// Modifying the interrupt stack frame may result in undefined behavior in numerous ways
+    pub unsafe fn interrupt_stack_frame_mut(&mut self) -> &mut InterruptStackFrameValue {
+        match self {
+            IrqCtx::Exception(ctx) => ctx.interrupt_stack_frame_mut(),
+            IrqCtx::Interrupt(ctx) => ctx.interrupt_stack_frame_mut(),
+        }
+    }
+
+    pub fn preserved_regs(&self) -> &PreservedRegs {
+        match self {
+            IrqCtx::Exception(ctx) => ctx.preserved_regs(),
+            IrqCtx::Interrupt(ctx) => ctx.preserved_regs(),
+        }
+    }
+
+    pub fn scratch_regs(&self) -> &ScratchRegs {
+        match self {
+            IrqCtx::Exception(ctx) => ctx.scratch_regs(),
+            IrqCtx::Interrupt(ctx) => ctx.scratch_regs(),
+        }
+    }
+
+    pub unsafe fn scratch_regs_mut(&self) -> &mut ScratchRegs {
+        match self {
+            IrqCtx::Exception(ctx) => ctx.scratch_regs_mut(),
+            IrqCtx::Interrupt(ctx) => ctx.scratch_regs_mut(),
+        }
+    }
+
+    pub fn ctrl_regs(&self) -> ControlRegs {
+        match self {
+            IrqCtx::Exception(ctx) => ctx.ctrl_regs(),
+            IrqCtx::Interrupt(ctx) => ctx.ctrl_regs(),
+        }
+    }
+
+    pub fn regs(&self) -> Regs {
+        let preserved = self.preserved_regs();
+        let scratch = self.scratch_regs();
+        let control = self.ctrl_regs();
+        Regs {
+            scratch: *scratch,
+            preserved: *preserved,
+            control,
+        }
+    }
+
+    pub fn error_code(&self) -> Option<u64> {
+        match self {
+            IrqCtx::Exception(ctx) => Some(ctx.error_code()),
+            IrqCtx::Interrupt(ctx) => None,
+        }
+    }
+}
+
+impl ExecState for ExecCtx {
+    type Sys = X64Sys;
+
+    fn save(&self, ctx: &IrqCtx) {
+        let regs = ctx.regs();
         self.regs.set(regs);
     }
 
@@ -280,21 +353,17 @@ pub struct Regs {
     pub control: ControlRegs,
 }
 
-impl InvokeAbi for CallAbi {
-    type System = X64Sys;
-
-    fn new_invocation(
-        entry: usize,
-        ctx: &<<Self::System as System>::ExecState as ExecState>::RegCtx,
-    ) -> <Self::System as System>::ExecState {
+impl InvokeAbi<X64Sys> for CallAbi {
+    fn new_invocation(self, entry: usize, ctx: &IrqCtx) -> <X64Sys as System>::ExecState {
+        let curr_regs = ctx.regs();
         let mut regs = Regs::default();
         regs.control.rip = entry as u64;
         regs.control.rsp = 0;
         // NOTE: RDI and RSI contain the SyncCallOp and SyncCall cap respectively.
-        regs.scratch.rdi = ctx.scratch_regs().rdx;
-        regs.scratch.rsi = ctx.scratch_regs().rcx;
-        regs.scratch.rdx = ctx.scratch_regs().r8;
-        regs.scratch.rcx = ctx.scratch_regs().r9;
+        regs.scratch.rdi = curr_regs.scratch.rdx;
+        regs.scratch.rsi = curr_regs.scratch.rcx;
+        regs.scratch.rdx = curr_regs.scratch.r8;
+        regs.scratch.rcx = curr_regs.scratch.r9;
         // TODO: Maybe don't give access to all hardware here but it's good for debugging.
         regs.control.rflags =
             (RFlags::INTERRUPT_FLAG | RFlags::IOPL_HIGH | RFlags::IOPL_LOW).bits();
@@ -304,13 +373,17 @@ impl InvokeAbi for CallAbi {
     }
 }
 
-impl InvokeAbi for ExceptionAbi {
-    type System = X64Sys;
-
-    fn new_invocation(
-        entry: usize,
-        ctx: &<<Self::System as System>::ExecState as ExecState>::RegCtx,
-    ) -> <Self::System as System>::ExecState {
-        todo!();
+impl InvokeAbi<X64Sys> for ExceptionAbi {
+    fn new_invocation(self, entry: usize, ctx: &IrqCtx) -> <X64Sys as System>::ExecState {
+        let mut regs = Regs::default();
+        regs.control.rip = entry as u64;
+        regs.control.rsp = 0;
+        regs.scratch.rdi = self.which as u64;
+        regs.scratch.rsi = self.code.unwrap_or(u64::MAX);
+        regs.control.rflags =
+            (RFlags::INTERRUPT_FLAG | RFlags::IOPL_HIGH | RFlags::IOPL_LOW).bits();
+        ExecCtx {
+            regs: Cell::new(regs),
+        }
     }
 }

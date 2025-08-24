@@ -8,9 +8,9 @@ use qapi::caps::{CapError, CapId};
 use qapi::syscall::ops::introspect;
 use qapi::syscall::ops::sync_ipc::{SyncRetOp, SYNC_CALL_ARGS};
 
-use crate::arch::exec::{ExecState, InvokeAbi};
 use crate::arch::mem::Addrspace;
 use crate::arch::{ArchSystem, System};
+use crate::arch::{ExecState, InvokeAbi};
 use crate::caps::{CapRef, CapTable, Resources};
 use crate::core_local::core_cell::{Affinity, BorrowError, ResetAffinityError, SetAffinityError};
 use crate::core_local::{CoreCell, CORE_LOCAL_CORE_ID, CORE_LOCAL_CURRENT_THREAD};
@@ -50,9 +50,26 @@ impl Thread<ArchSystem> {
         fun(current)
     }
 
+    pub fn initial_dispatch(this: KPtr<Self>) -> Result<Never, SetAffinityError> {
+        let exec_state = {
+            match this.ctx.set_affinity() {
+                Ok(()) => {}
+                Err(SetAffinityError::BoundToSelf) => {}
+                Err(e) => return Err(e),
+            }
+            this.active_comp().unwrap().addrspace().activate();
+            // TODO: Remove lint allow once type alias impl trait works and ArchSystem uses it.
+            #[allow(clippy::clone_on_copy)]
+            let exec_state = this.active_ctx().unwrap().exec_state.clone();
+            assert!(Self::replace_current(this).is_none());
+            log::info!("Set the active thread");
+            exec_state
+        };
+        exec_state.dispatch();
+    }
     pub fn dispatch(
         this: KPtr<Self>,
-        ctx: Option<<<ArchSystem as System>::ExecState as ExecState>::RegCtx>,
+        ctx: <ArchSystem as System>::IrqCtx,
     ) -> Result<Never, SetAffinityError> {
         // Our kernel is non-preemptive which makes every other case really
         // simple as it's a completely synchronous call-response. However, thread
@@ -84,9 +101,7 @@ impl Thread<ArchSystem> {
             {
                 let previous = Self::replace_current(this);
                 if let Some(previous) = &previous {
-                    if let Some(ctx) = ctx {
-                        previous.active_ctx().unwrap().exec_state.save(&ctx);
-                    }
+                    previous.active_ctx().unwrap().exec_state.save(&ctx);
                     previous.unset_affinity().expect(
                         "Previous thread did not have it's affinity properly set to the local core",
                     );
@@ -132,14 +147,13 @@ impl<S: System> Thread<S> {
     pub fn sync_invoke<Abi>(
         &self,
         sync_call: SyncCall<S, Abi>,
-        ctx: <S::ExecState as ExecState>::RegCtx,
+        ctx: S::IrqCtx,
     ) -> Result<Never, CapError>
     where
-        Abi: InvokeAbi<System = S>,
+        Abi: InvokeAbi<S>,
     {
         let exec_state = {
-            let (resources, entry) = sync_call.into_parts();
-            let xstate = Abi::new_invocation(entry, &ctx);
+            let (resources, xstate) = sync_call.create_invocation(&ctx);
             let sync_ctx = ThreadCtx {
                 resources,
                 exec_state: xstate,
