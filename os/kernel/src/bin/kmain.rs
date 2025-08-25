@@ -4,7 +4,7 @@
 
 use kernel::{kinit, uinit};
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn kmain() -> ! {
     kinit();
     uinit();

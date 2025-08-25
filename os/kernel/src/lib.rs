@@ -19,14 +19,14 @@ mod boot;
 use core::sync::atomic::AtomicUsize;
 
 use arch::{ArchCaps, System};
-use boot::bump_alloc::BumpFrameAllocator;
 use boot::Process;
+use boot::bump_alloc::BumpFrameAllocator;
 use caps::trie::TrieSlotPayload;
 use caps::{CapBlock, CapTable, Capability, Resources};
 use core_local::CoreLocalDataKernelLocalStoreExt as _;
 use kmem::KPtr;
-use limine::request::{HhdmRequest, MemoryMapRequest, ModuleRequest, StackSizeRequest};
 use limine::BaseRevision;
+use limine::request::{HhdmRequest, MemoryMapRequest, ModuleRequest, StackSizeRequest};
 use qapi::caps::SysSlot;
 use sync::cell::AtomicLazyCell;
 use sync::singleton::Singleton;
@@ -37,7 +37,7 @@ use thread::Thread;
 
 use crate::arch::mem::core_local::CoreLocalData;
 use crate::arch::mem::{Pmo, VirtAddr};
-use crate::arch::{system, ArchSystem};
+use crate::arch::{ArchSystem, system};
 
 static BASE_REVISION: BaseRevision = BaseRevision::new();
 static MEMORY_MAP: Singleton<MemoryMapRequest> = Singleton::new(MemoryMapRequest::new());
@@ -146,44 +146,42 @@ pub fn uinit() -> ! {
         .set_affinity()
         .expect("Couldn't set init-thread affinity to core");
 
-    CapBlock::at(
-        // SAFETY: It's okay to cast a cap table to cap block.
-        unsafe { thread.active_comp().unwrap().cap_table().cast_ref() },
-        SysSlot::new(0).unwrap(),
-    )
-    .try_set(TrieSlotPayload::Data(
-        Capability::<ArchSystem>::CompResource(resources),
-    ))
-    .expect("Unable to set boot capabilities");
-    CapBlock::at(
-        // SAFETY: It's okay to cast a cap table to cap block.
-        unsafe { thread.active_comp().unwrap().cap_table().cast_ref() },
-        SysSlot::new(1).unwrap(),
-    )
-    .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::CapBlock(
-        // SAFETY: It's okay to cast a cap table to cap block.
-        unsafe { cap_table.cast() },
-    )))
-    .expect("Unable to set boot capabilities");
-    CapBlock::at(
-        // SAFETY: It's okay to cast a cap table to cap block.
-        unsafe { thread.active_comp().unwrap().cap_table().cast_ref() },
-        SysSlot::new(2).unwrap(),
-    )
-    .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::Arch(
-        <ArchSystem as System>::ArchCaps::new_addrspace(
-            &*thread.active_comp().unwrap().addrspace(),
-        ),
-    )))
-    .expect("Unable to set boot capabilities");
-    CapBlock::at(
-        // SAFETY: It's okay to cast a cap table to cap block.
-        unsafe { thread.active_comp().unwrap().cap_table().cast_ref() },
-        SysSlot::new(3).unwrap(),
-    )
-    .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::Thread(
-        KPtr::clone(&thread),
-    )))
-    .expect("Unable to set boot capabilities");
+    // SAFETY: It's okay to cast a cap table to cap block.
+    unsafe {
+        CapBlock::at(
+            thread.active_comp().unwrap().cap_table().cast_ref(),
+            SysSlot::new(0).unwrap(),
+        )
+        .try_set(TrieSlotPayload::Data(
+            Capability::<ArchSystem>::CompResource(resources),
+        ))
+        .expect("Unable to set boot capabilities");
+        CapBlock::at(
+            thread.active_comp().unwrap().cap_table().cast_ref(),
+            SysSlot::new(1).unwrap(),
+        )
+        .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::CapBlock(
+            cap_table.cast(),
+        )))
+        .expect("Unable to set boot capabilities");
+        CapBlock::at(
+            thread.active_comp().unwrap().cap_table().cast_ref(),
+            SysSlot::new(2).unwrap(),
+        )
+        .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::Arch(
+            <ArchSystem as System>::ArchCaps::new_addrspace(
+                &*thread.active_comp().unwrap().addrspace(),
+            ),
+        )))
+        .expect("Unable to set boot capabilities");
+        CapBlock::at(
+            thread.active_comp().unwrap().cap_table().cast_ref(),
+            SysSlot::new(3).unwrap(),
+        )
+        .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::Thread(
+            KPtr::clone(&thread),
+        )))
+        .expect("Unable to set boot capabilities");
+    }
     Thread::initial_dispatch(thread).expect("Thread affinity was set above.");
 }
