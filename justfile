@@ -35,10 +35,14 @@ install-deps:
 check:
 	cargo check --workspace --target {{target}}
 	cargo check --workspace --tests
+	cargo +nightly fmt --all --check
 
 clippy:
 	cargo clippy  --workspace --target {{target}}
 	cargo clippy  --workspace --tests
+
+fmt:
+	cargo +nightly fmt --all
 
 setup:
 	rm -rf {{build_dir}}
