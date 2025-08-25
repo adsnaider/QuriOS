@@ -55,6 +55,7 @@ pub unsafe trait System: Sized {
     type ArchCaps: Debug + Clone + ArchCaps<Self>;
     type ExceptionAbi: Debug + Clone + InvokeAbi<Self>;
     type IrqCtx: Debug;
+    type RetAbi: Debug + Default + RetAbi<Self>;
 
     /// Initializes the architecture-specific subsystem
     fn init() -> Self;
@@ -100,9 +101,12 @@ pub trait ExecState: Debug {
     fn for_init_comp(entry_fun: EntryFn, stack_top: *const (), arg0: *const BootArgs) -> Self;
     fn save(&self, ctx: &<Self::Sys as System>::IrqCtx);
     fn dispatch(&self) -> !;
-    fn update_sync_ret(&self, resp: PositiveIsize);
 }
 
 pub trait InvokeAbi<Sys: System> {
-    fn new_invocation(self, entry: usize, ctx: &Sys::IrqCtx) -> Sys::ExecState;
+    fn new_invocation(self, entry: usize, ctx: &Sys::IrqCtx) -> (Sys::ExecState, Sys::RetAbi);
+}
+
+pub trait RetAbi<Sys: System> {
+    fn ret(self, callee_ctx: &Sys::IrqCtx, caller_ctx: &Sys::ExecState);
 }

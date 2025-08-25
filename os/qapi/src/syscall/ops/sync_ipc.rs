@@ -40,20 +40,14 @@ impl SyscallRequest for SyncInvokeOp {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct SyncRetOp {
-    pub resp: PositiveIsize,
-}
+pub struct SyncRetOp {}
 
 impl SyscallRequest for SyncRetOp {
     fn into_args(self) -> UninitSyscallParams {
-        let mut args = [MaybeUninit::uninit(); SYSCALL_ARGS];
-        args[0] = MaybeUninit::new(self.resp.into());
-        args
+        [MaybeUninit::uninit(); SYSCALL_ARGS]
     }
 
-    fn try_from_args(args: &InitSyscallParams) -> Result<Self, CapError> {
-        Ok(Self {
-            resp: args[0].try_into()?,
-        })
+    fn try_from_args(_args: &InitSyscallParams) -> Result<Self, CapError> {
+        Ok(Self {})
     }
 }

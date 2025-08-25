@@ -47,7 +47,7 @@ pub fn syscall_handler(
         SyscallOp::VMUnlink => vm_unlink(VMUnlinkOp::try_from_args(args.args())?),
         SyscallOp::VMSetAttr => vm_set_attr(VMSetAttr::try_from_args(args.args())?),
         SyscallOp::SyncInvoke => sync_invoke(SyncInvokeOp::try_from_args(args.args())?, ctx),
-        SyscallOp::SyncRet => sync_ret(SyncRetOp::try_from_args(args.args())?),
+        SyscallOp::SyncRet => sync_ret(SyncRetOp::try_from_args(args.args())?, ctx),
         SyscallOp::Introspect => introspect(IntrospectOp::try_from_args(args.args())?),
         _ => Err(CapError::SyscallNotImplemented),
     }

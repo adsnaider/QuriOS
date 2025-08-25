@@ -37,13 +37,13 @@ impl<S: System, Abi> SyncCall<S, Abi> {
         &self.comp
     }
 
-    pub fn create_invocation(self, ctx: &S::IrqCtx) -> (KPtr<Resources<S>>, S::ExecState)
+    pub fn create_invocation(self, ctx: &S::IrqCtx) -> (KPtr<Resources<S>>, S::ExecState, S::RetAbi)
     where
         Abi: InvokeAbi<S>,
     {
         let Self { comp, entry, abi } = self;
-        let xstate = abi.new_invocation(entry, ctx);
-        (comp, xstate)
+        let (xstate, sret) = abi.new_invocation(entry, ctx);
+        (comp, xstate, sret)
     }
 
     pub const fn entry(&self) -> usize {

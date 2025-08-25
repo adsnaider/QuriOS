@@ -21,6 +21,6 @@ pub fn sync_invoke(opts: SyncInvokeOp, ctx: <ArchSystem as System>::IrqCtx) -> S
     })
 }
 
-pub fn sync_ret(opts: SyncRetOp) -> SyscallResp {
-    Thread::with_current(|thread| thread.sync_ret(opts))?;
+pub fn sync_ret(opts: SyncRetOp, ctx: <ArchSystem as System>::IrqCtx) -> SyscallResp {
+    Thread::with_current(|thread| thread.sync_ret(opts, ctx))?;
 }

@@ -7,7 +7,7 @@ use core::fmt::{Octal, UpperHex};
 use core::marker::PhantomData;
 use core::mem::MaybeUninit;
 
-use derive_more::Debug;
+use derive_more::{Debug, From};
 use qapi::caps::PositiveIsize;
 use qapi::exception::ExceptionKind;
 use qapi::init::{BootArgs, EntryFn};
@@ -19,8 +19,8 @@ use x86_64::structures::idt::{
 };
 
 use super::{gdt, X64Sys};
-use crate::arch::System;
 use crate::arch::{ExecState, InvokeAbi};
+use crate::arch::{RetAbi, System};
 use crate::sync_call::CallAbi;
 
 pub struct Exception;
@@ -83,6 +83,17 @@ impl<Kind> ExceptionCtx<Kind> {
         unsafe { &mut *(self.stack_top as usize as *mut InterruptStackFrameValue) }
     }
 
+    pub fn ctrl_regs(&self) -> ControlRegs {
+        let isr = self.interrupt_stack_frame();
+        ControlRegs {
+            rflags: isr.cpu_flags.bits(),
+            rsp: isr.stack_pointer.as_u64(),
+            rip: isr.instruction_pointer.as_u64(),
+        }
+    }
+}
+
+impl ExceptionCtx<Interrupt> {
     pub fn preserved_regs(&self) -> &PreservedRegs {
         // SAFETY: Preserved regs are pushed after scratch registers. Should be safe to read this.
         unsafe {
@@ -105,21 +116,37 @@ impl<Kind> ExceptionCtx<Kind> {
         // SAFETY: Scratch registers are pushed first before, so should be here.
         unsafe { &mut *scratch }
     }
-
-    pub fn ctrl_regs(&self) -> ControlRegs {
-        let isr = self.interrupt_stack_frame();
-        ControlRegs {
-            rflags: isr.cpu_flags.bits(),
-            rsp: isr.stack_pointer.as_u64(),
-            rip: isr.instruction_pointer.as_u64(),
-        }
-    }
 }
 
 impl ExceptionCtx<Exception> {
     pub fn error_code(&self) -> u64 {
         // SAFETY: Stack must contain error code below the interrupt stack frame
         unsafe { core::ptr::read((self.stack_top - 8) as *const u64) }
+    }
+
+    pub fn preserved_regs(&self) -> &PreservedRegs {
+        // SAFETY: Preserved regs are pushed after scratch registers. Should be safe to read this.
+        unsafe {
+            let preserved = (self.stack_top as usize
+                - size_of::<PreservedRegs>()
+                - size_of::<ScratchRegs>()
+                - 8) as *const PreservedRegs;
+            &*preserved
+        }
+    }
+
+    pub fn scratch_regs(&self) -> &ScratchRegs {
+        let scratch =
+            (self.stack_top as usize - 8 - size_of::<ScratchRegs>()) as *const ScratchRegs;
+        // SAFETY: Scratch registers are pushed first before, so should be here.
+        unsafe { &*scratch }
+    }
+
+    #[allow(clippy::mut_from_ref)]
+    pub unsafe fn scratch_regs_mut(&self) -> &mut ScratchRegs {
+        let scratch = (self.stack_top as usize - 8 - size_of::<ScratchRegs>()) as *mut ScratchRegs;
+        // SAFETY: Scratch registers are pushed first before, so should be here.
+        unsafe { &mut *scratch }
     }
 }
 
@@ -247,13 +274,6 @@ impl ExecState for ExecCtx {
             regs: Cell::new(regs),
         }
     }
-
-    fn update_sync_ret(&self, resp: PositiveIsize) {
-        self.regs.update(|mut regs| {
-            regs.scratch.rax = usize::from(resp) as u64;
-            regs
-        });
-    }
 }
 
 impl ExecCtx {
@@ -354,7 +374,7 @@ pub struct Regs {
 }
 
 impl InvokeAbi<X64Sys> for CallAbi {
-    fn new_invocation(self, entry: usize, ctx: &IrqCtx) -> <X64Sys as System>::ExecState {
+    fn new_invocation(self, entry: usize, ctx: &IrqCtx) -> (ExecCtx, AnyRet) {
         let curr_regs = ctx.regs();
         let mut regs = Regs::default();
         regs.control.rip = entry as u64;
@@ -367,14 +387,17 @@ impl InvokeAbi<X64Sys> for CallAbi {
         // TODO: Maybe don't give access to all hardware here but it's good for debugging.
         regs.control.rflags =
             (RFlags::INTERRUPT_FLAG | RFlags::IOPL_HIGH | RFlags::IOPL_LOW).bits();
-        ExecCtx {
-            regs: Cell::new(regs),
-        }
+        (
+            ExecCtx {
+                regs: Cell::new(regs),
+            },
+            CallRetAbi.into(),
+        )
     }
 }
 
 impl InvokeAbi<X64Sys> for ExceptionAbi {
-    fn new_invocation(self, entry: usize, ctx: &IrqCtx) -> <X64Sys as System>::ExecState {
+    fn new_invocation(self, entry: usize, ctx: &IrqCtx) -> (ExecCtx, AnyRet) {
         let mut regs = Regs::default();
         regs.control.rip = entry as u64;
         regs.control.rsp = 0;
@@ -382,8 +405,56 @@ impl InvokeAbi<X64Sys> for ExceptionAbi {
         regs.scratch.rsi = self.code.unwrap_or(u64::MAX);
         regs.control.rflags =
             (RFlags::INTERRUPT_FLAG | RFlags::IOPL_HIGH | RFlags::IOPL_LOW).bits();
-        ExecCtx {
-            regs: Cell::new(regs),
+        (
+            ExecCtx {
+                regs: Cell::new(regs),
+            },
+            ExceptionRetAbi.into(),
+        )
+    }
+}
+
+impl RetAbi<X64Sys> for CallRetAbi {
+    fn ret(self, callee_ctx: &IrqCtx, caller_ctx: &ExecCtx) {
+        let resp = caller_ctx.regs().scratch.rsi as isize;
+        let resp = resp.max(0);
+        caller_ctx.regs.update(|mut regs| {
+            regs.scratch.rax = resp as u64;
+            regs
+        });
+    }
+}
+impl RetAbi<X64Sys> for ExceptionRetAbi {
+    fn ret(self, callee_ctx: &IrqCtx, caller_ctx: &ExecCtx) {
+        // Purposely empty: Exceptions are essentially as transparent as they get. In the future,
+        // we may have a way to return ways of udpating specific control registers (like to push the
+        // RIP forward)
+    }
+}
+
+#[derive(Debug)]
+pub struct ExceptionRetAbi;
+#[derive(Debug)]
+pub struct CallRetAbi;
+
+#[derive(Debug, Default, From)]
+pub enum AnyRet {
+    #[default]
+    NoReturn,
+    Standard(CallRetAbi),
+    Exception(ExceptionRetAbi),
+}
+
+impl RetAbi<X64Sys> for AnyRet {
+    fn ret(
+        self,
+        callee_ctx: &<X64Sys as System>::IrqCtx,
+        caller_ctx: &<X64Sys as System>::ExecState,
+    ) {
+        match self {
+            AnyRet::NoReturn => panic!("Attempted return on no-return ABI"),
+            AnyRet::Standard(call_abi) => call_abi.ret(callee_ctx, caller_ctx),
+            AnyRet::Exception(exception_ret_abi) => exception_ret_abi.ret(callee_ctx, caller_ctx),
         }
     }
 }

@@ -1,29 +1,29 @@
 use core::cell::{Ref, RefCell};
-use core::mem::MaybeUninit;
 
 use derive_more::{Display, Error};
 use derive_where::derive_where;
 use heapless::Vec;
 use qapi::caps::{CapError, CapId};
 use qapi::syscall::ops::introspect;
-use qapi::syscall::ops::sync_ipc::{SyncRetOp, SYNC_CALL_ARGS};
+use qapi::syscall::ops::sync_ipc::SyncRetOp;
 
 use crate::arch::mem::Addrspace;
-use crate::arch::{ArchSystem, System};
+use crate::arch::{ArchSystem, RetAbi, System};
 use crate::arch::{ExecState, InvokeAbi};
 use crate::caps::{CapRef, CapTable, Resources};
-use crate::core_local::core_cell::{Affinity, BorrowError, ResetAffinityError, SetAffinityError};
-use crate::core_local::{CoreCell, CORE_LOCAL_CORE_ID, CORE_LOCAL_CURRENT_THREAD};
+use crate::core_local::core_cell::{BorrowError, ResetAffinityError, SetAffinityError};
+use crate::core_local::{CoreCell, CORE_LOCAL_CURRENT_THREAD};
 use crate::kmem::KPtr;
 use crate::never::Never;
-use crate::sync_call::{CallAbi, SyncCall};
+use crate::sync_call::SyncCall;
 
 pub type CurrentThread = RefCell<Option<KPtr<Thread<ArchSystem>>>>;
 
-#[derive_where(Debug, Clone)]
+#[derive_where(Debug)]
 struct ThreadCtx<S: System> {
     exec_state: S::ExecState,
     resources: KPtr<Resources<S>>,
+    ret_abi: S::RetAbi,
 }
 
 #[derive_where(Debug)]
@@ -121,6 +121,7 @@ impl<S: System> Thread<S> {
         ctx.push(ThreadCtx {
             exec_state,
             resources: comp,
+            ret_abi: Default::default(),
         })
         .unwrap();
         Self {
@@ -153,10 +154,11 @@ impl<S: System> Thread<S> {
         Abi: InvokeAbi<S>,
     {
         let exec_state = {
-            let (resources, xstate) = sync_call.create_invocation(&ctx);
+            let (resources, xstate, sret) = sync_call.create_invocation(&ctx);
             let sync_ctx = ThreadCtx {
                 resources,
                 exec_state: xstate,
+                ret_abi: sret,
             };
 
             let mut curr_ctx = self
@@ -169,29 +171,32 @@ impl<S: System> Thread<S> {
                 .expect("There should always be at least 1 execution context on a thread")
                 .exec_state
                 .save(&ctx);
-            curr_ctx
-                .push(sync_ctx.clone())
-                .map_err(|_| CapError::SyncInvokeLimit)?;
+            if curr_ctx.is_full() {
+                return Err(CapError::SyncInvokeLimit);
+            }
             sync_ctx.resources.addrspace().activate();
-            sync_ctx.exec_state.clone()
+            let xstate = sync_ctx.exec_state.clone();
+            curr_ctx.push(sync_ctx).unwrap();
+            xstate
         };
         exec_state.dispatch();
     }
 
-    pub fn sync_ret(&self, args: SyncRetOp) -> Result<Never, CapError> {
+    pub fn sync_ret(&self, _args: SyncRetOp, callee_ctx: S::IrqCtx) -> Result<Never, CapError> {
         let exec_state = {
-            let mut ctx = self
+            let mut thread_ctx = self
                 .ctx
                 .try_borrow_mut()
                 .expect("Kernel attempted to sync ret on non core bound thread");
-            if ctx.len() <= 1 {
+            if thread_ctx.len() <= 1 {
                 return Err(CapError::SyncRetLimit);
             }
-            let _prev_ctx = ctx.pop().unwrap();
-            let ret_ctx = ctx.last().unwrap();
-            ret_ctx.resources.addrspace().activate();
-            ret_ctx.exec_state.update_sync_ret(args.resp);
-            ret_ctx.exec_state.clone()
+
+            let ThreadCtx { ret_abi, .. } = thread_ctx.pop().unwrap();
+            let caller_ctx = thread_ctx.last().unwrap();
+            ret_abi.ret(&callee_ctx, &caller_ctx.exec_state);
+            caller_ctx.resources.addrspace().activate();
+            caller_ctx.exec_state.clone()
         };
         exec_state.dispatch();
     }

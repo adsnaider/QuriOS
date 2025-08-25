@@ -13,6 +13,7 @@ use qapi::exception::ExceptionKind;
 use qapi::init::{BootArgs, BootCaps};
 use qapi::syscall::SyscallOp;
 use qapi::syscall::ops::sync_ipc::SyncCallFun;
+use serial::sprintln;
 use stack_list::{StackList, StackNode, stack_list_pop, stack_list_push};
 use ulib::alloc::allocman::{ALockedMan, Allocman, ReservedHeap};
 use ulib::alloc::caps::CapabilityMan;
@@ -95,7 +96,7 @@ make_sync_call!(sync_invoke, sync_invoke_impl, STACK_LIST);
 
 fn exception_handler_impl(kind: usize, code: usize, _: usize, _: usize) -> PositiveIsize {
     let kind = ExceptionKind::try_from(kind).unwrap();
-    panic!("Exception: {kind:?} code={code}");
+    panic!("Exception: {:?} code={:#X}", kind, code);
 }
 make_sync_call!(exception_handler, exception_handler_impl, STACK_LIST, unsafe(link_section = ".exception_handler"));
 
