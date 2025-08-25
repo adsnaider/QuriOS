@@ -2,6 +2,7 @@
 target/
 .build/
 gdb.txt
+/output.map
 *.log
 *.bin
 *.o

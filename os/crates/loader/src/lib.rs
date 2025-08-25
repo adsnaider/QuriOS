@@ -1,10 +1,12 @@
 #![no_std]
 
+use core::cell::UnsafeCell;
+use core::marker::PhantomData;
 use core::mem::MaybeUninit;
-use core::ops::Range;
+use core::ops::{Deref, Range};
 
 use bitflags::bitflags;
-use derive_more::{Deref, DerefMut, Display, Error};
+use derive_more::{Display, Error};
 use goblin::elf::program_header::{PF_R, PF_W, PF_X};
 use goblin::elf64::header::{Header, SIZEOF_EHDR};
 use goblin::elf64::program_header::{PT_LOAD, ProgramHeader};
@@ -21,17 +23,32 @@ impl LoadedMagic {
 }
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy, Deref, DerefMut)]
+#[derive(Debug)]
 pub struct MagicInfo<T> {
     magic: LoadedMagic,
-    #[deref]
-    #[deref_mut]
-    data: T,
+    data: UnsafeCell<T>,
 }
+
+impl<T> Deref for MagicInfo<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.data.get() }
+    }
+}
+
+unsafe impl<T: Sync> Sync for MagicInfo<T> {}
 
 impl<T> MagicInfo<T> {
     pub const fn new(magic: LoadedMagic, data: T) -> Self {
-        Self { magic, data }
+        Self {
+            magic,
+            data: UnsafeCell::new(data),
+        }
+    }
+
+    pub const fn keep(&self) {
+        core::hint::black_box(self.data.get());
     }
 }
 

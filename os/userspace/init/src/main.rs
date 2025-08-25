@@ -36,6 +36,8 @@ static EXCEPTION_HANDLER: MagicInfo<extern "C" fn()> = const {
 
 #[entry]
 fn main(args: &'static BootArgs) -> ! {
+    // Aparently #[used] is not good enough...
+    EXCEPTION_HANDLER.keep();
     {
         static mut SNODE1: [u128; 4096] = [0; 4096];
         static mut SEXCEPT1: [u128; 128] = [0; 128];

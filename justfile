@@ -51,9 +51,9 @@ setup:
 init: setup
 	#!/usr/bin/env bash
 	set -euo pipefail
-	# export RUSTFLAGS="-Clink-arg=-Tos/userspace/linker.ld -Crelocation-model=static"
-	LIB=`cargo build -p init --profile {{profile}} --target {{target}} --message-format=json | {{extractor}}`
-	ld.lld -m "elf_{{arch}}" -T os/userspace/linker.ld -o "{{build_dir}}/init" "$LIB"
+	export RUSTFLAGS="-Crelocation-model=static"
+	BIN=`cargo build -p init --profile {{profile}} --target {{target}} --message-format=json | {{extractor}}`
+	cp -f "$BIN" "{{build_dir}}/init"
 
 initrd: init
 	cd {{build_dir}} && tar -H ustar -cf initrd.tar init
@@ -62,7 +62,7 @@ kernel: setup
 	#!/usr/bin/env bash
 	set -euo pipefail
 	BIN=`cargo build --profile {{profile}} --target {{target}} --bin kmain --message-format=json | {{extractor}}`
-	cp -fs "$BIN" "{{build_dir}}/kernel"
+	cp -f "$BIN" "{{build_dir}}/kernel"
 
 build: kernel initrd
 

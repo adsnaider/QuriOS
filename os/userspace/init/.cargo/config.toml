@@ -1,3 +1,3 @@
 [build]
 target = "x86_64-unknown-none"
-rustflags = ["-C", "link-arg=-Map=output.map"]
+rustflags = ["-Crelocation-model=static"]
