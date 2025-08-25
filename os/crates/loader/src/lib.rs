@@ -4,10 +4,46 @@ use core::mem::MaybeUninit;
 use core::ops::Range;
 
 use bitflags::bitflags;
-use derive_more::{Display, Error};
+use derive_more::{Deref, DerefMut, Display, Error};
 use goblin::elf::program_header::{PF_R, PF_W, PF_X};
 use goblin::elf64::header::{Header, SIZEOF_EHDR};
 use goblin::elf64::program_header::{PT_LOAD, ProgramHeader};
+
+/// A unique and arbitrary ID used to identify important pieces of data in an executable.
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone)]
+pub struct LoadedMagic([u64; 4]);
+
+impl LoadedMagic {
+    pub const fn new(bytes: [u64; 4]) -> Self {
+        Self(bytes)
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Deref, DerefMut)]
+pub struct MagicInfo<T> {
+    magic: LoadedMagic,
+    #[deref]
+    #[deref_mut]
+    data: T,
+}
+
+impl<T> MagicInfo<T> {
+    pub const fn new(magic: LoadedMagic, data: T) -> Self {
+        Self { magic, data }
+    }
+}
+
+#[derive(Debug, Clone, Error, Display)]
+pub enum FindMagicError {
+    #[display("The requested magic value was not found in the executable")]
+    NotFound,
+    #[display("Found multiple instances of the same magic value in the executable")]
+    ManyInstances,
+    #[display("The requested value would require reading from outside the program bounds")]
+    Overflow,
+}
 
 #[derive(Debug)]
 pub struct Program<'a> {
@@ -80,6 +116,39 @@ impl<'a> Program<'a> {
             header,
             program_headers,
         })
+    }
+
+    pub unsafe fn get_magic<T>(&self, magic: LoadedMagic) -> Result<&T, FindMagicError> {
+        const {
+            assert!(align_of::<T>() <= align_of::<u64>());
+        }
+        let magic = self.find_magic(magic)?;
+        let tbytes = &self.program[magic..(magic + size_of::<T>())];
+        if tbytes.len() != size_of::<T>() {
+            return Err(FindMagicError::Overflow);
+        }
+        // SAFETY: Precondition
+        Ok(unsafe { &*tbytes.as_ptr().cast() })
+    }
+
+    fn find_magic(&self, magic: LoadedMagic) -> Result<usize, FindMagicError> {
+        // SAFETY: Transmuting integer arrays
+        let magic: [u8; 4 * size_of::<u64>()] = unsafe { core::mem::transmute(magic.0) };
+        let mut magics = self
+            .program_headers
+            .iter()
+            .flat_map(|hdr| (hdr.p_offset..(hdr.p_offset + hdr.p_filesz)))
+            .filter_map(|off| {
+                let off = off as usize;
+                let magic_end = off + size_of::<u64>() * 4;
+                let sect = &self.program[off..magic_end];
+                (magic == sect).then_some(magic_end)
+            });
+        let found = magics.next().ok_or(FindMagicError::NotFound)?;
+        if let Some(_more) = magics.next() {
+            return Err(FindMagicError::ManyInstances);
+        }
+        Ok(found)
     }
 
     // TODO: Implement non-static PIE binaries and shared libraries.

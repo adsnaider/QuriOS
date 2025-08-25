@@ -25,7 +25,9 @@ use core_local::CoreLocalDataKernelLocalStoreExt as _;
 use kmem::KPtr;
 use limine::BaseRevision;
 use limine::request::{HhdmRequest, MemoryMapRequest, ModuleRequest, StackSizeRequest};
+use loader::Program;
 use qapi::caps::SysSlot;
+use qapi::init::EXCEPTION_HANDLER_ID;
 use sync::cell::AtomicLazyCell;
 use sync::singleton::Singleton;
 use tap::TapFallible;
@@ -51,8 +53,6 @@ static PMO: AtomicLazyCell<Pmo> = AtomicLazyCell::new(|| {
     unsafe { Pmo::new(VirtAddr::new(pmo as usize)) }
 });
 static MODULES_REQUEST: ModuleRequest = ModuleRequest::new();
-
-const BOOTER_EXCEPTION_HANDLER_ADDR: usize = 0x1000;
 
 pub fn kinit() {
     serial::init();
@@ -112,7 +112,16 @@ pub fn uinit() -> ! {
         0,
     );
 
-    let init = Process::<ArchSystem>::load(system(), proc, 10, initrd, &mut fallocator)
+    let prog = Program::new(proc).expect("Error reading init process as ELF Executable");
+    // SAFETY: The data will be valid for any `usize` type
+    let exception_entry = unsafe {
+        *prog
+            .get_magic::<usize>(EXCEPTION_HANDLER_ID)
+            .expect("Booter program does not have an exception handler set up")
+    };
+    log::info!("Got init exception endpoint @ ({exception_entry:#X})");
+
+    let init = Process::<ArchSystem>::load(system(), prog, 10, initrd, &mut fallocator)
         .expect("Error loading init process");
 
     let frame = fallocator
@@ -125,7 +134,7 @@ pub fn uinit() -> ! {
         init.addrspace,
         cap_table.clone(),
         caps::ExceptionHandler::Within {
-            entry: BOOTER_EXCEPTION_HANDLER_ADDR,
+            entry: exception_entry,
         },
     );
     let resources_frame = fallocator

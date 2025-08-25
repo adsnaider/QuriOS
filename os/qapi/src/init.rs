@@ -1,5 +1,6 @@
 use core::sync::atomic::AtomicU16;
 
+use loader::LoadedMagic;
 use zerocopy::{Immutable, IntoBytes, KnownLayout};
 
 use crate::caps::ctable::CTableCap;
@@ -8,6 +9,13 @@ use crate::caps::thread::ThreadCap;
 use crate::caps::vmtable::VMTableCap;
 use crate::caps::{CapId, SysSlot};
 use crate::types::CSlice;
+
+pub const EXCEPTION_HANDLER_ID: LoadedMagic = LoadedMagic::new([
+    0x2e5d95e08702dd36,
+    0x4207b064f9f00f9c,
+    0xd0ad5a8dd5418e44,
+    0xc7ec052989c7d4f6,
+]);
 
 pub type EntryFn = extern "C" fn(args: &'static BootArgs) -> !;
 

@@ -114,9 +114,6 @@ where
         }
     }
 
-    // TODO: Ideally the kernel/user loader look for a static that has a specific name with a
-    // pointer to the routine instead of this link section.
-    #[unsafe(link_section = ".exception_handler")]
     #[unsafe(naked)]
     extern "C" fn stackfull_entry() {
         #[allow(unused_unsafe)]

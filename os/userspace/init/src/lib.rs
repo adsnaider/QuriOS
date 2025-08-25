@@ -5,12 +5,14 @@ use core::arch::naked_asm;
 use core::mem::MaybeUninit;
 
 use allocator_api2::boxed::Box;
+use derive_more::{Deref, DerefMut};
 use entry::entry;
+use loader::MagicInfo;
 use qapi::caps::slotid::SlotId;
 use qapi::caps::sync_ipc::{ExceptionAbi, StandardAbi, SyncInvokeCap};
 use qapi::caps::{CapId, PositiveIsize};
 use qapi::exception::ExceptionKind;
-use qapi::init::{BootArgs, BootCaps};
+use qapi::init::{BootArgs, BootCaps, EXCEPTION_HANDLER_ID};
 use qapi::syscall::SyscallOp;
 use qapi::syscall::ops::sync_ipc::SyncCallFun;
 use serial::sprintln;
@@ -25,14 +27,11 @@ use ulib::sysops::{CTableCapExt, CapIdExt, SyncInvokeCapExt};
 #[global_allocator]
 static ALLOCATOR: ALockedMan<BitmapAllocator> = ALockedMan::uninit();
 
-// TODO: Ideally the kernel/user loader will find this with a special name while loading the process and use the
-// pointer as the exception handler routine.
 #[used]
-static EXCEPTION_HANDLER: extern "C" fn() = const {
+static EXCEPTION_HANDLER: MagicInfo<extern "C" fn()> = const {
     let endpoint =
         SyncEndpoint::<1, _, _>::create(ExceptionAbi, |(kind, code)| exception_handler(kind, code));
-
-    endpoint.stackfull_endpoint()
+    MagicInfo::new(EXCEPTION_HANDLER_ID, endpoint.stackfull_endpoint())
 };
 
 #[entry]

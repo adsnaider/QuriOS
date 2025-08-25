@@ -146,7 +146,7 @@ impl<'a, A: Addrspace> Loader for InitLoader<'a, A> {
 impl<S: System> Process<S> {
     pub fn load(
         sys: &S,
-        program: &[u8],
+        program: Program<'_>,
         stack_pages: usize,
         initrd: &[u8],
         fallocator: &mut BumpFrameAllocator,
@@ -156,7 +156,6 @@ impl<S: System> Process<S> {
         assert!(untyped_memory_offset % Page::SIZE == 0);
         assert!(untyped_memory_length % Page::SIZE == 0);
         assert!(untyped_memory_offset + untyped_memory_length < 0xFFFF_8000_0000_0000);
-        let program = Program::new(program)?;
 
         // SAFETY: The addrespace is accounted for at retype init with index 1.
         let addrspace = sys.addrspace();

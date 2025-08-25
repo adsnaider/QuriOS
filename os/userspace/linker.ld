@@ -6,7 +6,6 @@ PHDRS
     rodata  PT_LOAD    FLAGS((1 << 2)) ;            /* Read only */
     data    PT_LOAD    FLAGS((1 << 1) | (1 << 2)) ; /* Write + Read */
     dynamic PT_DYNAMIC FLAGS((1 << 1) | (1 << 2)) ; /* Dynamic PHDR for relocations */
-    exception_handler    PT_LOAD    FLAGS((1 << 0) | (1 << 2)) ; /* Execute + Read */
 }
 
 SECTIONS
@@ -18,11 +17,6 @@ SECTIONS
 
     /* Empty page to act as a guard */
     . = 0x1000;
-
-    .exception_handler : {
-        *(.exception_handler)
-    } :exception_handler
-
 
     .text : ALIGN(CONSTANT(MAXPAGESIZE)){
         *(.text .text.*)
