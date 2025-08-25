@@ -119,7 +119,8 @@ impl<T> KPtr<T> {
     unsafe fn from_ptr_unchecked(value: NonNull<T>) -> Self {
         let () = Self::VALID_SIZE_AND_ALIGN;
         let this = Self { inner: value };
-        this.frame().as_kernel_unchecked().into_raw();
+        // SAFETY: Precondition
+        unsafe { this.frame().as_kernel_unchecked().into_raw() };
         this
     }
 

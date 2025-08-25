@@ -271,6 +271,7 @@ impl<const COUNT: usize, T> TrieRef<COUNT, T> {
     }
 
     pub fn payload(&self) -> &TrieSlotPayload<COUNT, T> {
+        // SAFETY: If we have a ref then the payload must be initiailized
         unsafe { (*self.slot().payload.get()).assume_init_ref() }
     }
 

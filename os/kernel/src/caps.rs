@@ -3,7 +3,6 @@ pub mod trie;
 use core::marker::PhantomData;
 use core::mem::MaybeUninit;
 use core::ops::Deref;
-use core::sync::atomic::{AtomicUsize, Ordering};
 
 use derive_more::Deref;
 use derive_where::derive_where;

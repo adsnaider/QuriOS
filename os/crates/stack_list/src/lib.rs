@@ -149,9 +149,9 @@ mod tests {
         let buf2_ptr = &buf2 as *const _ as *const u8;
         let mut buf3 = [0u128; 256];
         let buf3_ptr = &buf3 as *const _ as *const u8;
-        let n1 = StackNode::new(buf1.as_u8_slice_mut()).unwrap();
-        let n2 = StackNode::new(buf2.as_u8_slice_mut()).unwrap();
-        let n3 = StackNode::new(buf3.as_u8_slice_mut()).unwrap();
+        let n1 = StackNode::new(&mut buf1).unwrap();
+        let n2 = StackNode::new(&mut buf2).unwrap();
+        let n3 = StackNode::new(&mut buf3).unwrap();
         stacks.push_front(n1);
         stacks.push_front(n2);
         stacks.push_front(n3);
@@ -173,7 +173,7 @@ mod tests {
         let mut buffers = [[0u128; 256]; 16];
         std::thread::scope(|scope| {
             for buf in &mut buffers {
-                let stack = StackNode::new(buf.as_u8_slice_mut()).unwrap();
+                let stack = StackNode::new(buf).unwrap();
                 stacks.push_front(stack);
             }
             for i in 0..16 {

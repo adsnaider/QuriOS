@@ -10,7 +10,6 @@ use qapi::syscall::ops::introspect::{IntrospectResult, VMTable};
 use qapi::syscall::ops::vmtable::PaddedPageTableOffset;
 use x86_64::instructions::interrupts;
 use x86_64::registers::model_specific::GsBase;
-use x86_64::structures::idt::InterruptStackFrameValue;
 
 use crate::arch::Addrspace as _;
 

@@ -179,8 +179,10 @@ impl IrqCtx {
     /// Modifying the interrupt stack frame may result in undefined behavior in numerous ways
     pub unsafe fn interrupt_stack_frame_mut(&mut self) -> &mut InterruptStackFrameValue {
         match self {
-            IrqCtx::Exception(ctx) => ctx.interrupt_stack_frame_mut(),
-            IrqCtx::Interrupt(ctx) => ctx.interrupt_stack_frame_mut(),
+            // SAFETY: Precondition
+            IrqCtx::Exception(ctx) => unsafe { ctx.interrupt_stack_frame_mut() },
+            // SAFETY: Precondition
+            IrqCtx::Interrupt(ctx) => unsafe { ctx.interrupt_stack_frame_mut() },
         }
     }
 
@@ -198,10 +200,13 @@ impl IrqCtx {
         }
     }
 
+    #[allow(clippy::mut_from_ref)]
     pub unsafe fn scratch_regs_mut(&self) -> &mut ScratchRegs {
         match self {
-            IrqCtx::Exception(ctx) => ctx.scratch_regs_mut(),
-            IrqCtx::Interrupt(ctx) => ctx.scratch_regs_mut(),
+            // SAFETY: Precondition
+            IrqCtx::Exception(ctx) => unsafe { ctx.scratch_regs_mut() },
+            // SAFETY: Precondition
+            IrqCtx::Interrupt(ctx) => unsafe { ctx.scratch_regs_mut() },
         }
     }
 

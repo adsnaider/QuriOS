@@ -7,7 +7,7 @@ use core::borrow::Borrow;
 use core::fmt::Debug;
 
 use mem::{Addrspace, PageFlags, VirtAddr};
-use qapi::caps::{CapError, PositiveIsize};
+use qapi::caps::CapError;
 use qapi::init::{BootArgs, EntryFn};
 use qapi::syscall::ops::ctable::VMTableCons;
 use qapi::syscall::ops::introspect::IntrospectResult;

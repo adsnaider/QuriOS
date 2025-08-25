@@ -4,7 +4,6 @@ use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout};
 
 use crate::caps::ctable::CTableCap;
 use crate::caps::resources::ResourcesCap;
-use crate::caps::vmtable::VMTableCap;
 use crate::caps::{CapId, SysSlot};
 use crate::mem::Frame;
 use crate::types::UserPtr;

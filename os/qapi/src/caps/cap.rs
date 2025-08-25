@@ -3,18 +3,6 @@ use core::convert::Infallible;
 use derive_more::{Display, Error, Into, TryFrom, TryFromReprError};
 use zerocopy::{FromBytes, Immutable, IntoBytes};
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u8)]
-pub enum CapabilityKind {
-    Empty = 0,
-    Thread,
-    TranscientPageTable,
-    RootPageTable,
-    CapTable,
-    SyncCall,
-    Retype,
-}
-
 #[derive(
     Debug,
     Display,

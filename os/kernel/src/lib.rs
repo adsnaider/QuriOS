@@ -16,8 +16,6 @@ pub(crate) mod hint;
 
 mod boot;
 
-use core::sync::atomic::AtomicUsize;
-
 use arch::{ArchCaps, System};
 use boot::Process;
 use boot::bump_alloc::BumpFrameAllocator;
@@ -30,7 +28,6 @@ use limine::request::{HhdmRequest, MemoryMapRequest, ModuleRequest, StackSizeReq
 use qapi::caps::SysSlot;
 use sync::cell::AtomicLazyCell;
 use sync::singleton::Singleton;
-use sync_call::SyncCall;
 use tap::TapFallible;
 use tar_no_std::TarArchiveRef;
 use thread::Thread;
