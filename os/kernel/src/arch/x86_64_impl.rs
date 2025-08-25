@@ -19,13 +19,12 @@ mod gdt;
 mod idt;
 mod mem_impl;
 
-use crate::arch::mem::VirtAddr;
+use super::mem::PageFlags;
+use crate::PMO;
 use crate::arch::System;
+use crate::arch::mem::VirtAddr;
 use crate::kmem::KPtr;
 use crate::syscall::SyscallResp;
-use crate::PMO;
-
-use super::mem::PageFlags;
 
 #[derive(Debug)]
 pub struct X64Sys {}

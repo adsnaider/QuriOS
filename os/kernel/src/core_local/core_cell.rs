@@ -1,6 +1,6 @@
+use core::cell::{Ref, RefCell, RefMut};
 use core::sync::atomic::{AtomicU16, Ordering};
 
-use core::cell::{Ref, RefCell, RefMut};
 use derive_more::{Display, Error, From};
 use tap::TapFallible;
 
@@ -31,7 +31,9 @@ pub enum SetAffinityError {
 
 #[derive(Error, Display, Debug, Clone)]
 pub enum ResetAffinityError {
-    #[display("Can't reset the core-cell affinity as it's not currently tied to the running core (bound to core: {affinity})")]
+    #[display(
+        "Can't reset the core-cell affinity as it's not currently tied to the running core (bound to core: {affinity})"
+    )]
     Bounded { affinity: u16 },
     #[display("Can't reset the core-cell affinity as it's already unbound")]
     Unbound,
@@ -104,7 +106,7 @@ impl<T> CoreCell<T> {
         match self.get_affinity() {
             Affinity::Unset => return Err(ResetAffinityError::Unbound),
             Affinity::Set(bounded) if bounded != core_affinity => {
-                return Err(ResetAffinityError::Bounded { affinity: bounded })
+                return Err(ResetAffinityError::Bounded { affinity: bounded });
             }
             _ => {} // Bound to this core
         }

@@ -484,11 +484,7 @@ impl RetypeEntry {
         self.0
             .fetch_update(Ordering::Release, Ordering::Relaxed, |value| {
                 let (_, counter) = Self::value_into(value);
-                if counter == 0 {
-                    None
-                } else {
-                    Some(value - 1)
-                }
+                if counter == 0 { None } else { Some(value - 1) }
             })
             .map(|entry| Self::value_into(entry).1)
             .map_err(|_| NoRefs)

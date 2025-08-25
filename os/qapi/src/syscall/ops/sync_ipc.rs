@@ -1,9 +1,8 @@
 use core::mem::MaybeUninit;
 
-use crate::{
-    caps::{CapError, PositiveIsize, sync_ipc::SyncInvokeCap},
-    syscall::{InitSyscallParams, SYSCALL_ARGS, SyscallRequest, UninitSyscallParams},
-};
+use crate::caps::sync_ipc::SyncInvokeCap;
+use crate::caps::{CapError, PositiveIsize};
+use crate::syscall::{InitSyscallParams, SYSCALL_ARGS, SyscallRequest, UninitSyscallParams};
 
 pub const SYNC_CALL_ARGS: usize = SYSCALL_ARGS - 1;
 pub const SYNC_CALL_RETS: usize = 2;

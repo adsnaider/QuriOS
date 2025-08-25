@@ -1,5 +1,5 @@
-use crate::arch::mem::{PhysAddr, VirtAddr};
 use crate::PMO;
+use crate::arch::mem::{PhysAddr, VirtAddr};
 
 #[extend::ext]
 pub impl VirtAddr {

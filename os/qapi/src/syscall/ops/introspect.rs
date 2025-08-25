@@ -2,11 +2,10 @@ use core::mem::MaybeUninit;
 
 use qapi_macros::SyscallRequest;
 
-use crate::{
-    caps::CapId,
-    mem::{Frame, vmtable::VMTableEntry},
-    types::UserPtrMut,
-};
+use crate::caps::CapId;
+use crate::mem::Frame;
+use crate::mem::vmtable::VMTableEntry;
+use crate::types::UserPtrMut;
 
 #[derive(Debug, Copy, Clone, SyscallRequest)]
 pub struct IntrospectOp {

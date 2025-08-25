@@ -8,11 +8,10 @@ use qapi::syscall::ops::introspect;
 use qapi::syscall::ops::sync_ipc::SyncRetOp;
 
 use crate::arch::mem::Addrspace;
-use crate::arch::{ArchSystem, RetAbi, System};
-use crate::arch::{ExecState, InvokeAbi};
+use crate::arch::{ArchSystem, ExecState, InvokeAbi, RetAbi, System};
 use crate::caps::{CapRef, CapTable, Resources};
 use crate::core_local::core_cell::{BorrowError, ResetAffinityError, SetAffinityError};
-use crate::core_local::{CoreCell, CORE_LOCAL_CURRENT_THREAD};
+use crate::core_local::{CORE_LOCAL_CURRENT_THREAD, CoreCell};
 use crate::kmem::KPtr;
 use crate::never::Never;
 use crate::sync_call::SyncCall;

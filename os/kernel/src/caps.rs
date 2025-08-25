@@ -8,22 +8,22 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 use derive_more::Deref;
 use derive_where::derive_where;
 use extend::ext;
-use qapi::caps::slotid::{NUM_SLOTS, SLOT_SIZE};
 use qapi::caps::CapError;
+use qapi::caps::slotid::{NUM_SLOTS, SLOT_SIZE};
 use qapi::syscall::ops::introspect::{self, IntrospectResult};
 use qapi::types::{UserPtr, UserPtrMut};
 use trie::{Trie, TrieBlock, TrieRef, TrieSetError};
 use zerocopy::{FromBytes, Immutable, KnownLayout};
 
+use crate::PMO;
 use crate::arch::mem::phys::BadAddress;
-use crate::arch::mem::{user_buffer_copy, Addrspace, Page, VirtAddr};
+use crate::arch::mem::{Addrspace, Page, VirtAddr, user_buffer_copy};
 use crate::arch::{ArchCaps as _, ArchSystem, System};
 use crate::kmem::KPtr;
 use crate::never::Never;
 use crate::retyping::{AsUnusedKernelError, FrameExt};
 use crate::sync_call::{SyncCall, SyncRet};
 use crate::thread::Thread;
-use crate::PMO;
 
 const _EXPECTED_SLOT_SIZE: () = {
     assert!(SLOT_SIZE == CapTable::<ArchSystem>::slot_size().next_power_of_two());

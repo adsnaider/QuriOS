@@ -8,10 +8,8 @@ use x86_64::structures::idt::{
     HandlerFuncWithErrCode, PageFaultHandlerFunc,
 };
 
-use crate::{
-    arch::x86_64_impl::exec::{Exception, ExceptionCtx, Interrupt},
-    never::Never,
-};
+use crate::arch::x86_64_impl::exec::{Exception, ExceptionCtx, Interrupt};
+use crate::never::Never;
 
 pub trait IsrHandler<Kind, Ret> {
     extern "sysv64" fn call(_ctx: ExceptionCtx<Kind>) -> Ret;

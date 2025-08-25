@@ -1,6 +1,4 @@
 pub mod sync_endpoint;
-pub use crate::make_sync_call;
-
 use core::mem::MaybeUninit;
 
 use extend::ext;
@@ -23,6 +21,7 @@ use qapi::syscall::{SyscallArgs, SyscallOp, SyscallRequest};
 use qapi::types::{UserPtr, UserPtrMut};
 use zerocopy::IntoBytes as _;
 
+pub use crate::make_sync_call;
 use crate::syscall::syscall;
 
 #[ext]

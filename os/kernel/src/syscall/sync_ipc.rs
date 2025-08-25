@@ -1,15 +1,10 @@
-use qapi::{
-    caps::CapError,
-    syscall::ops::sync_ipc::{SyncInvokeOp, SyncRetOp},
-};
-
-use crate::{
-    arch::{ArchSystem, System},
-    sync_call::CallAbi,
-    thread::Thread,
-};
+use qapi::caps::CapError;
+use qapi::syscall::ops::sync_ipc::{SyncInvokeOp, SyncRetOp};
 
 use super::SyscallResp;
+use crate::arch::{ArchSystem, System};
+use crate::sync_call::CallAbi;
+use crate::thread::Thread;
 
 pub fn sync_invoke(opts: SyncInvokeOp, ctx: <ArchSystem as System>::IrqCtx) -> SyscallResp {
     let cap = Thread::with_current(|thread| thread.get_cap(opts.cap.cap()))

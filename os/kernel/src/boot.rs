@@ -13,11 +13,10 @@ use qapi::types::CSlice;
 use zerocopy::IntoBytes as _;
 
 use crate::arch::mem::{
-    Addrspace, Frame, FrameAllocError, MapPageError, Page, PageFlags, VirtAddr,
-    UNTYPED_MEMORY_OFFSET,
+    Addrspace, Frame, FrameAllocError, MapPageError, Page, PageFlags, UNTYPED_MEMORY_OFFSET,
+    VirtAddr,
 };
-use crate::arch::ExecState;
-use crate::arch::System;
+use crate::arch::{ExecState, System};
 use crate::pmo::PhysAddrExt as _;
 use crate::retyping::{FrameExt, RetypeTable};
 

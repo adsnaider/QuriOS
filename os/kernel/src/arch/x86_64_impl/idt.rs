@@ -10,7 +10,7 @@ use x86_64::structures::idt::{InterruptDescriptorTable, PageFaultErrorCode};
 use x86_64::{PrivilegeLevel, VirtAddr as VirtAddrImpl};
 
 use super::exec::{ExceptionAbi, Interrupt};
-use crate::arch::mem::{user_buffer_read_page_fault_call_gate, MemorySegment, VirtAddr};
+use crate::arch::mem::{MemorySegment, VirtAddr, user_buffer_read_page_fault_call_gate};
 use crate::arch::x86_64_impl::exec::{Exception, ExceptionCtx, IrqCtx};
 use crate::arch::x86_64_impl::gdt;
 use crate::core_local::CORE_LOCAL_SAFE_BUFFER_LOCK;

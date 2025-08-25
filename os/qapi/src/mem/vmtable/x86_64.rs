@@ -1,8 +1,7 @@
+use bitflags::bitflags;
 use derive_more::{Debug, From, Into};
 
 use crate::mem::Frame;
-
-use bitflags::bitflags;
 
 #[repr(transparent)]
 #[derive(From, Into, Debug, Clone, Copy, PartialEq, Eq)]

@@ -4,9 +4,7 @@ use qapi::syscall::ops::ctable::{
 };
 
 use super::SyscallResp;
-use crate::arch::ArchCaps as _;
-use crate::arch::ExecState;
-use crate::arch::{ArchSystem, System};
+use crate::arch::{ArchCaps as _, ArchSystem, ExecState, System};
 use crate::caps::trie::TrieSlotPayload;
 use crate::caps::{CapBlock, Capability, UserPtrTExt};
 use crate::kmem::KPtr;

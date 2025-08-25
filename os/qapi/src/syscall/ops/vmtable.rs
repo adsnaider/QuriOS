@@ -1,13 +1,10 @@
 use derive_more::{Display, Error, Into};
 use qapi_macros::SyscallRequest;
 
-use crate::{
-    caps::{CapError, vmtable::VMTableCap},
-    mem::{
-        PageFlags,
-        virt::{PageTableOffset, PageTableOffsetError},
-    },
-};
+use crate::caps::CapError;
+use crate::caps::vmtable::VMTableCap;
+use crate::mem::PageFlags;
+use crate::mem::virt::{PageTableOffset, PageTableOffsetError};
 
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Into)]

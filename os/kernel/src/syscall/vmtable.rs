@@ -1,14 +1,9 @@
-use qapi::syscall::ops::vmtable::{VMSetAttr, VMUnlinkOp};
-use qapi::{caps::CapError, syscall::ops::vmtable::VMLinkOp};
-
-use crate::arch::ArchCaps;
-
-use crate::{
-    arch::{ArchSystem, System},
-    thread::Thread,
-};
+use qapi::caps::CapError;
+use qapi::syscall::ops::vmtable::{VMLinkOp, VMSetAttr, VMUnlinkOp};
 
 use super::SyscallResp;
+use crate::arch::{ArchCaps, ArchSystem, System};
+use crate::thread::Thread;
 
 pub fn vm_link(opts: VMLinkOp) -> SyscallResp {
     let top_table = Thread::with_current(|thread| thread.get_cap(opts.top_table.cap()))

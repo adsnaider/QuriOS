@@ -3,7 +3,7 @@
 use core::mem::ManuallyDrop;
 use core::ops::Deref;
 use core::ptr::NonNull;
-use core::sync::atomic::{fence, Ordering};
+use core::sync::atomic::{Ordering, fence};
 
 use crate::arch::mem::{Frame, Page, VirtAddr};
 use crate::pmo::{PhysAddrExt as _, VirtAddrExt as _};

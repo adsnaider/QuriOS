@@ -1,12 +1,12 @@
 pub mod core_cell;
-pub use core_cell::CoreCell;
-
 use core::cell::RefCell;
 use core::mem::{align_of, size_of};
 
-use crate::arch::mem::core_local::CoreLocalData;
+pub use core_cell::CoreCell;
+
 use crate::arch::mem::Page;
-use crate::arch::{system, System};
+use crate::arch::mem::core_local::CoreLocalData;
+use crate::arch::{System, system};
 use crate::pmo::PhysAddrExt;
 use crate::retyping::KernelFrame;
 use crate::thread::CurrentThread;

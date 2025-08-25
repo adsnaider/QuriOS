@@ -1,17 +1,14 @@
 use core::mem::MaybeUninit;
 
-use qapi::{
-    caps::PositiveIsize,
-    syscall::ops::introspect::{IntrospectOp, IntrospectResult},
-};
-
-use crate::{
-    arch::{mem::Frame, ArchCaps as _},
-    caps::{trie::TrieSlotPayload, CapBlock, Capability, UserPtrMutTExt as _},
-    thread::Thread,
-};
+use qapi::caps::PositiveIsize;
+use qapi::syscall::ops::introspect::{IntrospectOp, IntrospectResult};
 
 use super::SyscallResp;
+use crate::arch::ArchCaps as _;
+use crate::arch::mem::Frame;
+use crate::caps::trie::TrieSlotPayload;
+use crate::caps::{CapBlock, Capability, UserPtrMutTExt as _};
+use crate::thread::Thread;
 
 pub fn introspect(opts: IntrospectOp) -> SyscallResp {
     let cap = Thread::with_current(|thread| thread.get_cap(opts.cap)).unwrap();

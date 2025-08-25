@@ -19,9 +19,8 @@ use x86_64::structures::idt::{
     HandlerFuncWithErrCode, InterruptStackFrame, InterruptStackFrameValue, PageFaultHandlerFunc,
 };
 
-use super::{gdt, X64Sys};
-use crate::arch::{ExecState, InvokeAbi};
-use crate::arch::{RetAbi, System};
+use super::{X64Sys, gdt};
+use crate::arch::{ExecState, InvokeAbi, RetAbi, System};
 use crate::sync_call::CallAbi;
 
 pub struct Exception;

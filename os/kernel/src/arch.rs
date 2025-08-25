@@ -7,16 +7,15 @@ use core::borrow::Borrow;
 use core::fmt::Debug;
 
 use mem::{Addrspace, PageFlags, VirtAddr};
-use qapi::{
-    caps::{CapError, PositiveIsize},
-    init::{BootArgs, EntryFn},
-    syscall::ops::{
-        ctable::VMTableCons, introspect::IntrospectResult, vmtable::PaddedPageTableOffset,
-    },
-};
+use qapi::caps::{CapError, PositiveIsize};
+use qapi::init::{BootArgs, EntryFn};
+use qapi::syscall::ops::ctable::VMTableCons;
+use qapi::syscall::ops::introspect::IntrospectResult;
+use qapi::syscall::ops::vmtable::PaddedPageTableOffset;
 use sync::cell::AtomicOnceCell;
 
-use crate::{kmem::KPtr, syscall::SyscallResp};
+use crate::kmem::KPtr;
+use crate::syscall::SyscallResp;
 
 cfg_if::cfg_if! {
     if #[cfg(target_arch = "x86_64")] {
