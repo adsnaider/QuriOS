@@ -7,7 +7,7 @@ use core::mem::MaybeUninit;
 use allocator_api2::boxed::Box;
 use entry::entry;
 use qapi::caps::slotid::SlotId;
-use qapi::caps::sync_ipc::SyncInvokeCap;
+use qapi::caps::sync_ipc::{ExceptionAbi, StandardAbi, SyncInvokeCap};
 use qapi::caps::{CapId, PositiveIsize};
 use qapi::exception::ExceptionKind;
 use qapi::init::{BootArgs, BootCaps};
@@ -19,29 +19,33 @@ use ulib::alloc::allocman::{ALockedMan, Allocman, ReservedHeap};
 use ulib::alloc::caps::CapabilityMan;
 use ulib::alloc::phys::bitmap_allocator::BitmapAllocator;
 use ulib::alloc::virt::Addrspace;
-use ulib::make_sync_call;
+use ulib::sysops::sync_endpoint::{IPC_STACKS, SyncEndpoint};
 use ulib::sysops::{CTableCapExt, CapIdExt, SyncInvokeCapExt};
 
 #[global_allocator]
 static ALLOCATOR: ALockedMan<BitmapAllocator> = ALockedMan::uninit();
 
-static STACK_LIST: StackList<'static> = StackList::new();
-
 #[entry]
 fn main(args: &'static BootArgs) -> ! {
     {
         static mut SNODE1: [u128; 4096] = [0; 4096];
+        static mut SEXCEPT1: [u128; 128] = [0; 128];
         #[allow(static_mut_refs)]
-        STACK_LIST.push_front(StackNode::new(unsafe { &mut SNODE1 }).unwrap());
+        IPC_STACKS[0].push_front(StackNode::new(unsafe { &mut SNODE1 }).unwrap());
+        #[allow(static_mut_refs)]
+        IPC_STACKS[1].push_front(StackNode::new(unsafe { &mut SEXCEPT1 }).unwrap());
     }
     serial::init();
+    let _exception_handler =
+        SyncEndpoint::<1, _, _>::create(ExceptionAbi, |(kind, code)| exception_handler(kind, code));
+    core::hint::black_box(_exception_handler.stackful_endpoint());
     log::info!("Landed on userspace init");
     let bootcaps = BootCaps::new();
     bootcaps
         .self_caps
         .make_sync_call(
             SlotId::new(10).unwrap(),
-            sync_invoke,
+            SyncEndpoint::<0, _, _>::create(StandardAbi, |(a, b, c, d)| sync_invoke(a, b, c, d)),
             bootcaps.self_resources,
         )
         .unwrap();
@@ -88,17 +92,15 @@ fn main(args: &'static BootArgs) -> ! {
     todo!();
 }
 
-fn sync_invoke_impl(a: usize, b: usize, c: usize, d: usize) -> PositiveIsize {
+fn sync_invoke(a: usize, b: usize, c: usize, d: usize) -> PositiveIsize {
     log::info!("Synchronous call: ({a}, {b}, {c}, {d})");
     10isize.try_into().unwrap()
 }
-make_sync_call!(sync_invoke, sync_invoke_impl, STACK_LIST);
 
-fn exception_handler_impl(kind: usize, code: usize, _: usize, _: usize) -> PositiveIsize {
+fn exception_handler(kind: usize, code: u64) {
     let kind = ExceptionKind::try_from(kind).unwrap();
     panic!("Exception: {:?} code={:#X}", kind, code);
 }
-make_sync_call!(exception_handler, exception_handler_impl, STACK_LIST, unsafe(link_section = ".exception_handler"));
 
 #[cfg(target_os = "none")]
 #[panic_handler]

@@ -8,6 +8,7 @@ use core::fmt::Debug;
 
 use mem::{Addrspace, PageFlags, VirtAddr};
 use qapi::caps::CapError;
+use qapi::caps::sync_ipc::SyncAbi;
 use qapi::init::{BootArgs, EntryFn};
 use qapi::syscall::ops::ctable::VMTableCons;
 use qapi::syscall::ops::introspect::IntrospectResult;
@@ -54,7 +55,6 @@ pub unsafe trait System: Sized {
     type ArchCaps: Debug + Clone + ArchCaps<Self>;
     type ExceptionAbi: Debug + Clone + InvokeAbi<Self>;
     type IrqCtx: Debug;
-    type RetAbi: Debug + Default + RetAbi<Self>;
 
     /// Initializes the architecture-specific subsystem
     fn init() -> Self;
@@ -102,10 +102,9 @@ pub trait ExecState: Debug {
     fn dispatch(&self) -> !;
 }
 
-pub trait InvokeAbi<Sys: System> {
-    fn new_invocation(self, entry: usize, ctx: &Sys::IrqCtx) -> (Sys::ExecState, Sys::RetAbi);
-}
-
-pub trait RetAbi<Sys: System> {
-    fn ret(self, callee_ctx: &Sys::IrqCtx, caller_ctx: &Sys::ExecState);
+pub trait InvokeAbi<Sys: System>: SyncAbi {
+    fn invoke_with_args(&self, args: Self::Args, entry: usize) -> Sys::ExecState;
+    fn ret_with_args(&self, ret: Self::Ret, caller_ctx: &Sys::ExecState);
+    fn invoke_passthrough(&self, ctx: &Sys::IrqCtx, entry: usize) -> Sys::ExecState;
+    fn ret_passthrough(&self, callee_ctx: &Sys::IrqCtx, caller_ctx: &Sys::ExecState);
 }

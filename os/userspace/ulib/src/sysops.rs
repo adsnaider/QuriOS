@@ -14,14 +14,14 @@ use qapi::syscall::ops::ctable::{
 };
 use qapi::syscall::ops::introspect::{IntrospectOp, IntrospectResult};
 use qapi::syscall::ops::retype::{RetypeKind, RetypeOp};
-use qapi::syscall::ops::sync_ipc::{SYNC_CALL_ARGS, SyncCallFun, SyncInvokeOp};
+use qapi::syscall::ops::sync_ipc::{SYNC_CALL_ARGS, SyncInvokeOp};
 use qapi::syscall::ops::thread::DispatchOp;
 use qapi::syscall::ops::vmtable::{PaddedPageTableOffset, VMLinkOp, VMSetAttr, VMUnlinkOp};
 use qapi::syscall::{SyscallArgs, SyscallOp, SyscallRequest};
 use qapi::types::{UserPtr, UserPtrMut};
+use sync_endpoint::{AbiImpl, SyncEndpoint};
 use zerocopy::IntoBytes as _;
 
-pub use crate::make_sync_call;
 use crate::syscall::syscall;
 
 #[ext]
@@ -70,15 +70,18 @@ pub impl CTableCap {
         )
     }
 
-    fn make_sync_call(
+    fn make_sync_call<const BUCKET: usize, Abi, F>(
         &self,
         slot: SysSlot,
-        fun: SyncCallFun,
+        fun: SyncEndpoint<BUCKET, Abi, F>,
         resources: ResourcesCap,
-    ) -> Result<(), CapError> {
+    ) -> Result<(), CapError>
+    where
+        SyncEndpoint<BUCKET, Abi, F>: AbiImpl,
+    {
         self.construct(
             ConsArgs::SyncCall(SyncCallCons {
-                entry: fun as usize,
+                entry: fun.stackful_endpoint() as usize,
                 resources,
                 _padding: 0,
             }),

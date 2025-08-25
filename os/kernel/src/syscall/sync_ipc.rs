@@ -1,18 +1,16 @@
-use qapi::caps::CapError;
-use qapi::syscall::ops::sync_ipc::{SyncInvokeOp, SyncRetOp};
-
 use super::SyscallResp;
 use crate::arch::{ArchSystem, System};
-use crate::sync_call::CallAbi;
 use crate::thread::Thread;
+use qapi::caps::CapError;
+use qapi::syscall::ops::sync_ipc::{SyncInvokeOp, SyncRetOp};
 
 pub fn sync_invoke(opts: SyncInvokeOp, ctx: <ArchSystem as System>::IrqCtx) -> SyscallResp {
     let cap = Thread::with_current(|thread| thread.get_cap(opts.cap.cap()))
         .unwrap()
         .ok_or(CapError::CapNotFound)?;
-    let sync_call = cap.as_synccall()?;
+    let call_ctx = cap.as_synccall()?.clone().create_invocation(&ctx);
     Thread::with_current(move |thread| {
-        thread.sync_invoke::<CallAbi>(sync_call.clone(), ctx)?;
+        thread.invoke(call_ctx, ctx)?;
     })
 }
 

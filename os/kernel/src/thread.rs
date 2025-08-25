@@ -3,26 +3,37 @@ use core::cell::{Ref, RefCell};
 use derive_more::{Display, Error};
 use derive_where::derive_where;
 use heapless::Vec;
+use qapi::caps::sync_ipc::{ExceptionAbi, StandardAbi};
 use qapi::caps::{CapError, CapId};
 use qapi::syscall::ops::introspect;
 use qapi::syscall::ops::sync_ipc::SyncRetOp;
 
 use crate::arch::mem::Addrspace;
-use crate::arch::{ArchSystem, ExecState, InvokeAbi, RetAbi, System};
+use crate::arch::{ArchSystem, ExecState, InvokeAbi, System};
 use crate::caps::{CapRef, CapTable, Resources};
 use crate::core_local::core_cell::{BorrowError, ResetAffinityError, SetAffinityError};
 use crate::core_local::{CORE_LOCAL_CURRENT_THREAD, CoreCell};
 use crate::kmem::KPtr;
 use crate::never::Never;
-use crate::sync_call::SyncCall;
+use crate::sync_call::AnyAbi;
 
 pub type CurrentThread = RefCell<Option<KPtr<Thread<ArchSystem>>>>;
 
 #[derive_where(Debug)]
-struct ThreadCtx<S: System> {
+pub struct ThreadCtx<S: System> {
     exec_state: S::ExecState,
     resources: KPtr<Resources<S>>,
-    ret_abi: S::RetAbi,
+    abi: AnyAbi,
+}
+
+impl<S: System> ThreadCtx<S> {
+    pub fn new(state: S::ExecState, resources: KPtr<Resources<S>>, abi: impl Into<AnyAbi>) -> Self {
+        Self {
+            exec_state: state,
+            resources,
+            abi: abi.into(),
+        }
+    }
 }
 
 #[derive_where(Debug)]
@@ -120,7 +131,7 @@ impl<S: System> Thread<S> {
         ctx.push(ThreadCtx {
             exec_state,
             resources: comp,
-            ret_abi: Default::default(),
+            abi: Default::default(),
         })
         .unwrap();
         Self {
@@ -144,22 +155,8 @@ impl<S: System> Thread<S> {
         Ok(Ref::map(self.ctx.try_borrow()?, |ctx| ctx.last().unwrap()))
     }
 
-    pub fn sync_invoke<Abi>(
-        &self,
-        sync_call: SyncCall<S, Abi>,
-        ctx: S::IrqCtx,
-    ) -> Result<Never, CapError>
-    where
-        Abi: InvokeAbi<S>,
-    {
+    pub fn invoke(&self, invocation: ThreadCtx<S>, ctx: S::IrqCtx) -> Result<Never, CapError> {
         let exec_state = {
-            let (resources, xstate, sret) = sync_call.create_invocation(&ctx);
-            let sync_ctx = ThreadCtx {
-                resources,
-                exec_state: xstate,
-                ret_abi: sret,
-            };
-
             let mut curr_ctx = self
                 .ctx
                 .try_borrow_mut()
@@ -173,15 +170,19 @@ impl<S: System> Thread<S> {
             if curr_ctx.is_full() {
                 return Err(CapError::SyncInvokeLimit);
             }
-            sync_ctx.resources.addrspace().activate();
-            let xstate = sync_ctx.exec_state.clone();
-            curr_ctx.push(sync_ctx).unwrap();
+            invocation.resources.addrspace().activate();
+            let xstate = invocation.exec_state.clone();
+            curr_ctx.push(invocation).unwrap();
             xstate
         };
         exec_state.dispatch();
     }
 
-    pub fn sync_ret(&self, _args: SyncRetOp, callee_ctx: S::IrqCtx) -> Result<Never, CapError> {
+    pub fn sync_ret(&self, _args: SyncRetOp, callee_ctx: S::IrqCtx) -> Result<Never, CapError>
+    where
+        StandardAbi: InvokeAbi<S>,
+        ExceptionAbi: InvokeAbi<S>,
+    {
         let exec_state = {
             let mut thread_ctx = self
                 .ctx
@@ -191,9 +192,9 @@ impl<S: System> Thread<S> {
                 return Err(CapError::SyncRetLimit);
             }
 
-            let ThreadCtx { ret_abi, .. } = thread_ctx.pop().unwrap();
+            let ThreadCtx { abi, .. } = thread_ctx.pop().unwrap();
             let caller_ctx = thread_ctx.last().unwrap();
-            ret_abi.ret(&callee_ctx, &caller_ctx.exec_state);
+            abi.ret_to(&callee_ctx, &caller_ctx.exec_state)?;
             caller_ctx.resources.addrspace().activate();
             caller_ctx.exec_state.clone()
         };

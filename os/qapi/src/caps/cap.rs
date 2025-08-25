@@ -100,6 +100,8 @@ pub enum CapError {
         "Tried to perform an operation on a thread that is currently bound to a different core"
     )]
     ThreadBoundToOtherCore = -22,
+    #[display("Attempted to sync-ret on a component with a no-return ABI")]
+    SyncRetOnNoRetAbi = -23,
 }
 
 impl CapError {
@@ -121,6 +123,14 @@ pub struct PositiveIsize(isize);
 impl PositiveIsize {
     pub const fn zero() -> Self {
         Self(0)
+    }
+
+    pub const fn truncate(value: isize) -> Self {
+        if value < 0 {
+            PositiveIsize::zero()
+        } else {
+            Self(value)
+        }
     }
 }
 

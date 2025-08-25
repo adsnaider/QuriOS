@@ -10,6 +10,7 @@ use core::mem::MaybeUninit;
 use derive_more::{Debug, From};
 use derive_where::derive_where;
 use qapi::caps::PositiveIsize;
+use qapi::caps::sync_ipc::{ExceptionAbi, ExceptionRetAbi, StandardAbi, StandardRetAbi};
 use qapi::exception::ExceptionKind;
 use qapi::init::{BootArgs, EntryFn};
 use sealed::sealed;
@@ -20,8 +21,7 @@ use x86_64::structures::idt::{
 };
 
 use super::{X64Sys, gdt};
-use crate::arch::{ExecState, InvokeAbi, RetAbi, System};
-use crate::sync_call::CallAbi;
+use crate::arch::{ExecState, InvokeAbi, System};
 
 pub struct Exception;
 pub struct Interrupt;
@@ -141,18 +141,6 @@ impl ExceptionCtx<Exception> {
         let scratch = (self.stack_top as usize - 8 - size_of::<ScratchRegs>()) as *mut ScratchRegs;
         // SAFETY: Scratch registers are pushed first before, so should be here.
         unsafe { &mut *scratch }
-    }
-}
-
-#[derive(Debug, Copy, Clone)]
-pub struct ExceptionAbi {
-    which: ExceptionKind,
-    code: Option<u64>,
-}
-
-impl ExceptionAbi {
-    pub const fn new(which: ExceptionKind, code: Option<u64>) -> Self {
-        Self { which, code }
     }
 }
 
@@ -372,88 +360,93 @@ pub struct Regs {
     pub control: ControlRegs,
 }
 
-impl InvokeAbi<X64Sys> for CallAbi {
-    fn new_invocation(self, entry: usize, ctx: &IrqCtx) -> (ExecCtx, AnyRet) {
-        let curr_regs = ctx.regs();
+impl InvokeAbi<X64Sys> for StandardAbi {
+    fn invoke_with_args(&self, args: Self::Args, entry: usize) -> <X64Sys as System>::ExecState {
         let mut regs = Regs::default();
         regs.control.rip = entry as u64;
         regs.control.rsp = 0;
         // NOTE: RDI and RSI contain the SyncCallOp and SyncCall cap respectively.
-        regs.scratch.rdi = curr_regs.scratch.rdx;
-        regs.scratch.rsi = curr_regs.scratch.rcx;
-        regs.scratch.rdx = curr_regs.scratch.r8;
-        regs.scratch.rcx = curr_regs.scratch.r9;
+        regs.scratch.rdi = args.0 as u64;
+        regs.scratch.rsi = args.1 as u64;
+        regs.scratch.rdx = args.2 as u64;
+        regs.scratch.rcx = args.3 as u64;
         // TODO: Maybe don't give access to all hardware here but it's good for debugging.
         regs.control.rflags =
             (RFlags::INTERRUPT_FLAG | RFlags::IOPL_HIGH | RFlags::IOPL_LOW).bits();
-        (
-            ExecCtx {
-                regs: Cell::new(regs),
-            },
-            CallRetAbi.into(),
+        ExecCtx {
+            regs: Cell::new(regs),
+        }
+    }
+
+    fn ret_with_args(&self, ret: Self::Ret, caller_ctx: &<X64Sys as System>::ExecState) {
+        caller_ctx.regs.update(|mut regs| {
+            regs.scratch.rax = isize::from(ret) as u64;
+            regs
+        });
+    }
+
+    fn invoke_passthrough(
+        &self,
+        ctx: &<X64Sys as System>::IrqCtx,
+        entry: usize,
+    ) -> <X64Sys as System>::ExecState {
+        let regs = ctx.regs().scratch;
+        self.invoke_with_args(
+            (
+                regs.rdx as usize,
+                regs.rcx as usize,
+                regs.r8 as usize,
+                regs.r9 as usize,
+            ),
+            entry,
         )
+    }
+
+    fn ret_passthrough(
+        &self,
+        callee_ctx: &<X64Sys as System>::IrqCtx,
+        caller_ctx: &<X64Sys as System>::ExecState,
+    ) {
+        self.ret_with_args(
+            PositiveIsize::truncate(callee_ctx.scratch_regs().rax as isize),
+            caller_ctx,
+        );
     }
 }
 
 impl InvokeAbi<X64Sys> for ExceptionAbi {
-    fn new_invocation(self, entry: usize, ctx: &IrqCtx) -> (ExecCtx, AnyRet) {
+    fn invoke_with_args(&self, args: Self::Args, entry: usize) -> <X64Sys as System>::ExecState {
         let mut regs = Regs::default();
         regs.control.rip = entry as u64;
         regs.control.rsp = 0;
-        regs.scratch.rdi = self.which as u64;
-        regs.scratch.rsi = self.code.unwrap_or(u64::MAX);
+        regs.scratch.rdi = args.0 as u64;
+        regs.scratch.rsi = args.1;
         regs.control.rflags =
             (RFlags::INTERRUPT_FLAG | RFlags::IOPL_HIGH | RFlags::IOPL_LOW).bits();
-        (
-            ExecCtx {
-                regs: Cell::new(regs),
-            },
-            ExceptionRetAbi.into(),
+        ExecCtx {
+            regs: Cell::new(regs),
+        }
+    }
+
+    fn ret_with_args(&self, ret: Self::Ret, caller_ctx: &<X64Sys as System>::ExecState) {}
+
+    fn invoke_passthrough(
+        &self,
+        ctx: &<X64Sys as System>::IrqCtx,
+        entry: usize,
+    ) -> <X64Sys as System>::ExecState {
+        let caller_regs = ctx.regs();
+        self.invoke_with_args(
+            (caller_regs.scratch.rdx as usize, caller_regs.scratch.rcx),
+            entry,
         )
     }
-}
 
-impl RetAbi<X64Sys> for CallRetAbi {
-    fn ret(self, callee_ctx: &IrqCtx, caller_ctx: &ExecCtx) {
-        let resp = caller_ctx.regs().scratch.rsi as isize;
-        let resp = resp.max(0);
-        caller_ctx.regs.update(|mut regs| {
-            regs.scratch.rax = resp as u64;
-            regs
-        });
-    }
-}
-impl RetAbi<X64Sys> for ExceptionRetAbi {
-    fn ret(self, callee_ctx: &IrqCtx, caller_ctx: &ExecCtx) {
-        // Purposely empty: Exceptions are essentially as transparent as they get. In the future,
-        // we may have a way to return ways of udpating specific control registers (like to push the
-        // RIP forward)
-    }
-}
-
-#[derive(Debug)]
-pub struct ExceptionRetAbi;
-#[derive(Debug)]
-pub struct CallRetAbi;
-
-#[derive(Debug, Default, From)]
-pub enum AnyRet {
-    #[default]
-    NoReturn,
-    Standard(CallRetAbi),
-    Exception(ExceptionRetAbi),
-}
-
-impl RetAbi<X64Sys> for AnyRet {
-    fn ret(
-        self,
+    fn ret_passthrough(
+        &self,
         callee_ctx: &<X64Sys as System>::IrqCtx,
         caller_ctx: &<X64Sys as System>::ExecState,
     ) {
-        match self {
-            AnyRet::NoReturn => panic!("Attempted return on no-return ABI"),
-            AnyRet::Standard(call_abi) => call_abi.ret(callee_ctx, caller_ctx),
-            AnyRet::Exception(exception_ret_abi) => exception_ret_abi.ret(callee_ctx, caller_ctx),
-        }
+        self.ret_with_args((), caller_ctx)
     }
 }

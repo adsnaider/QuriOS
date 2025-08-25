@@ -21,7 +21,7 @@ use crate::arch::{ArchCaps as _, ArchSystem, System};
 use crate::kmem::KPtr;
 use crate::never::Never;
 use crate::retyping::{AsUnusedKernelError, FrameExt};
-use crate::sync_call::{SyncCall, SyncRet};
+use crate::sync_call::SyncCall;
 use crate::thread::Thread;
 
 const _EXPECTED_SLOT_SIZE: () = {
@@ -194,7 +194,6 @@ pub enum Capability<S: System> {
     Thread(KPtr<Thread<S>>),
     CapBlock(KPtr<CapBlock<S>>),
     SyncCall(SyncCall<S>),
-    SyncRet(SyncRet),
     CompResource(KPtr<Resources<S>>),
     Arch(S::ArchCaps),
 }

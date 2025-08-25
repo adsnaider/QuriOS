@@ -1,5 +1,6 @@
 use ctable::{cap_table_cons, cap_table_copy, cap_table_drop, cap_table_link};
 use introspect::introspect;
+use qapi::caps::sync_ipc::{ExceptionAbi, SyncAbi};
 use qapi::caps::{CapError, PositiveIsize};
 use qapi::syscall::ops::ctable::{ConsOp, CopyOp, DropOp, LinkOp};
 use qapi::syscall::ops::introspect::IntrospectOp;
@@ -13,10 +14,9 @@ use sync_ipc::{sync_invoke, sync_ret};
 use thread::dispatch;
 use vmtable::{vm_link, vm_set_attr, vm_unlink};
 
-use crate::arch::{ArchSystem, System};
+use crate::arch::{ArchSystem, InvokeAbi, System};
 use crate::caps::ExceptionHandler;
-use crate::sync_call::SyncCall;
-use crate::thread::Thread;
+use crate::thread::{Thread, ThreadCtx};
 
 mod ctable;
 mod introspect;
@@ -54,17 +54,19 @@ pub fn syscall_handler(
 }
 
 pub fn ring3_exception_handler(
-    exception: <ArchSystem as System>::ExceptionAbi,
+    args: <ExceptionAbi as SyncAbi>::Args,
     ctx: <ArchSystem as System>::IrqCtx,
 ) -> ! {
     let exception_handler =
         Thread::with_current(|thread| thread.active_comp().unwrap().exception_handler().clone());
-    let sync_call: SyncCall<ArchSystem, _> = match exception_handler {
+    let abi = ExceptionAbi;
+    let exception_ctx = match exception_handler {
         ExceptionHandler::Within { entry } => {
             let resources = Thread::with_current(|thread| thread.active_comp().unwrap().clone());
-            SyncCall::new(resources, entry, exception)
+            let exec_state = abi.invoke_with_args(args, entry);
+            ThreadCtx::new(exec_state, resources, abi)
         }
     };
     // TODO: If this fails, notifiy a scheduler thread instead...
-    Thread::with_current(move |thread| thread.sync_invoke(sync_call, ctx)).unwrap();
+    Thread::with_current(move |thread| thread.invoke(exception_ctx, ctx)).unwrap();
 }

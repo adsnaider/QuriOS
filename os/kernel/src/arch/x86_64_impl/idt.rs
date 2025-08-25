@@ -9,7 +9,7 @@ use x86_64::registers::control::Cr2;
 use x86_64::structures::idt::{InterruptDescriptorTable, PageFaultErrorCode};
 use x86_64::{PrivilegeLevel, VirtAddr as VirtAddrImpl};
 
-use super::exec::{ExceptionAbi, Interrupt};
+use super::exec::Interrupt;
 use crate::arch::mem::{MemorySegment, VirtAddr, user_buffer_read_page_fault_call_gate};
 use crate::arch::x86_64_impl::exec::{Exception, ExceptionCtx, IrqCtx};
 use crate::arch::x86_64_impl::gdt;
@@ -32,10 +32,9 @@ impl<const ID: usize> IsrHandler<Interrupt, ()> for ForwardRing3Exceptions<ID> {
             PrivilegeLevel::Ring1 | PrivilegeLevel::Ring2 => {
                 unreachable!("Unexpected ring usage in dual mode processor use")
             }
-            PrivilegeLevel::Ring3 => ring3_exception_handler(
-                ExceptionAbi::new(ExceptionKind::try_from(ID).unwrap(), None),
-                IrqCtx::Interrupt(ctx),
-            ),
+            PrivilegeLevel::Ring3 => {
+                ring3_exception_handler((ID, u64::MAX), IrqCtx::Interrupt(ctx))
+            }
         }
     }
 }
@@ -46,10 +45,9 @@ impl<const ID: usize> IsrHandler<Exception, ()> for ForwardRing3Exceptions<ID> {
             PrivilegeLevel::Ring1 | PrivilegeLevel::Ring2 => {
                 unreachable!("Unexpected ring usage in dual mode processor use")
             }
-            PrivilegeLevel::Ring3 => ring3_exception_handler(
-                ExceptionAbi::new(ExceptionKind::try_from(ID).unwrap(), Some(ctx.error_code())),
-                IrqCtx::Exception(ctx),
-            ),
+            PrivilegeLevel::Ring3 => {
+                ring3_exception_handler((ID, ctx.error_code()), IrqCtx::Exception(ctx))
+            }
         }
     }
 }
@@ -177,7 +175,7 @@ fn page_fault_handler(mut ctx: ExceptionCtx<Exception>) {
         PrivilegeLevel::Ring3 => {
             log::debug!("Ring3 Page fault handling due to access at @ {addr:#X?}");
             ring3_exception_handler(
-                ExceptionAbi::new(ExceptionKind::PageFault, Some(ctx.error_code())),
+                (ExceptionKind::PageFault as usize, ctx.error_code()),
                 IrqCtx::Exception(ctx),
             )
         }

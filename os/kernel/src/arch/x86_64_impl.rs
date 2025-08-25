@@ -1,8 +1,9 @@
 use core::arch::asm;
 use core::borrow::Borrow;
 
-use exec::{AnyRet, ExceptionAbi, ExecCtx, IrqCtx};
+use exec::{ExecCtx, IrqCtx};
 use mem_impl::page_table::{AnyPageTable, PageTableOffset, X64Addrspace};
+use qapi::caps::sync_ipc::ExceptionAbi;
 use qapi::caps::{CapError, PositiveIsize};
 use qapi::mem::vmtable::VMTableEntry;
 use qapi::syscall::ops::ctable::VMTableCons;
@@ -36,7 +37,6 @@ unsafe impl System for X64Sys {
     type ArchCaps = ArchCaps;
     type IrqCtx = IrqCtx;
     type ExceptionAbi = ExceptionAbi;
-    type RetAbi = AnyRet;
 
     fn addrspace(&self) -> Self::Addrspace {
         // SAFETY: PMO is correct from initialization

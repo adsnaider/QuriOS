@@ -23,7 +23,6 @@ pub fn introspect(opts: IntrospectOp) -> SyscallResp {
             cblock: CapBlock::introspect(kptr),
         },
         Some(TrieSlotPayload::Data(Capability::SyncCall(sync_call))) => sync_call.introspect(),
-        Some(TrieSlotPayload::Data(Capability::SyncRet(sync_ret))) => sync_ret.introspect(),
         Some(TrieSlotPayload::Data(Capability::CompResource(resources))) => resources.introspect(),
         Some(TrieSlotPayload::Data(Capability::Arch(a))) => a.introspect(),
         Some(TrieSlotPayload::Link(kptr)) => IntrospectResult::CLink {
