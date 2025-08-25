@@ -8,6 +8,7 @@ use core::marker::PhantomData;
 use core::mem::MaybeUninit;
 
 use derive_more::{Debug, From};
+use derive_where::derive_where;
 use qapi::caps::PositiveIsize;
 use qapi::exception::ExceptionKind;
 use qapi::init::{BootArgs, EntryFn};
@@ -33,16 +34,10 @@ pub enum IrqCtx {
 }
 
 #[repr(transparent)]
+#[derive_where(Clone, Copy)]
 pub struct ExceptionCtx<Kind> {
     stack_top: u64,
     _kind: PhantomData<Kind>,
-}
-impl<Kind> Copy for ExceptionCtx<Kind> {}
-impl<Kind> Clone for ExceptionCtx<Kind> {
-    fn clone(&self) -> Self {
-        let exception_ctx = *self;
-        exception_ctx
-    }
 }
 impl<Kind> core::fmt::Debug for ExceptionCtx<Kind> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
