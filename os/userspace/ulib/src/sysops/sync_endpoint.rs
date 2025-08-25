@@ -15,10 +15,12 @@ pub const IPC_STACK_BUCKETS: usize = 4;
 pub static IPC_STACKS: [StackList<'static>; IPC_STACK_BUCKETS] =
     [const { StackList::new() }; IPC_STACK_BUCKETS];
 
+#[derive(Debug, Copy, Clone)]
 pub struct SyncEndpoint<const BUCKET: usize, Abi, F>(Abi, F);
 
 pub trait AbiImpl {
-    extern "C" fn os_entry();
+    extern "C" fn stackless_entry();
+    extern "C" fn stackfull_entry();
 }
 
 trait AbiFn<Abi: SyncAbi>: Fn(<Abi as SyncAbi>::Args) -> <Abi as SyncAbi>::Ret {}
@@ -34,16 +36,7 @@ where
     F: AbiFn<StandardAbi>,
 {
     #[unsafe(naked)]
-    extern "C" fn os_entry() {
-        extern "C" fn routine<F>(a: usize, b: usize, c: usize, d: usize) -> PositiveIsize
-        where
-            F: AbiFn<StandardAbi>,
-        {
-            let fun: *const F = core::ptr::dangling();
-            // SAFETY: Zero-sized type can alwasy be dereferenced as it's a compile-type only object.
-            unsafe { (*fun)((a, b, c, d)) }
-        }
-
+    extern "C" fn stackless_entry() {
         // SAFETY: Proper conditions for a synchronous invocation call gate
         #[allow(unused_unsafe)]
         unsafe {
@@ -53,9 +46,50 @@ where
                 "mov rsi, rax",
                 "int 0x80",
                 "ud2",
-                inner = sym routine::<F>,
-                sync_ret_call = const {SyscallOp::SyncRet as usize},
+                inner = sym Self::routine,
+                sync_ret_call = const { SyscallOp::SyncRet as usize },
             );
+        }
+    }
+
+    #[unsafe(naked)]
+    extern "C" fn stackfull_entry() {
+        #[allow(unused_unsafe)]
+        unsafe {
+            naked_asm!(
+                "mov r12, rdi",
+                "mov r13, rsi",
+                "mov r14, rdx",
+                "mov r15, rcx",
+                "lea rdi, [{stack_list} + {stack_bucket_off}]",
+                stack_list_pop!(),
+                "test rax, rax",
+                "je 3f",
+                "mov rsp, rax",
+                "mov rdi, r12",
+                "mov rsi, r13",
+                "mov rdx, r14",
+                "mov rcx, r15",
+                "call {inner}",
+                "mov r12, rax",
+                "lea rdi, [{stack_list} + {stack_bucket_off}]",
+                "mov rsi, rsp",
+                stack_list_push!(),
+                "mov rax, r12",
+                "jmp 4f",
+                "3:",
+                 "mov rax, 1",
+                "4:",
+                 "mov rsp, 0",
+                 "mov rdi, {sync_ret_call}",
+                 "mov rsi, rax",
+                "int 0x80",
+                "ud2",
+                inner = sym Self::routine,
+                stack_list = sym IPC_STACKS,
+                stack_bucket_off = const { BUCKET * size_of::<StackList>() },
+                sync_ret_call = const { SyscallOp::SyncRet as usize },
+            )
         }
     }
 }
@@ -65,16 +99,7 @@ where
     F: AbiFn<ExceptionAbi>,
 {
     #[unsafe(naked)]
-    extern "C" fn os_entry() {
-        extern "C" fn routine<F>(kind: usize, code: u64)
-        where
-            F: AbiFn<ExceptionAbi>,
-        {
-            let fun: *const F = core::ptr::dangling();
-            // SAFETY: Zero-sized type can alwasy be dereferenced as it's a compile-type only object.
-            unsafe { (*fun)((kind, code)) }
-        }
-
+    extern "C" fn stackless_entry() {
         // SAFETY: Proper conditions for a synchronous invocation call gate
         #[allow(unused_unsafe)]
         unsafe {
@@ -83,9 +108,49 @@ where
                 "mov rdi, {sync_ret_call}",
                 "int 0x80",
                 "ud2",
-                inner = sym routine::<F>,
+                inner = sym Self::routine,
                 sync_ret_call = const {SyscallOp::SyncRet as usize},
             );
+        }
+    }
+
+    // TODO: Ideally the kernel/user loader look for a static that has a specific name with a
+    // pointer to the routine instead of this link section.
+    #[unsafe(link_section = ".exception_handler")]
+    #[unsafe(naked)]
+    extern "C" fn stackfull_entry() {
+        #[allow(unused_unsafe)]
+        unsafe {
+            naked_asm!(
+                "mov r12, rdi",
+                "mov r13, rsi",
+                "lea rdi, [{stack_list} + {stack_bucket_off}]",
+                stack_list_pop!(),
+                "test rax, rax",
+                "je 3f",
+                "mov rsp, rax",
+                "mov rdi, r12",
+                "mov rsi, r13",
+                "call {inner}",
+                "mov r12, rax",
+                "lea rdi, [{stack_list} + {stack_bucket_off}]",
+                "mov rsi, rsp",
+                stack_list_push!(),
+                "mov rax, r12",
+                "jmp 4f",
+                "3:",
+                 "mov rax, 1",
+                "4:",
+                 "mov rsp, 0",
+                 "mov rdi, {sync_ret_call}",
+                 "mov rsi, rax",
+                "int 0x80",
+                "ud2",
+                inner = sym Self::routine,
+                stack_list = sym IPC_STACKS,
+                stack_bucket_off = const { BUCKET * size_of::<StackList>() },
+                sync_ret_call = const { SyscallOp::SyncRet as usize },
+            )
         }
     }
 }
@@ -105,51 +170,32 @@ where
     }
 
     pub const fn endpoint(&self) -> extern "C" fn() {
-        Self::os_entry
+        Self::stackless_entry
     }
 
-    pub const fn stackful_endpoint(&self) -> extern "C" fn() {
-        #[unsafe(link_section = ".exception_handler")]
-        #[unsafe(naked)]
-        extern "C" fn entry<This: AbiImpl, const BUCKET: usize>() {
-            #[allow(unused_unsafe)]
-            unsafe {
-                naked_asm!(
-                    "mov r12, rdi",
-                    "mov r13, rsi",
-                    "mov r14, rdx",
-                    "mov r15, rcx",
-                    "lea rdi, [{stack_list} + {stack_bucket_off}]",
-                    stack_list_pop!(),
-                    "test rax, rax",
-                    "je 3f",
-                    "mov rsp, rax",
-                    "mov rdi, r12",
-                    "mov rsi, r13",
-                    "mov rdx, r14",
-                    "mov rcx, r15",
-                    "call {inner}",
-                    "mov r12, rax",
-                    "lea rdi, [{stack_list} + {stack_bucket_off}]",
-                    "mov rsi, rsp",
-                    stack_list_push!(),
-                    "mov rax, r12",
-                    "jmp 4f",
-                    "3:",
-                     "mov rax, 1",
-                    "4:",
-                     "mov rsp, 0",
-                     "mov rdi, {sync_ret_call}",
-                     "mov rsi, rax",
-                    "int 0x80",
-                    "ud2",
-                    inner = sym This::os_entry,
-                    stack_list = sym IPC_STACKS,
-                    stack_bucket_off = const { BUCKET * size_of::<StackList>() },
-                    sync_ret_call = const { SyscallOp::SyncRet as usize },
-                )
-            }
-        }
-        entry::<Self, BUCKET>
+    pub const fn stackfull_endpoint(&self) -> extern "C" fn() {
+        Self::stackfull_entry
+    }
+}
+
+impl<const BUCKET: usize, F> SyncEndpoint<BUCKET, ExceptionAbi, F>
+where
+    F: AbiFn<ExceptionAbi>,
+{
+    extern "C" fn routine(kind: usize, code: u64) {
+        let fun: *const F = core::ptr::dangling();
+        // SAFETY: Zero-sized type can alwasy be dereferenced as it's a compile-type only object.
+        unsafe { (*fun)((kind, code)) }
+    }
+}
+
+impl<const BUCKET: usize, F> SyncEndpoint<BUCKET, StandardAbi, F>
+where
+    F: AbiFn<StandardAbi>,
+{
+    extern "C" fn routine(a: usize, b: usize, c: usize, d: usize) -> PositiveIsize {
+        let fun: *const F = core::ptr::dangling();
+        // SAFETY: Zero-sized type can alwasy be dereferenced as it's a compile-type only object.
+        unsafe { (*fun)((a, b, c, d)) }
     }
 }

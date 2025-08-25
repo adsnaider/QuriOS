@@ -70,18 +70,15 @@ pub impl CTableCap {
         )
     }
 
-    fn make_sync_call<const BUCKET: usize, Abi, F>(
+    fn make_sync_call(
         &self,
         slot: SysSlot,
-        fun: SyncEndpoint<BUCKET, Abi, F>,
+        fun: extern "C" fn(),
         resources: ResourcesCap,
-    ) -> Result<(), CapError>
-    where
-        SyncEndpoint<BUCKET, Abi, F>: AbiImpl,
-    {
+    ) -> Result<(), CapError> {
         self.construct(
             ConsArgs::SyncCall(SyncCallCons {
-                entry: fun.stackful_endpoint() as usize,
+                entry: fun as usize,
                 resources,
                 _padding: 0,
             }),

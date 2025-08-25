@@ -25,6 +25,16 @@ use ulib::sysops::{CTableCapExt, CapIdExt, SyncInvokeCapExt};
 #[global_allocator]
 static ALLOCATOR: ALockedMan<BitmapAllocator> = ALockedMan::uninit();
 
+// TODO: Ideally the kernel/user loader will find this with a special name while loading the process and use the
+// pointer as the exception handler routine.
+#[used]
+static EXCEPTION_HANDLER: extern "C" fn() = const {
+    let endpoint =
+        SyncEndpoint::<1, _, _>::create(ExceptionAbi, |(kind, code)| exception_handler(kind, code));
+
+    endpoint.stackfull_endpoint()
+};
+
 #[entry]
 fn main(args: &'static BootArgs) -> ! {
     {
@@ -36,16 +46,14 @@ fn main(args: &'static BootArgs) -> ! {
         IPC_STACKS[1].push_front(StackNode::new(unsafe { &mut SEXCEPT1 }).unwrap());
     }
     serial::init();
-    let _exception_handler =
-        SyncEndpoint::<1, _, _>::create(ExceptionAbi, |(kind, code)| exception_handler(kind, code));
-    core::hint::black_box(_exception_handler.stackful_endpoint());
     log::info!("Landed on userspace init");
     let bootcaps = BootCaps::new();
     bootcaps
         .self_caps
         .make_sync_call(
             SlotId::new(10).unwrap(),
-            SyncEndpoint::<0, _, _>::create(StandardAbi, |(a, b, c, d)| sync_invoke(a, b, c, d)),
+            SyncEndpoint::<0, _, _>::create(StandardAbi, |(a, b, c, d)| sync_invoke(a, b, c, d))
+                .stackfull_endpoint(),
             bootcaps.self_resources,
         )
         .unwrap();
