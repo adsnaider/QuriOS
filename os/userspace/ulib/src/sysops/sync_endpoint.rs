@@ -5,7 +5,7 @@ pub use paste::paste;
 use qapi::{
     caps::{
         PositiveIsize,
-        sync_ipc::{ExceptionAbi, StandardAbi, SyncAbi},
+        sync_ipc::{ExceptionAbi, ExceptionArgs, StandardAbi, SyncAbi},
     },
     syscall::SyscallOp,
 };
@@ -121,6 +121,7 @@ where
             naked_asm!(
                 "mov r12, rdi",
                 "mov r13, rsi",
+                "mov r14, rdx",
                 "lea rdi, [{stack_list} + {stack_bucket_off}]",
                 stack_list_pop!(),
                 "test rax, rax",
@@ -128,6 +129,7 @@ where
                 "mov rsp, rax",
                 "mov rdi, r12",
                 "mov rsi, r13",
+                "mov rdx, r14",
                 "call {inner}",
                 "mov r12, rax",
                 "lea rdi, [{stack_list} + {stack_bucket_off}]",
@@ -179,10 +181,10 @@ impl<const BUCKET: usize, F> SyncEndpoint<BUCKET, ExceptionAbi, F>
 where
     F: AbiFn<ExceptionAbi>,
 {
-    extern "C" fn routine(kind: usize, code: u64) {
+    extern "C" fn routine(kind: usize, code: u64, extra: u64) {
         let fun: *const F = core::ptr::dangling();
         // SAFETY: Zero-sized type can alwasy be dereferenced as it's a compile-type only object.
-        unsafe { (*fun)((kind, code)) }
+        unsafe { (*fun)(ExceptionArgs { kind, code, extra }) }
     }
 }
 

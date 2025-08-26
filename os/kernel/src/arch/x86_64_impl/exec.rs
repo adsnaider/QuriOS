@@ -10,7 +10,9 @@ use core::mem::MaybeUninit;
 use derive_more::{Debug, From};
 use derive_where::derive_where;
 use qapi::caps::PositiveIsize;
-use qapi::caps::sync_ipc::{ExceptionAbi, ExceptionRetAbi, StandardAbi, StandardRetAbi};
+use qapi::caps::sync_ipc::{
+    ExceptionAbi, ExceptionArgs, ExceptionRetAbi, StandardAbi, StandardRetAbi,
+};
 use qapi::exception::ExceptionKind;
 use qapi::init::{BootArgs, EntryFn};
 use sealed::sealed;
@@ -416,11 +418,13 @@ impl InvokeAbi<X64Sys> for StandardAbi {
 
 impl InvokeAbi<X64Sys> for ExceptionAbi {
     fn invoke_with_args(&self, args: Self::Args, entry: usize) -> <X64Sys as System>::ExecState {
+        let Self::Args { kind, code, extra } = args;
         let mut regs = Regs::default();
         regs.control.rip = entry as u64;
         regs.control.rsp = 0;
-        regs.scratch.rdi = args.0 as u64;
-        regs.scratch.rsi = args.1;
+        regs.scratch.rdi = kind as u64;
+        regs.scratch.rsi = code;
+        regs.scratch.rdx = extra;
         regs.control.rflags =
             (RFlags::INTERRUPT_FLAG | RFlags::IOPL_HIGH | RFlags::IOPL_LOW).bits();
         ExecCtx {
@@ -437,7 +441,11 @@ impl InvokeAbi<X64Sys> for ExceptionAbi {
     ) -> <X64Sys as System>::ExecState {
         let caller_regs = ctx.regs();
         self.invoke_with_args(
-            (caller_regs.scratch.rdx as usize, caller_regs.scratch.rcx),
+            ExceptionArgs {
+                kind: caller_regs.scratch.rdx as usize,
+                code: caller_regs.scratch.rcx,
+                extra: caller_regs.scratch.r8,
+            },
             entry,
         )
     }

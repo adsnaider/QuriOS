@@ -31,8 +31,14 @@ mod x86_64 {
     #[derive(Debug)]
     pub struct ExceptionRetAbi;
 
+    pub struct ExceptionArgs {
+        pub kind: usize,
+        pub code: u64,
+        pub extra: u64,
+    }
+
     impl SyncAbi for ExceptionAbi {
-        type Args = (usize, u64);
+        type Args = ExceptionArgs;
         type Ret = ();
     }
 }

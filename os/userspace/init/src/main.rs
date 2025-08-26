@@ -11,7 +11,7 @@ use loader::MagicInfo;
 use qapi::caps::slotid::SlotId;
 use qapi::caps::sync_ipc::{ExceptionAbi, StandardAbi, SyncInvokeCap};
 use qapi::caps::{CapId, PositiveIsize};
-use qapi::exception::ExceptionKind;
+use qapi::exception::{ExceptionInfo, ExceptionKind};
 use qapi::init::{BootArgs, BootCaps, EXCEPTION_HANDLER_ID};
 use qapi::syscall::SyscallOp;
 use qapi::syscall::ops::sync_ipc::SyncCallFun;
@@ -29,8 +29,9 @@ static ALLOCATOR: ALockedMan<BitmapAllocator> = ALockedMan::uninit();
 
 #[used]
 static EXCEPTION_HANDLER: MagicInfo<extern "C" fn()> = const {
-    let endpoint =
-        SyncEndpoint::<1, _, _>::create(ExceptionAbi, |(kind, code)| exception_handler(kind, code));
+    let endpoint = SyncEndpoint::<1, _, _>::create(ExceptionAbi, |args| {
+        exception_handler(args.try_into().unwrap())
+    });
     MagicInfo::new(EXCEPTION_HANDLER_ID, endpoint.stackfull_endpoint())
 };
 
@@ -106,9 +107,8 @@ fn sync_invoke(a: usize, b: usize, c: usize, d: usize) -> PositiveIsize {
     10isize.try_into().unwrap()
 }
 
-fn exception_handler(kind: usize, code: u64) {
-    let kind = ExceptionKind::try_from(kind).unwrap();
-    panic!("Exception: {:?} code={:#X}", kind, code);
+fn exception_handler(e: ExceptionInfo) {
+    panic!("Exception: {e:?}");
 }
 
 #[cfg(target_os = "none")]

@@ -2,6 +2,7 @@ mod handlers;
 
 use handlers::{Isr, IsrHandler, PanicHandler};
 use qapi::caps::CapResult;
+use qapi::caps::sync_ipc::ExceptionArgs;
 use qapi::exception::ExceptionKind;
 use qapi::syscall::SyscallArgs;
 use sync::cell::AtomicLazyCell;
@@ -32,9 +33,14 @@ impl<const ID: usize> IsrHandler<Interrupt, ()> for ForwardRing3Exceptions<ID> {
             PrivilegeLevel::Ring1 | PrivilegeLevel::Ring2 => {
                 unreachable!("Unexpected ring usage in dual mode processor use")
             }
-            PrivilegeLevel::Ring3 => {
-                ring3_exception_handler((ID, u64::MAX), IrqCtx::Interrupt(ctx))
-            }
+            PrivilegeLevel::Ring3 => ring3_exception_handler(
+                ExceptionArgs {
+                    kind: ID,
+                    code: u64::MAX,
+                    extra: 0,
+                },
+                IrqCtx::Interrupt(ctx),
+            ),
         }
     }
 }
@@ -45,9 +51,14 @@ impl<const ID: usize> IsrHandler<Exception, ()> for ForwardRing3Exceptions<ID> {
             PrivilegeLevel::Ring1 | PrivilegeLevel::Ring2 => {
                 unreachable!("Unexpected ring usage in dual mode processor use")
             }
-            PrivilegeLevel::Ring3 => {
-                ring3_exception_handler((ID, ctx.error_code()), IrqCtx::Exception(ctx))
-            }
+            PrivilegeLevel::Ring3 => ring3_exception_handler(
+                ExceptionArgs {
+                    kind: ID,
+                    code: ctx.error_code(),
+                    extra: 0,
+                },
+                IrqCtx::Exception(ctx),
+            ),
         }
     }
 }
@@ -149,11 +160,10 @@ fn init_idt() {
 fn page_fault_handler(mut ctx: ExceptionCtx<Exception>) {
     let code = PageFaultErrorCode::from_bits(ctx.error_code()).unwrap();
     let addr = Cr2::read().unwrap().as_ptr::<()>() as usize;
-    let addr = VirtAddr::new(addr);
     // SAFETY: Only safe handling of the RIP for fix-up logic in case of userspace pointer reads
     let isr_stack = unsafe { ctx.interrupt_stack_frame_mut() };
     match isr_stack.code_segment.rpl() {
-        PrivilegeLevel::Ring0 => match addr.memory_segment() {
+        PrivilegeLevel::Ring0 => match VirtAddr::new(addr).memory_segment() {
             MemorySegment::User => {
                 if *CORE_LOCAL_SAFE_BUFFER_LOCK.get() {
                     isr_stack.instruction_pointer =
@@ -175,7 +185,11 @@ fn page_fault_handler(mut ctx: ExceptionCtx<Exception>) {
         PrivilegeLevel::Ring3 => {
             log::debug!("Ring3 Page fault handling due to access at @ {addr:#X?}");
             ring3_exception_handler(
-                (ExceptionKind::PageFault as usize, ctx.error_code()),
+                ExceptionArgs {
+                    kind: ExceptionKind::PageFault as usize,
+                    code: ctx.error_code(),
+                    extra: addr as u64,
+                },
                 IrqCtx::Exception(ctx),
             )
         }

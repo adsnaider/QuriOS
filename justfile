@@ -56,7 +56,7 @@ init: setup
 	cp -f "$BIN" "{{build_dir}}/init"
 
 initrd: init
-	cd {{build_dir}} && tar -H ustar -cf initrd.tar init
+	cd {{build_dir}} && tar -H ustar -cf initrd.tar "init"
 
 kernel: setup
 	#!/usr/bin/env bash

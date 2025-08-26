@@ -1,6 +1,6 @@
 use ctable::{cap_table_cons, cap_table_copy, cap_table_drop, cap_table_link};
 use introspect::introspect;
-use qapi::caps::sync_ipc::{ExceptionAbi, SyncAbi};
+use qapi::caps::sync_ipc::{ExceptionAbi, ExceptionArgs, SyncAbi};
 use qapi::caps::{CapError, PositiveIsize};
 use qapi::syscall::ops::ctable::{ConsOp, CopyOp, DropOp, LinkOp};
 use qapi::syscall::ops::introspect::IntrospectOp;
@@ -53,10 +53,7 @@ pub fn syscall_handler(
     }
 }
 
-pub fn ring3_exception_handler(
-    args: <ExceptionAbi as SyncAbi>::Args,
-    ctx: <ArchSystem as System>::IrqCtx,
-) -> ! {
+pub fn ring3_exception_handler(args: ExceptionArgs, ctx: <ArchSystem as System>::IrqCtx) -> ! {
     let exception_handler =
         Thread::with_current(|thread| thread.active_comp().unwrap().exception_handler().clone());
     let abi = ExceptionAbi;
