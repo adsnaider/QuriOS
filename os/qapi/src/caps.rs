@@ -1,6 +1,7 @@
 mod new_cap_macro;
 
 pub mod ctable;
+pub mod notify;
 pub mod resources;
 pub mod sync_ipc;
 pub mod thread;

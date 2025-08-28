@@ -399,6 +399,10 @@ impl KernelFrame {
         log::trace!("Dropping {this:?}: Old count {count}");
         count
     }
+
+    pub fn count(&self) -> u16 {
+        self.entry().get().1
+    }
 }
 
 impl Drop for KernelFrame {

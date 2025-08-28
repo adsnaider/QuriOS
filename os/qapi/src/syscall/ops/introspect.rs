@@ -30,8 +30,10 @@ pub enum IntrospectResult {
         cblock: CBlock,
     },
     SyncCall,
-    SyncRet,
     Resources,
+    Notification {
+        waiter: Frame,
+    },
     #[cfg(target_arch = "x86_64")]
     VMTable(VMTable),
 }

@@ -135,7 +135,6 @@ impl<T> SyscallStruct for SyscallArgs<T> {
 #[repr(usize)]
 #[derive(Debug, Copy, Clone, Eq, PartialEq, TryFrom)]
 #[try_from(repr)]
-#[non_exhaustive]
 pub enum SyscallOp {
     CapCons = 1,
     CapDrop,
@@ -148,6 +147,6 @@ pub enum SyscallOp {
     VMSetAttr,
     SyncInvoke,
     SyncRet,
-    SyncRetException,
+    Notify,
     Introspect,
 }

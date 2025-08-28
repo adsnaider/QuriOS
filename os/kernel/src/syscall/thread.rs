@@ -13,5 +13,5 @@ pub fn dispatch(
         .ok_or(CapError::CapNotFound)?;
     let thread = thread.as_thread()?;
 
-    Thread::dispatch(thread.clone(), ctx).map_err(|_| CapError::ThreadBoundToOtherCore)?;
+    Thread::dispatch(thread.clone(), ctx)?;
 }

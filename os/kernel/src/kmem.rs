@@ -111,19 +111,6 @@ impl<T> KPtr<T> {
         Self { inner: ptr }
     }
 
-    // TODO: Remove this function
-    #[allow(dead_code)]
-    /// # Safety
-    ///
-    /// Pointer must be a valid kernel struct originally constructed as a KPtr
-    unsafe fn from_ptr_unchecked(value: NonNull<T>) -> Self {
-        let () = Self::VALID_SIZE_AND_ALIGN;
-        let this = Self { inner: value };
-        // SAFETY: Precondition
-        unsafe { this.frame().as_kernel_unchecked().into_raw() };
-        this
-    }
-
     pub fn frame(&self) -> Frame {
         // SAFETY: Pointer was created a physical address
         Frame::from_start_address(unsafe { VirtAddr::from_ptr(self.inner.as_ptr()).to_physical() })
@@ -163,7 +150,8 @@ impl<T> Clone for KPtr<T> {
 impl<T> Drop for KPtr<T> {
     fn drop(&mut self) {
         // SAFETY: We constructed the frame with `into_raw`.
-        let count = unsafe { KernelFrame::from_raw(self.frame()).drop() };
+        let frame = unsafe { KernelFrame::from_raw(self.frame()) };
+        let count = frame.count();
         if count == 1 && core::mem::needs_drop::<T>() {
             // Last ones turn off the lights
             fence(Ordering::Acquire);

@@ -4,6 +4,7 @@ use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout};
 
 use crate::caps::ctable::CTableCap;
 use crate::caps::resources::ResourcesCap;
+use crate::caps::thread::ThreadCap;
 use crate::caps::{CapId, SysSlot};
 use crate::mem::Frame;
 use crate::types::UserPtr;
@@ -43,6 +44,7 @@ pub enum ConsArgs {
     VMTable(VMTableCons),
     SyncCall(SyncCallCons),
     CTable(CTableCons),
+    Notification(NotificationCons),
 }
 
 #[derive(KnownLayout, IntoBytes, FromBytes, Immutable, Debug, Copy, Clone)]
@@ -53,7 +55,7 @@ pub struct ThreadCons {
     pub frame: Frame,
     pub arg0: usize,
     pub resources: ResourcesCap,
-    pub _padding: u32,
+    pub priority: u32,
 }
 
 #[derive(KnownLayout, IntoBytes, FromBytes, Immutable, Debug, Copy, Clone)]
@@ -77,6 +79,13 @@ pub struct CTableCons {
     pub frame: Frame,
 }
 
+#[derive(KnownLayout, IntoBytes, FromBytes, Immutable, Debug, Copy, Clone)]
+#[repr(C)]
+pub struct NotificationCons {
+    pub thread: ThreadCap,
+    pub _padding: u32,
+}
+
 #[repr(usize)]
 #[derive(Debug, Copy, Clone, TryFrom)]
 #[try_from(repr)]
@@ -85,6 +94,7 @@ pub enum ConsKind {
     CTable,
     VMTable,
     SyncCall,
+    Notification,
 }
 
 impl From<ConsKind> for usize {

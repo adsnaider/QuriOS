@@ -1,6 +1,7 @@
 use qapi::caps::{CapError, PositiveIsize};
 use qapi::syscall::ops::ctable::{
-    CTableCons, ConsKind, ConsOp, CopyOp, DropOp, LinkOp, SyncCallCons, ThreadCons, VMTableCons,
+    CTableCons, ConsKind, ConsOp, CopyOp, DropOp, LinkOp, NotificationCons, SyncCallCons,
+    ThreadCons, VMTableCons,
 };
 
 use super::SyscallResp;
@@ -8,6 +9,7 @@ use crate::arch::{ArchCaps as _, ArchSystem, ExecState, System};
 use crate::caps::trie::TrieSlotPayload;
 use crate::caps::{CapBlock, Capability, UserPtrTExt};
 use crate::kmem::KPtr;
+use crate::notify::Notification;
 use crate::sync_call::SyncCall;
 use crate::thread::Thread;
 
@@ -25,6 +27,7 @@ pub fn cap_table_cons(opts: ConsOp) -> SyscallResp {
                 resources,
                 frame,
                 arg0,
+                priority,
                 ..
             } = opts.cons_args.cast::<ThreadCons>().verify()?.safe_read()?;
             let resources = Thread::with_current(|thread| thread.get_cap(resources.cap()))
@@ -36,6 +39,7 @@ pub fn cap_table_cons(opts: ConsOp) -> SyscallResp {
                 <ArchSystem as System>::ExecState::new_thread(entry, rsp, arg0),
                 // SAFETY: It's okay to cast a CapBlock to a CapTable
                 resources.clone(),
+                priority,
             );
             let thread = KPtr::new(frame.into(), thread)?;
             CapBlock::at(ctable, opts.slot_id)
@@ -72,6 +76,25 @@ pub fn cap_table_cons(opts: ConsOp) -> SyscallResp {
             let resources = resources.as_resources()?;
             CapBlock::at(ctable, opts.slot_id).try_set(TrieSlotPayload::Data(
                 Capability::SyncCall(SyncCall::new(resources.clone(), entry, Default::default())),
+            ))?;
+            Ok(PositiveIsize::zero())
+        }
+        ConsKind::Notification => {
+            let NotificationCons {
+                thread: thread_cap,
+                _padding,
+            } = opts
+                .cons_args
+                .cast::<NotificationCons>()
+                .verify()?
+                .safe_read()?;
+            let waiter = Thread::with_current(|thread| thread.get_cap(thread_cap.cap()))
+                .unwrap()
+                .ok_or(CapError::CapNotFound)?;
+            let waiter = waiter.as_thread()?;
+            let notification = Notification::new(waiter.clone());
+            CapBlock::at(ctable, opts.slot_id).try_set(TrieSlotPayload::Data(
+                Capability::Notification(notification),
             ))?;
             Ok(PositiveIsize::zero())
         }

@@ -39,6 +39,7 @@ impl<S: System> ThreadCtx<S> {
 #[derive_where(Debug)]
 pub struct Thread<S: System> {
     ctx: CoreCell<Vec<ThreadCtx<S>, 16>>,
+    flat_priority: u32,
 }
 
 impl Thread<ArchSystem> {
@@ -80,7 +81,7 @@ impl Thread<ArchSystem> {
     pub fn dispatch(
         this: KPtr<Self>,
         ctx: <ArchSystem as System>::IrqCtx,
-    ) -> Result<Never, SetAffinityError> {
+    ) -> Result<Never, CapError> {
         // Our kernel is non-preemptive which makes every other case really
         // simple as it's a completely synchronous call-response. However, thread
         // dispatching is somewhat weird because we exit the kernel early on the
@@ -102,7 +103,12 @@ impl Thread<ArchSystem> {
             match this.ctx.set_affinity() {
                 Ok(()) => {}
                 Err(SetAffinityError::BoundToSelf) => {}
-                Err(e) => return Err(e),
+                Err(SetAffinityError::Bounded { affinity }) => {
+                    log::debug!(
+                        "Thread can't be dispatched as its bound to a different core: {affinity}"
+                    );
+                    return Err(CapError::ThreadBoundToOtherCore);
+                }
             }
             this.active_comp().unwrap().addrspace().activate();
             // TODO: Remove lint allow once type alias impl trait works and ArchSystem uses it.
@@ -123,10 +129,24 @@ impl Thread<ArchSystem> {
         };
         exec_state.dispatch();
     }
+
+    pub fn priority_dispatch(
+        this: KPtr<Self>,
+        ctx: <ArchSystem as System>::IrqCtx,
+    ) -> Result<(), CapError> {
+        let current = CORE_LOCAL_CURRENT_THREAD.borrow();
+        match current.as_ref() {
+            Some(current) if this.flat_priority > current.flat_priority => {
+                Self::dispatch(this, ctx)?;
+            }
+            Some(_) => Ok(()),
+            None => Self::dispatch(this, ctx)?,
+        }
+    }
 }
 
 impl<S: System> Thread<S> {
-    pub fn new(exec_state: S::ExecState, comp: KPtr<Resources<S>>) -> Self {
+    pub fn new(exec_state: S::ExecState, comp: KPtr<Resources<S>>, priority: u32) -> Self {
         let mut ctx = Vec::new();
         ctx.push(ThreadCtx {
             exec_state,
@@ -136,6 +156,7 @@ impl<S: System> Thread<S> {
         .unwrap();
         Self {
             ctx: CoreCell::new(ctx),
+            flat_priority: priority,
         }
     }
 

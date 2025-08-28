@@ -28,6 +28,11 @@ pub fn introspect(opts: IntrospectOp) -> SyscallResp {
         Some(TrieSlotPayload::Link(kptr)) => IntrospectResult::CLink {
             kobj: kptr.frame().into(),
         },
+        Some(TrieSlotPayload::Data(Capability::Notification(notification))) => {
+            IntrospectResult::Notification {
+                waiter: notification.waiter().frame().into(),
+            }
+        }
         None => IntrospectResult::Empty,
     };
     write_buf.safe_write(MaybeUninit::new(result))?;

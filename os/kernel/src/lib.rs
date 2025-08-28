@@ -5,6 +5,7 @@ pub(crate) mod never;
 pub mod arch;
 pub mod caps;
 pub mod kmem;
+pub mod notify;
 pub mod pmo;
 pub mod retyping;
 pub mod sync_call;
@@ -142,7 +143,7 @@ pub fn uinit() -> ! {
         .expect("Out of memory during initialization");
     // SAFETY: The kernel frame is unused
     let resources = unsafe { KPtr::new_unchecked(resources_frame, resources) };
-    let thread = Thread::new(init.exec, resources.clone());
+    let thread = Thread::new(init.exec, resources.clone(), u32::MAX);
     let thread_frame = fallocator
         .alloc_kernel_frame()
         .expect("Out of memory error during initialization");

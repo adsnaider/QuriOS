@@ -20,6 +20,7 @@ use crate::arch::mem::{Addrspace, Page, VirtAddr, user_buffer_copy};
 use crate::arch::{ArchCaps as _, ArchSystem, System};
 use crate::kmem::KPtr;
 use crate::never::Never;
+use crate::notify::Notification;
 use crate::retyping::{AsUnusedKernelError, FrameExt};
 use crate::sync_call::SyncCall;
 use crate::thread::Thread;
@@ -42,6 +43,14 @@ impl<S: System> CapRef<S> {
         let data = self.data().ok_or(CapError::CapNotFound)?;
         match data {
             Capability::CapBlock(kptr) => Ok(kptr),
+            _ => Err(CapError::InvalidArg),
+        }
+    }
+
+    pub fn as_notification(&self) -> Result<&Notification<S>, CapError> {
+        let data = self.data().ok_or(CapError::CapNotFound)?;
+        match data {
+            Capability::Notification(notification) => Ok(notification),
             _ => Err(CapError::InvalidArg),
         }
     }
@@ -195,6 +204,7 @@ pub enum Capability<S: System> {
     CapBlock(KPtr<CapBlock<S>>),
     SyncCall(SyncCall<S>),
     CompResource(KPtr<Resources<S>>),
+    Notification(Notification<S>),
     Arch(S::ArchCaps),
 }
 

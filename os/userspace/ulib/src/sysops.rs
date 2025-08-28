@@ -19,7 +19,6 @@ use qapi::syscall::ops::thread::DispatchOp;
 use qapi::syscall::ops::vmtable::{PaddedPageTableOffset, VMLinkOp, VMSetAttr, VMUnlinkOp};
 use qapi::syscall::{SyscallArgs, SyscallOp, SyscallRequest};
 use qapi::types::{UserPtr, UserPtrMut};
-use sync_endpoint::{AbiImpl, SyncEndpoint};
 use zerocopy::IntoBytes as _;
 
 use crate::syscall::syscall;
@@ -56,6 +55,7 @@ pub impl CTableCap {
         resources: ResourcesCap,
         frame: Frame,
         arg0: usize,
+        priority: u32,
     ) -> Result<(), CapError> {
         self.construct(
             ConsArgs::Thread(ThreadCons {
@@ -64,7 +64,7 @@ pub impl CTableCap {
                 resources,
                 frame,
                 arg0,
-                _padding: 0,
+                priority,
             }),
             slot,
         )
@@ -109,6 +109,9 @@ pub impl CTableCap {
             ConsArgs::VMTable(vm_cons) => (ConsKind::VMTable, vm_cons.as_bytes()),
             ConsArgs::SyncCall(sync_call_cons) => (ConsKind::SyncCall, sync_call_cons.as_bytes()),
             ConsArgs::CTable(cap_table_cons) => (ConsKind::CTable, cap_table_cons.as_bytes()),
+            ConsArgs::Notification(notification_cons) => {
+                (ConsKind::Notification, notification_cons.as_bytes())
+            }
         };
 
         let args = ConsOp {

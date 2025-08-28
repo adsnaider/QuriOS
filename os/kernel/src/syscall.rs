@@ -1,9 +1,10 @@
 use ctable::{cap_table_cons, cap_table_copy, cap_table_drop, cap_table_link};
 use introspect::introspect;
-use qapi::caps::sync_ipc::{ExceptionAbi, ExceptionArgs, SyncAbi};
+use qapi::caps::sync_ipc::{ExceptionAbi, ExceptionArgs};
 use qapi::caps::{CapError, PositiveIsize};
 use qapi::syscall::ops::ctable::{ConsOp, CopyOp, DropOp, LinkOp};
 use qapi::syscall::ops::introspect::IntrospectOp;
+use qapi::syscall::ops::notify::NotifyOp;
 use qapi::syscall::ops::retype::RetypeOp;
 use qapi::syscall::ops::sync_ipc::{SyncInvokeOp, SyncRetOp};
 use qapi::syscall::ops::thread::DispatchOp;
@@ -20,6 +21,7 @@ use crate::thread::{Thread, ThreadCtx};
 
 mod ctable;
 mod introspect;
+mod notify;
 mod retyping;
 mod sync_ipc;
 mod thread;
@@ -49,7 +51,7 @@ pub fn syscall_handler(
         SyscallOp::SyncInvoke => sync_invoke(SyncInvokeOp::try_from_args(args.args())?, ctx),
         SyscallOp::SyncRet => sync_ret(SyncRetOp::try_from_args(args.args())?, ctx),
         SyscallOp::Introspect => introspect(IntrospectOp::try_from_args(args.args())?),
-        _ => Err(CapError::SyscallNotImplemented),
+        SyscallOp::Notify => notify::notify(NotifyOp::try_from_args(args.args())?, ctx),
     }
 }
 

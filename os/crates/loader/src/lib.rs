@@ -1,7 +1,6 @@
 #![no_std]
 
 use core::cell::UnsafeCell;
-use core::marker::PhantomData;
 use core::mem::MaybeUninit;
 use core::ops::{Deref, Range};
 
