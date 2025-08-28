@@ -36,6 +36,8 @@ pub enum IntrospectResult {
     },
     #[cfg(target_arch = "x86_64")]
     VMTable(VMTable),
+    #[cfg(target_arch = "x86_64")]
+    IrqCtrl,
 }
 
 #[repr(C)]

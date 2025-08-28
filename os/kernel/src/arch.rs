@@ -70,6 +70,7 @@ pub unsafe trait System: Sized {
 }
 
 pub trait ArchCaps<S: System>: Sized {
+    fn irq_ctrl() -> Result<Self, CapError>;
     fn new_vmtable(args: VMTableCons) -> Result<Self, CapError>;
     fn new_addrspace<A>(addrspace: A) -> Self
     where

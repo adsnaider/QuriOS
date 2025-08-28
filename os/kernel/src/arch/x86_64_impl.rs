@@ -88,10 +88,11 @@ fn sce_enable() {
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum ArchCaps {
-    L4(KPtr<AnyPageTable>),
-    L3(KPtr<AnyPageTable>),
-    L2(KPtr<AnyPageTable>),
-    L1(KPtr<AnyPageTable>),
+    VMTableL4(KPtr<AnyPageTable>),
+    VMTableL3(KPtr<AnyPageTable>),
+    VMTableL2(KPtr<AnyPageTable>),
+    VMTableL1(KPtr<AnyPageTable>),
+    IrqCtrl,
 }
 
 #[allow(unreachable_patterns)]
@@ -99,10 +100,10 @@ impl super::ArchCaps<X64Sys> for ArchCaps {
     fn new_vmtable(args: VMTableCons) -> Result<Self, CapError> {
         let table = KPtr::new(args.frame.into(), AnyPageTable::new())?;
         let cap = match args.level {
-            1 => Self::L1(table),
-            2 => Self::L2(table),
-            3 => Self::L3(table),
-            4 => Self::L4(table),
+            1 => Self::VMTableL1(table),
+            2 => Self::VMTableL2(table),
+            3 => Self::VMTableL3(table),
+            4 => Self::VMTableL4(table),
             _ => return Err(CapError::InvalidVMTableLevel),
         };
         Ok(cap)
@@ -113,22 +114,22 @@ impl super::ArchCaps<X64Sys> for ArchCaps {
     {
         let frame = addrspace.borrow().frame();
         // SAFETY: We can use KPtr<AnyPageTable> from an addrspace frame.
-        Self::L4(unsafe { KPtr::from_frame_unchecked(frame.try_clone().unwrap()) })
+        Self::VMTableL4(unsafe { KPtr::from_frame_unchecked(frame.try_clone().unwrap()) })
     }
 
     fn as_addrspace(&self) -> Result<&KPtr<AnyPageTable>, CapError> {
         match self {
-            Self::L4(addrspace) => Ok(addrspace),
+            Self::VMTableL4(addrspace) => Ok(addrspace),
             _ => Err(CapError::InvalidArg),
         }
     }
 
     fn as_vmtable(&self) -> Result<&KPtr<<X64Sys as System>::PageTable>, CapError> {
         match self {
-            ArchCaps::L4(kptr) => Ok(kptr),
-            ArchCaps::L3(kptr) => Ok(kptr),
-            ArchCaps::L2(kptr) => Ok(kptr),
-            ArchCaps::L1(kptr) => Ok(kptr),
+            ArchCaps::VMTableL4(kptr) => Ok(kptr),
+            ArchCaps::VMTableL3(kptr) => Ok(kptr),
+            ArchCaps::VMTableL2(kptr) => Ok(kptr),
+            ArchCaps::VMTableL1(kptr) => Ok(kptr),
             _ => Err(CapError::InvalidCapType),
         }
     }
@@ -140,17 +141,17 @@ impl super::ArchCaps<X64Sys> for ArchCaps {
         flags: PageFlags,
     ) -> SyscallResp {
         let (top_table, top_level) = match top_table {
-            ArchCaps::L4(kptr) => (kptr, 4),
-            ArchCaps::L3(kptr) => (kptr, 3),
-            ArchCaps::L2(kptr) => (kptr, 2),
-            ArchCaps::L1(kptr) => (kptr, 1),
+            ArchCaps::VMTableL4(kptr) => (kptr, 4),
+            ArchCaps::VMTableL3(kptr) => (kptr, 3),
+            ArchCaps::VMTableL2(kptr) => (kptr, 2),
+            ArchCaps::VMTableL1(kptr) => (kptr, 1),
             _ => return Err(CapError::InvalidCapType),
         };
         let (bottom_table, bottom_level) = match bottom_table {
-            ArchCaps::L4(kptr) => (kptr, 4),
-            ArchCaps::L3(kptr) => (kptr, 3),
-            ArchCaps::L2(kptr) => (kptr, 2),
-            ArchCaps::L1(kptr) => (kptr, 1),
+            ArchCaps::VMTableL4(kptr) => (kptr, 4),
+            ArchCaps::VMTableL3(kptr) => (kptr, 3),
+            ArchCaps::VMTableL2(kptr) => (kptr, 2),
+            ArchCaps::VMTableL1(kptr) => (kptr, 1),
             _ => return Err(CapError::InvalidCapType),
         };
 
@@ -169,10 +170,10 @@ impl super::ArchCaps<X64Sys> for ArchCaps {
 
     fn vm_unlink(table: &Self, slot: PaddedPageTableOffset) -> SyscallResp {
         let table = match table {
-            ArchCaps::L4(kptr) => kptr,
-            ArchCaps::L3(kptr) => kptr,
-            ArchCaps::L2(kptr) => kptr,
-            ArchCaps::L1(kptr) => kptr,
+            ArchCaps::VMTableL4(kptr) => kptr,
+            ArchCaps::VMTableL3(kptr) => kptr,
+            ArchCaps::VMTableL2(kptr) => kptr,
+            ArchCaps::VMTableL1(kptr) => kptr,
             _ => return Err(CapError::InvalidCapType),
         };
         let slot: usize = slot.into();
@@ -189,10 +190,10 @@ impl super::ArchCaps<X64Sys> for ArchCaps {
         attributes: PageFlags,
     ) -> SyscallResp {
         let table = match table {
-            ArchCaps::L4(kptr) => kptr,
-            ArchCaps::L3(kptr) => kptr,
-            ArchCaps::L2(kptr) => kptr,
-            ArchCaps::L1(kptr) => kptr,
+            ArchCaps::VMTableL4(kptr) => kptr,
+            ArchCaps::VMTableL3(kptr) => kptr,
+            ArchCaps::VMTableL2(kptr) => kptr,
+            ArchCaps::VMTableL1(kptr) => kptr,
             _ => return Err(CapError::InvalidCapType),
         };
         let slot: usize = slot.into();
@@ -205,12 +206,22 @@ impl super::ArchCaps<X64Sys> for ArchCaps {
     }
 
     fn introspect(&self) -> IntrospectResult {
-        let (level, table) = match self {
-            ArchCaps::L4(kptr) => (4, kptr),
-            ArchCaps::L3(kptr) => (3, kptr),
-            ArchCaps::L2(kptr) => (2, kptr),
-            ArchCaps::L1(kptr) => (1, kptr),
-        };
+        match self {
+            ArchCaps::VMTableL4(kptr) => Self::introspect_vmtable(4, kptr),
+            ArchCaps::VMTableL3(kptr) => Self::introspect_vmtable(3, kptr),
+            ArchCaps::VMTableL2(kptr) => Self::introspect_vmtable(2, kptr),
+            ArchCaps::VMTableL1(kptr) => Self::introspect_vmtable(1, kptr),
+            ArchCaps::IrqCtrl => IntrospectResult::IrqCtrl,
+        }
+    }
+
+    fn irq_ctrl() -> Result<Self, CapError> {
+        Ok(Self::IrqCtrl)
+    }
+}
+
+impl ArchCaps {
+    fn introspect_vmtable(level: u8, table: &KPtr<AnyPageTable>) -> IntrospectResult {
         let mut entries = [VMTableEntry::empty(); 512];
         for (i, entry) in entries.iter_mut().enumerate() {
             *entry = table

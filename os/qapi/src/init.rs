@@ -4,6 +4,7 @@ use loader::LoadedMagic;
 use zerocopy::{Immutable, IntoBytes, KnownLayout};
 
 use crate::caps::ctable::CTableCap;
+use crate::caps::irq_ctrl::IrqCtrlCap;
 use crate::caps::resources::ResourcesCap;
 use crate::caps::thread::ThreadCap;
 use crate::caps::vmtable::VMTableCap;
@@ -47,6 +48,7 @@ pub struct BootCaps {
     pub self_caps: CTableCap,
     pub self_addrspace: VMTableCap,
     pub self_thread: ThreadCap,
+    pub irq_ctrl: IrqCtrlCap,
 }
 
 impl Default for BootCaps {
@@ -62,6 +64,7 @@ impl BootCaps {
             self_caps: CTableCap::new(CapId::new(1)),
             self_addrspace: VMTableCap::new(CapId::new(2)),
             self_thread: ThreadCap::new(CapId::new(3)),
+            irq_ctrl: IrqCtrlCap::new(CapId::new(4)),
         }
     }
 

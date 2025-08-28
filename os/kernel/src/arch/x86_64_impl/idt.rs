@@ -1,4 +1,5 @@
 mod handlers;
+pub mod irqs;
 
 use handlers::{Isr, IsrHandler, PanicHandler};
 use qapi::caps::CapResult;
