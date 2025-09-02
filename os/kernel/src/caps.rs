@@ -175,7 +175,7 @@ impl<S: System> Resources<S> {
         }
     }
 
-    pub fn cap_table(&self) -> &KPtr<CapTable<S>> {
+    pub fn ctable(&self) -> &KPtr<CapTable<S>> {
         &self.capabilities
     }
 

@@ -1,19 +1,19 @@
 pub mod core_cell;
-use core::cell::RefCell;
 use core::mem::{align_of, size_of};
 
 pub use core_cell::CoreCell;
+use core_cell::Lock;
 
 use crate::arch::mem::Page;
 use crate::arch::mem::core_local::CoreLocalData;
 use crate::arch::{System, system};
 use crate::pmo::PhysAddrExt;
 use crate::retyping::KernelFrame;
-use crate::thread::CurrentThread;
+use crate::thread::CoreLocalThread;
 
 #[repr(C)]
 pub struct KernelLocalStore {
-    current_thread: CurrentThread,
+    current_thread: CoreLocalThread,
     safe_buffer_lock: bool,
     core_id: u16,
 }
@@ -22,7 +22,7 @@ impl KernelLocalStore {
     pub const fn new(core_id: u16) -> Self {
         Self {
             core_id,
-            current_thread: RefCell::new(None),
+            current_thread: Lock::new(None),
             safe_buffer_lock: false,
         }
     }
@@ -57,6 +57,6 @@ pub impl CoreLocalData<KernelLocalStore> {
     }
 }
 
-get_core_local_data_impl!(pub current_thread, CurrentThread);
+get_core_local_data_impl!(pub current_thread, CoreLocalThread);
 get_core_local_data_impl!(pub safe_buffer_lock, bool);
 get_core_local_data_impl!(pub core_id, u16);

@@ -7,7 +7,7 @@ use qapi::syscall::ops::introspect::IntrospectResult;
 use crate::arch::{InvokeAbi, System};
 use crate::caps::Resources;
 use crate::kmem::KPtr;
-use crate::thread::ThreadCtx;
+use crate::thread::ThreadExecCtx;
 
 #[derive(Debug, Default, From)]
 pub enum AnyAbi {
@@ -61,13 +61,13 @@ impl<S: System, Abi> SyncCall<S, Abi> {
         &self.comp
     }
 
-    pub fn create_invocation(self, ctx: &S::IrqCtx) -> ThreadCtx<S>
+    pub fn create_invocation(self, ctx: &S::IrqCtx) -> ThreadExecCtx<S>
     where
         Abi: InvokeAbi<S> + Into<AnyAbi>,
     {
         let Self { comp, entry, abi } = self;
         let xstate = abi.invoke_passthrough(ctx, entry);
-        ThreadCtx::new(xstate, comp, abi)
+        ThreadExecCtx::new(xstate, comp, abi)
     }
 
     pub const fn entry(&self) -> usize {

@@ -24,7 +24,11 @@ impl<S: System> Notification<S> {
 
 impl Notification<ArchSystem> {
     pub fn signal(&self, ctx: <ArchSystem as System>::IrqCtx) -> Result<(), CapError> {
-        Thread::priority_dispatch(self.waiter.clone(), ctx)?;
-        Ok(())
+        let dispatcher = Thread::priority_dispatch(self.waiter.clone(), ctx)?;
+        if let Some(dispatcher) = dispatcher {
+            dispatcher.dispatch();
+        } else {
+            Ok(())
+        }
     }
 }

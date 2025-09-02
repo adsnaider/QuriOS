@@ -49,11 +49,11 @@ pub fn init() {
 ///
 /// The implementation must adhere exactly to the documentation
 pub unsafe trait System: Sized {
-    type Addrspace: Addrspace + Debug;
-    type PageTable: Debug + Default;
+    type Addrspace: Addrspace + Debug + Clone;
     type ExecState: ExecState<Sys = Self> + Clone;
-    type ArchCaps: Debug + Clone + ArchCaps<Self>;
-    type ExceptionAbi: Debug + Clone + InvokeAbi<Self>;
+    type ArchCaps: ArchCaps<Self> + Debug + Clone;
+    type ExceptionAbi: InvokeAbi<Self> + Debug + Clone;
+    type PageTable: Debug + Default;
     type IrqCtx: Debug;
 
     /// Initializes the architecture-specific subsystem

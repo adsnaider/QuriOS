@@ -2,6 +2,7 @@ mod handlers;
 pub mod irqs;
 
 use handlers::{Isr, IsrHandler, PanicHandler};
+use pic8259::ChainedPics;
 use qapi::caps::CapResult;
 use qapi::caps::sync_ipc::ExceptionArgs;
 use qapi::exception::ExceptionKind;
@@ -15,7 +16,8 @@ use super::exec::Interrupt;
 use crate::arch::mem::{MemorySegment, VirtAddr, user_buffer_read_page_fault_call_gate};
 use crate::arch::x86_64_impl::exec::{Exception, ExceptionCtx, IrqCtx};
 use crate::arch::x86_64_impl::gdt;
-use crate::core_local::CORE_LOCAL_SAFE_BUFFER_LOCK;
+use crate::core_local::core_cell::Lock;
+use crate::core_local::{CORE_LOCAL_SAFE_BUFFER_LOCK, CoreCell};
 use crate::syscall::{ring3_exception_handler, syscall_handler};
 
 const SYSCALL_INT: u8 = 0x80;
@@ -92,6 +94,12 @@ impl IsrHandler<Interrupt, ()> for SyscallHandler {
     }
 }
 
+const PIC_OFFSET: u8 = 32;
+
+static PICS: CoreCell<Lock<ChainedPics>> = CoreCell::new(Lock::new(unsafe {
+    ChainedPics::new_contiguous(PIC_OFFSET)
+}));
+
 /// Initializes the interrupt descriptor table.
 fn init_idt() {
     static IDT: AtomicLazyCell<InterruptDescriptorTable> = AtomicLazyCell::new(|| {
@@ -155,6 +163,13 @@ fn init_idt() {
         idt
     });
     IDT.load();
+}
+
+pub fn init_irqs() {
+    PICS.do_bound(|pics| unsafe {
+        pics.lock().initialize();
+    })
+    .unwrap();
 }
 
 #[inline(always)]

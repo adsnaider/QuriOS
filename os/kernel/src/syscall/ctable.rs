@@ -15,7 +15,6 @@ use crate::thread::Thread;
 
 pub fn cap_table_cons(opts: ConsOp) -> SyscallResp {
     let ctable = Thread::with_current(|thread| thread.get_cap(opts.table_cap.cap()))
-        .unwrap()
         .ok_or(CapError::CapNotFound)?;
     let ctable = ctable.as_ctable()?;
 
@@ -31,7 +30,6 @@ pub fn cap_table_cons(opts: ConsOp) -> SyscallResp {
                 ..
             } = opts.cons_args.cast::<ThreadCons>().verify()?.safe_read()?;
             let resources = Thread::with_current(|thread| thread.get_cap(resources.cap()))
-                .unwrap()
                 .ok_or(CapError::CapNotFound)?;
             let resources = resources.as_resources()?;
 
@@ -70,7 +68,6 @@ pub fn cap_table_cons(opts: ConsOp) -> SyscallResp {
                 .verify()?
                 .safe_read()?;
             let resources = Thread::with_current(|thread| thread.get_cap(resources.cap()))
-                .unwrap()
                 .ok_or(CapError::CapNotFound)?;
             // SAFETY: Casting a ctable to resources is fine.
             let resources = resources.as_resources()?;
@@ -89,7 +86,6 @@ pub fn cap_table_cons(opts: ConsOp) -> SyscallResp {
                 .verify()?
                 .safe_read()?;
             let waiter = Thread::with_current(|thread| thread.get_cap(thread_cap.cap()))
-                .unwrap()
                 .ok_or(CapError::CapNotFound)?;
             let waiter = waiter.as_thread()?;
             let notification = Notification::new(waiter.clone());
@@ -103,12 +99,10 @@ pub fn cap_table_cons(opts: ConsOp) -> SyscallResp {
 
 pub fn cap_table_copy(opts: CopyOp) -> SyscallResp {
     let to_table = Thread::with_current(|thread| thread.get_cap(opts.to_table.cap()))
-        .unwrap()
         .ok_or(CapError::CapNotFound)?;
     let to_table = to_table.as_ctable()?;
 
     let from_cap = Thread::with_current(|thread| thread.get_cap(opts.from_cap))
-        .unwrap()
         .ok_or(CapError::CapNotFound)?
         .data()
         .ok_or(CapError::CapNotFound)?
@@ -120,7 +114,6 @@ pub fn cap_table_copy(opts: CopyOp) -> SyscallResp {
 
 pub fn cap_table_drop(opts: DropOp) -> SyscallResp {
     let ctable = Thread::with_current(|thread| thread.get_cap(opts.table_cap.cap()))
-        .unwrap()
         .ok_or(CapError::CapNotFound)?;
     let ctable = ctable.as_ctable()?;
     CapBlock::at(ctable, opts.slot_id).kill();
@@ -129,12 +122,10 @@ pub fn cap_table_drop(opts: DropOp) -> SyscallResp {
 
 pub fn cap_table_link(opts: LinkOp) -> SyscallResp {
     let top_table = Thread::with_current(|thread| thread.get_cap(opts.top_table.cap()))
-        .unwrap()
         .ok_or(CapError::CapNotFound)?;
     let top_table = top_table.as_ctable()?;
 
     let bottom_table = Thread::with_current(|thread| thread.get_cap(opts.bottom_table.cap()))
-        .unwrap()
         .ok_or(CapError::CapNotFound)?;
     let bottom_table = bottom_table.as_ctable()?;
 

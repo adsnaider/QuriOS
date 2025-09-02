@@ -22,6 +22,15 @@ pub struct X64Addrspace {
     pmo: Pmo,
 }
 
+impl Clone for X64Addrspace {
+    fn clone(&self) -> Self {
+        Self {
+            l4_frame: self.l4_frame.try_clone().unwrap(),
+            pmo: self.pmo,
+        }
+    }
+}
+
 impl X64Addrspace {
     /// Constructs a new addrspace with all the kernel pages mapped into it
     ///

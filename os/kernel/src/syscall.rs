@@ -17,7 +17,8 @@ use vmtable::{vm_link, vm_set_attr, vm_unlink};
 
 use crate::arch::{ArchSystem, InvokeAbi, System};
 use crate::caps::ExceptionHandler;
-use crate::thread::{Thread, ThreadCtx};
+use crate::never::Never;
+use crate::thread::{Thread, ThreadExecCtx};
 
 mod ctable;
 mod introspect;
@@ -55,17 +56,20 @@ pub fn syscall_handler(
     }
 }
 
-pub fn ring3_exception_handler(args: ExceptionArgs, ctx: <ArchSystem as System>::IrqCtx) -> ! {
-    let exception_handler =
-        Thread::with_current(|thread| thread.active_comp().unwrap().exception_handler().clone());
-    let abi = ExceptionAbi;
-    let exception_ctx = match exception_handler {
-        ExceptionHandler::Within { entry } => {
-            let resources = Thread::with_current(|thread| thread.active_comp().unwrap().clone());
-            let exec_state = abi.invoke_with_args(args, entry);
-            ThreadCtx::new(exec_state, resources, abi)
-        }
-    };
-    // TODO: If this fails, notifiy a scheduler thread instead...
-    Thread::with_current(move |thread| thread.invoke(exception_ctx, ctx)).unwrap();
+pub fn ring3_exception_handler(args: ExceptionArgs, ctx: <ArchSystem as System>::IrqCtx) -> Never {
+    let dispatcher;
+    {
+        let exception_handler = Thread::with_current(|thread| thread.exception_handler());
+        let abi = ExceptionAbi;
+        let exception_ctx = match exception_handler {
+            ExceptionHandler::Within { entry } => {
+                let resources = Thread::with_current(|thread| thread.resources());
+                let exec_state = abi.invoke_with_args(args, entry);
+                ThreadExecCtx::new(exec_state, resources, abi)
+            }
+        };
+        // TODO: If this fails, notifiy a scheduler thread instead...
+        dispatcher = Thread::with_current(move |thread| thread.invoke(exception_ctx, ctx)).unwrap();
+    }
+    dispatcher.dispatch();
 }

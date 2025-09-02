@@ -53,6 +53,7 @@ unsafe impl System for X64Sys {
 
     fn post_init(&self) {
         X64Addrspace::current(*PMO).obscure_top_half();
+        idt::init_irqs();
     }
 
     fn set_core_data(&self, addr: VirtAddr) {

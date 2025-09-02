@@ -1,4 +1,4 @@
-use core::cell::{Ref, RefCell};
+use core::ops::Deref;
 
 use derive_more::{Display, Error};
 use derive_where::derive_where;
@@ -10,23 +10,56 @@ use qapi::syscall::ops::sync_ipc::SyncRetOp;
 
 use crate::arch::mem::Addrspace;
 use crate::arch::{ArchSystem, ExecState, InvokeAbi, System};
-use crate::caps::{CapRef, CapTable, Resources};
-use crate::core_local::core_cell::{BorrowError, ResetAffinityError, SetAffinityError};
+use crate::caps::{CapRef, CapTable, ExceptionHandler, Resources};
+use crate::core_local::core_cell::{BindError, CoreGuard, Lock, UnbindError};
 use crate::core_local::{CORE_LOCAL_CURRENT_THREAD, CoreCell};
 use crate::kmem::KPtr;
 use crate::never::Never;
 use crate::sync_call::AnyAbi;
 
-pub type CurrentThread = RefCell<Option<KPtr<Thread<ArchSystem>>>>;
+pub type CoreLocalThread = Lock<Option<KPtr<Thread<ArchSystem>>>>;
 
 #[derive_where(Debug)]
-pub struct ThreadCtx<S: System> {
+pub struct ThreadExecStack<S: System>(Vec<ThreadExecCtx<S>, 16>);
+
+impl<S: System> ThreadExecStack<S> {
+    pub fn active(&self) -> &ThreadExecCtx<S> {
+        self.0.last().unwrap()
+    }
+
+    pub fn active_mut(&mut self) -> &mut ThreadExecCtx<S> {
+        self.0.last_mut().unwrap()
+    }
+
+    pub fn is_full(&self) -> bool {
+        self.0.is_full()
+    }
+
+    pub fn is_base(&self) -> bool {
+        self.0.len() == 1
+    }
+
+    pub fn push(&mut self, ctx: ThreadExecCtx<S>) -> Result<(), ThreadExecCtx<S>> {
+        self.0.push(ctx)
+    }
+
+    pub fn pop(&mut self) -> Option<ThreadExecCtx<S>> {
+        if self.is_base() {
+            None
+        } else {
+            Some(self.0.pop().unwrap())
+        }
+    }
+}
+
+#[derive_where(Debug)]
+pub struct ThreadExecCtx<S: System> {
     exec_state: S::ExecState,
     resources: KPtr<Resources<S>>,
     abi: AnyAbi,
 }
 
-impl<S: System> ThreadCtx<S> {
+impl<S: System> ThreadExecCtx<S> {
     pub fn new(state: S::ExecState, resources: KPtr<Resources<S>>, abi: impl Into<AnyAbi>) -> Self {
         Self {
             exec_state: state,
@@ -34,54 +67,71 @@ impl<S: System> ThreadCtx<S> {
             abi: abi.into(),
         }
     }
+
+    pub fn get_cap(&self, cap: CapId) -> Option<CapRef<S>> {
+        CapTable::get(self.resources.ctable(), cap.value())
+    }
+
+    pub fn addrspace(&self) -> impl Deref<Target = S::Addrspace> + '_ {
+        self.resources.addrspace()
+    }
+
+    pub fn ctable(&self) -> &KPtr<CapTable<S>> {
+        self.resources.ctable()
+    }
+
+    pub fn resources(&self) -> &KPtr<Resources<S>> {
+        &self.resources
+    }
+
+    pub fn exception_handler(&self) -> &ExceptionHandler {
+        self.resources.exception_handler()
+    }
 }
 
 #[derive_where(Debug)]
 pub struct Thread<S: System> {
-    ctx: CoreCell<Vec<ThreadCtx<S>, 16>>,
+    execution_stack: CoreCell<Lock<ThreadExecStack<S>>>,
     flat_priority: u32,
 }
 
+#[derive_where(Debug)]
+#[repr(transparent)]
+pub struct LocalBoundThread<S: System>(Thread<S>);
+
 impl Thread<ArchSystem> {
+    pub fn current() -> &'static CoreLocalThread {
+        &CORE_LOCAL_CURRENT_THREAD
+    }
+
     fn replace_current(new: KPtr<Self>) -> Option<KPtr<Self>> {
-        CORE_LOCAL_CURRENT_THREAD.replace(Some(new))
+        CORE_LOCAL_CURRENT_THREAD.replace(Some(new)).unwrap()
     }
 
     pub fn with_current<F, T>(fun: F) -> T
     where
-        F: FnOnce(&KPtr<Self>) -> T,
+        F: FnOnce(&LocalBoundThread<ArchSystem>) -> T,
     {
-        let current = CORE_LOCAL_CURRENT_THREAD.borrow();
-        let current = current.as_ref().unwrap();
-        #[cfg(debug_assertions)]
-        current
-            .verify_affinity()
-            .expect("Current thread is not bound to this core");
-        // SAFETY: repr transparent and identical semantics over
-        fun(current)
+        Self::current().locked(|current| {
+            let current = current.as_mut().unwrap();
+            let current = current.verify_affinity().unwrap();
+            // SAFETY: repr transparent and identical semantics over
+            fun(current)
+        })
     }
 
-    pub fn initial_dispatch(this: KPtr<Self>) -> Result<Never, SetAffinityError> {
-        let exec_state = {
-            match this.ctx.set_affinity() {
-                Ok(()) => {}
-                Err(SetAffinityError::BoundToSelf) => {}
-                Err(e) => return Err(e),
-            }
-            this.active_comp().unwrap().addrspace().activate();
-            // TODO: Remove lint allow once type alias impl trait works and ArchSystem uses it.
-            #[allow(clippy::clone_on_copy)]
-            let exec_state = this.active_ctx().unwrap().exec_state.clone();
-            assert!(Self::replace_current(this).is_none());
-            log::info!("Set the active thread");
-            exec_state
-        };
-        exec_state.dispatch();
+    pub fn kinit_dispatch(this: KPtr<Self>) -> Result<DispatchToken<ArchSystem>, BindError> {
+        let next = this.bind()?;
+        let dispatcher =
+            LocalBoundThread::switch(None, next).expect("Couldn't switch to starting thread");
+        Self::replace_current(this);
+        Ok(dispatcher)
     }
+
     pub fn dispatch(
         this: KPtr<Self>,
-        ctx: <ArchSystem as System>::IrqCtx,
-    ) -> Result<Never, CapError> {
+        irq_ctx: <ArchSystem as System>::IrqCtx,
+    ) -> Result<DispatchToken<ArchSystem>, CapError> {
         // Our kernel is non-preemptive which makes every other case really
         // simple as it's a completely synchronous call-response. However, thread
         // dispatching is somewhat weird because we exit the kernel early on the
@@ -99,48 +149,26 @@ impl Thread<ArchSystem> {
         // 2. rflags register needs to be valid (interrupts enabled, ring 3 execution, etc.)
         // 3. stack register needs to be whatever it was before syscall
         // 4. All callee-saved registers need to be set back (done in userspace)
-        let exec_state = {
-            match this.ctx.set_affinity() {
-                Ok(()) => {}
-                Err(SetAffinityError::BoundToSelf) => {}
-                Err(SetAffinityError::Bounded { affinity }) => {
-                    log::debug!(
-                        "Thread can't be dispatched as its bound to a different core: {affinity}"
-                    );
-                    return Err(CapError::ThreadBoundToOtherCore);
-                }
-            }
-            this.active_comp().unwrap().addrspace().activate();
-            // TODO: Remove lint allow once type alias impl trait works and ArchSystem uses it.
-            #[allow(clippy::clone_on_copy)]
-            let exec_state = this.active_ctx().unwrap().exec_state.clone();
-            {
-                let previous = Self::replace_current(this);
-                if let Some(previous) = &previous {
-                    previous.active_ctx().unwrap().exec_state.save(&ctx);
-                    previous.unset_affinity().expect(
-                        "Previous thread did not have it's affinity properly set to the local core",
-                    );
-                    // At this point, any other core may come in and execute the previous thread which is fine as it was saved above and it won't be used further
-                }
-            }
-            log::info!("Set the active thread");
-            exec_state
-        };
-        exec_state.dispatch();
+
+        let next = this.bind()?;
+        let previous = Self::current().lock();
+        let previous = previous
+            .as_ref()
+            .map(|prev| (Thread::verify_affinity(&prev).unwrap(), irq_ctx));
+        let dispatcher = LocalBoundThread::switch(previous, next)?;
+        Self::replace_current(this);
+        Ok(dispatcher)
     }
 
     pub fn priority_dispatch(
-        this: KPtr<Self>,
+        next: KPtr<Self>,
         ctx: <ArchSystem as System>::IrqCtx,
-    ) -> Result<(), CapError> {
-        let current = CORE_LOCAL_CURRENT_THREAD.borrow();
-        match current.as_ref() {
-            Some(current) if this.flat_priority > current.flat_priority => {
-                Self::dispatch(this, ctx)?;
-            }
-            Some(_) => Ok(()),
-            None => Self::dispatch(this, ctx)?,
+    ) -> Result<Option<DispatchToken<ArchSystem>>, CapError> {
+        let dispatch = Self::with_current(|current| next.flat_priority() > current.flat_priority());
+        if dispatch {
+            Ok(Some(Self::dispatch(next, ctx)?))
+        } else {
+            Ok(None)
         }
     }
 }
@@ -148,97 +176,158 @@ impl Thread<ArchSystem> {
 impl<S: System> Thread<S> {
     pub fn new(exec_state: S::ExecState, comp: KPtr<Resources<S>>, priority: u32) -> Self {
         let mut ctx = Vec::new();
-        ctx.push(ThreadCtx {
+        ctx.push(ThreadExecCtx {
             exec_state,
             resources: comp,
             abi: Default::default(),
         })
         .unwrap();
         Self {
-            ctx: CoreCell::new(ctx),
+            execution_stack: CoreCell::new(Lock::new(ThreadExecStack(ctx))),
             flat_priority: priority,
         }
-    }
-
-    pub fn get_cap(&self, cap: CapId) -> Result<Option<CapRef<S>>, BorrowError> {
-        Ok(CapTable::get(self.active_comp()?.cap_table(), cap.value()))
-    }
-
-    pub fn active_comp(&self) -> Result<Ref<'_, KPtr<Resources<S>>>, BorrowError> {
-        Ok(Ref::map(self.active_ctx()?, |ctx| &ctx.resources))
     }
 
     pub fn introspect(&self) -> introspect::Thread {
         introspect::Thread
     }
 
-    fn active_ctx(&self) -> Result<Ref<'_, ThreadCtx<S>>, BorrowError> {
-        Ok(Ref::map(self.ctx.try_borrow()?, |ctx| ctx.last().unwrap()))
+    pub fn bind(&self) -> Result<&LocalBoundThread<S>, BindError> {
+        self.execution_stack.bind()?;
+        Ok(self.verify_affinity().unwrap())
     }
 
-    pub fn invoke(&self, invocation: ThreadCtx<S>, ctx: S::IrqCtx) -> Result<Never, CapError> {
-        let exec_state = {
-            let mut curr_ctx = self
-                .ctx
-                .try_borrow_mut()
-                .expect("Attempted to synchronous invoke on non-bound thread");
-            curr_ctx
-                .last()
-                .as_mut()
-                .expect("There should always be at least 1 execution context on a thread")
-                .exec_state
-                .save(&ctx);
-            if curr_ctx.is_full() {
-                return Err(CapError::SyncInvokeLimit);
-            }
-            invocation.resources.addrspace().activate();
-            let xstate = invocation.exec_state.clone();
-            curr_ctx.push(invocation).unwrap();
-            xstate
-        };
-        exec_state.dispatch();
+    pub fn unbind(&self) -> Result<(), UnbindError> {
+        self.execution_stack.unbind()
     }
 
-    pub fn sync_ret(&self, _args: SyncRetOp, callee_ctx: S::IrqCtx) -> Result<Never, CapError>
+    fn verify_affinity(&self) -> Result<&LocalBoundThread<S>, FugitiveThread> {
+        LocalBoundThread::new(self)
+    }
+
+    fn verify_affinity_kptr(this: KPtr<Self>) -> Result<KPtr<LocalBoundThread<S>>, FugitiveThread> {
+        this.verify_affinity()?;
+        Ok(unsafe { this.cast() })
+    }
+
+    pub fn flat_priority(&self) -> u32 {
+        self.flat_priority
+    }
+}
+
+impl<S: System> LocalBoundThread<S> {
+    pub fn new(thread: &Thread<S>) -> Result<&Self, FugitiveThread> {
+        if thread.execution_stack.is_locally_bound() {
+            Ok(unsafe { core::mem::transmute(thread) })
+        } else {
+            Err(FugitiveThread)
+        }
+    }
+
+    pub fn get_cap(&self, cap: CapId) -> Option<CapRef<S>> {
+        self.execution_stack().lock().active().get_cap(cap)
+    }
+
+    pub fn exception_handler(&self) -> ExceptionHandler {
+        self.execution_stack()
+            .lock()
+            .active()
+            .resources()
+            .exception_handler()
+            .clone()
+    }
+
+    pub fn resources(&self) -> KPtr<Resources<S>> {
+        self.execution_stack().lock().active().resources().clone()
+    }
+
+    pub fn unbind(&self) -> Result<(), UnbindError> {
+        self.0.unbind()
+    }
+
+    pub fn execution_stack(&self) -> CoreGuard<'_, Lock<ThreadExecStack<S>>> {
+        self.0.execution_stack.try_get().unwrap()
+    }
+
+    pub fn invoke(
+        &self,
+        invocation: ThreadExecCtx<S>,
+        ctx: S::IrqCtx,
+    ) -> Result<DispatchToken<S>, CapError> {
+        let curr_ctx = self.execution_stack();
+        let mut curr_ctx = curr_ctx.lock();
+        if curr_ctx.is_full() {
+            return Err(CapError::SyncInvokeLimit);
+        }
+        curr_ctx.active_mut().exec_state.save(&ctx);
+        invocation.resources.addrspace().activate();
+        let xstate = invocation.exec_state.clone();
+        curr_ctx.push(invocation).unwrap();
+        Ok(DispatchToken(xstate))
+    }
+
+    pub fn sync_ret(
+        &self,
+        _args: SyncRetOp,
+        callee_ctx: S::IrqCtx,
+    ) -> Result<DispatchToken<S>, CapError>
     where
         StandardAbi: InvokeAbi<S>,
         ExceptionAbi: InvokeAbi<S>,
     {
-        let exec_state = {
-            let mut thread_ctx = self
-                .ctx
-                .try_borrow_mut()
-                .expect("Kernel attempted to sync ret on non core bound thread");
-            if thread_ctx.len() <= 1 {
-                return Err(CapError::SyncRetLimit);
-            }
-
-            let ThreadCtx { abi, .. } = thread_ctx.pop().unwrap();
-            let caller_ctx = thread_ctx.last().unwrap();
-            abi.ret_to(&callee_ctx, &caller_ctx.exec_state)?;
-            caller_ctx.resources.addrspace().activate();
-            caller_ctx.exec_state.clone()
-        };
-        exec_state.dispatch();
-    }
-
-    pub fn set_affinity(&self) -> Result<(), SetAffinityError> {
-        self.ctx.set_affinity()
-    }
-
-    pub fn unset_affinity(&self) -> Result<(), ResetAffinityError> {
-        self.ctx.reset_affinity()
-    }
-
-    fn verify_affinity(&self) -> Result<(), FugitiveThread> {
-        if self.ctx.is_bound_to_local() {
-            Ok(())
-        } else {
-            Err(FugitiveThread)
+        let thread_ctx = self.execution_stack();
+        let mut thread_ctx = thread_ctx.lock();
+        if thread_ctx.is_base() {
+            return Err(CapError::SyncRetLimit);
         }
+
+        let ThreadExecCtx { abi, .. } = thread_ctx.pop().unwrap();
+        let caller_ctx = thread_ctx.active_mut();
+        abi.ret_to(&callee_ctx, &caller_ctx.exec_state)?;
+        caller_ctx.resources.addrspace().activate();
+        Ok(DispatchToken(caller_ctx.exec_state.clone()))
+    }
+
+    pub fn flat_priority(&self) -> u32 {
+        self.0.flat_priority
+    }
+
+    pub fn switch(
+        current: Option<(&Self, S::IrqCtx)>,
+        next: &Self,
+    ) -> Result<DispatchToken<S>, CapError> {
+        let exec_state;
+        {
+            let exec_stack = next.execution_stack();
+            let exec_stack = exec_stack.lock();
+            exec_stack.active().addrspace().activate();
+            exec_state = exec_stack.active().exec_state.clone();
+            if let Some((previous, ref irq_ctx)) = current {
+                let prev_ctx = previous.execution_stack();
+                let prev_ctx = prev_ctx.lock();
+                prev_ctx.active().exec_state.save(irq_ctx);
+                previous
+                    .unbind()
+                    .expect("Active references to previous thread preventing unbinding!");
+                // At this point, any other core may come in and execute the previous thread which is fine as it was saved above and it won't be used further
+            };
+            log::info!("Set the active thread");
+        }
+
+        Ok(DispatchToken(exec_state))
+    }
+}
+
+#[derive(Debug)]
+#[must_use]
+pub struct DispatchToken<S: System>(S::ExecState);
+
+impl<S: System> DispatchToken<S> {
+    pub fn dispatch(&self) -> Never {
+        self.0.dispatch();
     }
 }
 
 #[derive(Debug, Display, Error)]
 #[display("Found a fugitive thread not boiund to the expected core")]
-struct FugitiveThread;
+pub struct FugitiveThread;
