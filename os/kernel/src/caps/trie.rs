@@ -62,6 +62,8 @@ pub struct TrieSlot<const COUNT: usize, T> {
     state: AtomicU64,
 }
 
+unsafe impl<const COUNT: usize, T: Sync> Sync for TrieSlot<COUNT, T> {}
+
 #[derive(Debug)]
 #[repr(C)]
 pub enum TrieSlotPayload<const COUNT: usize, T> {

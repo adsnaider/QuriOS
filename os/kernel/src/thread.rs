@@ -14,7 +14,6 @@ use crate::caps::{CapRef, CapTable, ExceptionHandler, Resources};
 use crate::core_local::core_cell::{BindError, CoreGuard, Lock, UnbindError};
 use crate::core_local::{CORE_LOCAL_CURRENT_THREAD, CoreCell};
 use crate::kmem::KPtr;
-use crate::never::Never;
 use crate::sync_call::AnyAbi;
 
 pub type CoreLocalThread = Lock<Option<KPtr<Thread<ArchSystem>>>>;
@@ -323,7 +322,7 @@ impl<S: System> LocalBoundThread<S> {
 pub struct DispatchToken<S: System>(S::ExecState);
 
 impl<S: System> DispatchToken<S> {
-    pub fn dispatch(&self) -> Never {
+    pub fn dispatch(&self) -> ! {
         self.0.dispatch();
     }
 }

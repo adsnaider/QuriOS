@@ -8,19 +8,40 @@ use qapi::caps::sync_ipc::ExceptionArgs;
 use qapi::exception::ExceptionKind;
 use qapi::syscall::SyscallArgs;
 use sync::cell::AtomicLazyCell;
+use tap::TapFallible;
 use x86_64::registers::control::Cr2;
 use x86_64::structures::idt::{InterruptDescriptorTable, PageFaultErrorCode};
 use x86_64::{PrivilegeLevel, VirtAddr as VirtAddrImpl};
 
+use super::X64Sys;
 use super::exec::Interrupt;
+use crate::arch::ArchSystem;
 use crate::arch::mem::{MemorySegment, VirtAddr, user_buffer_read_page_fault_call_gate};
 use crate::arch::x86_64_impl::exec::{Exception, ExceptionCtx, IrqCtx};
 use crate::arch::x86_64_impl::gdt;
 use crate::core_local::core_cell::Lock;
 use crate::core_local::{CORE_LOCAL_SAFE_BUFFER_LOCK, CoreCell};
+use crate::notify::Notification;
 use crate::syscall::{ring3_exception_handler, syscall_handler};
 
 const SYSCALL_INT: u8 = 0x80;
+
+pub struct IrqCtrlTable(CoreCell<Lock<[Option<Notification<X64Sys>>; 15]>>);
+static IRQ_CTRL_TABLE: IrqCtrlTable = IrqCtrlTable::new();
+
+impl IrqCtrlTable {
+    pub const fn new() -> Self {
+        Self(CoreCell::new(Lock::new([const { None }; 15])))
+    }
+
+    pub fn set(&self, irq: u8, notification: Option<Notification<X64Sys>>) {
+        self.0.try_get().unwrap().lock()[irq as usize] = notification;
+    }
+
+    pub fn get(&self, irq: u8) -> Option<Notification<X64Sys>> {
+        self.0.try_get().unwrap().lock()[irq as usize].clone()
+    }
+}
 
 /// Initializes the IDT and sets up the 8259 PIC.
 pub fn init() {
@@ -94,6 +115,22 @@ impl IsrHandler<Interrupt, ()> for SyscallHandler {
     }
 }
 
+pub struct IrqHandler<const IRQ: u8>;
+impl<const IRQ: u8> IsrHandler<Interrupt, ()> for IrqHandler<IRQ> {
+    extern "sysv64" fn call(ctx: ExceptionCtx<Interrupt>) {
+        if let Ok(pics) = PICS.try_get() {
+            let mut pics = pics.lock();
+            unsafe { pics.notify_end_of_interrupt(IRQ) };
+            let handler = IRQ_CTRL_TABLE.get(IRQ);
+            if let Some(notification) = handler {
+                let _ = notification
+                    .signal(IrqCtx::Interrupt(ctx))
+                    .tap_err(|e| log::warn!("Unable to notify IRQ handler: {IRQ} - {e}"));
+            }
+        }
+    }
+}
+
 const PIC_OFFSET: u8 = 32;
 
 static PICS: CoreCell<Lock<ChainedPics>> = CoreCell::new(Lock::new(unsafe {
@@ -160,6 +197,22 @@ fn init_idt() {
         idt[SYSCALL_INT]
             .register(SyscallHandler)
             .set_privilege_level(PrivilegeLevel::Ring3);
+
+        idt[PIC_OFFSET].register(IrqHandler::<0>);
+        idt[PIC_OFFSET + 1].register(IrqHandler::<1>);
+        idt[PIC_OFFSET + 2].register(IrqHandler::<2>);
+        idt[PIC_OFFSET + 3].register(IrqHandler::<3>);
+        idt[PIC_OFFSET + 4].register(IrqHandler::<4>);
+        idt[PIC_OFFSET + 5].register(IrqHandler::<5>);
+        idt[PIC_OFFSET + 6].register(IrqHandler::<6>);
+        idt[PIC_OFFSET + 7].register(IrqHandler::<7>);
+        idt[PIC_OFFSET + 8].register(IrqHandler::<8>);
+        idt[PIC_OFFSET + 9].register(IrqHandler::<9>);
+        idt[PIC_OFFSET + 10].register(IrqHandler::<10>);
+        idt[PIC_OFFSET + 11].register(IrqHandler::<11>);
+        idt[PIC_OFFSET + 12].register(IrqHandler::<12>);
+        idt[PIC_OFFSET + 13].register(IrqHandler::<13>);
+        idt[PIC_OFFSET + 14].register(IrqHandler::<14>);
         idt
     });
     IDT.load();
@@ -168,6 +221,7 @@ fn init_idt() {
 pub fn init_irqs() {
     PICS.do_bound(|pics| unsafe {
         pics.lock().initialize();
+        pics.lock().write_masks(0xFC, 0xFF);
     })
     .unwrap();
 }

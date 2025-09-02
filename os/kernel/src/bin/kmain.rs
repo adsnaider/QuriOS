@@ -7,7 +7,8 @@ use kernel::{kinit, uinit};
 #[unsafe(no_mangle)]
 pub extern "C" fn kmain() -> ! {
     kinit();
-    uinit();
+    let dispatcher = uinit();
+    dispatcher.dispatch();
 }
 
 #[cfg(target_os = "none")]
