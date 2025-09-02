@@ -73,130 +73,134 @@ pub fn kinit() {
         .entries_mut();
     // SAFETY: Memory map can be trusted to be correct
     unsafe { retyping::init(memory_map).expect("Error initializing retype table") }
-    system().post_init();
 }
 
 /// Initializes the `init` userspace process
 pub fn uinit() -> ! {
-    let modules = MODULES_REQUEST.get_response().unwrap().modules();
-    let initrd = modules
-        .iter()
-        .find(|module| module.path().to_bytes().ends_with(b"initrd.tar"))
-        .expect("Bootloader didn't provide the initrd image");
-    // SAFETY: The limine module is an in-memory file with the expected address and length and should be
-    // valid until bootloader reclaimable data is used.
-    let initrd =
-        unsafe { core::slice::from_raw_parts(initrd.addr(), initrd.size().try_into().unwrap()) };
-    log::info!("Loaded init image");
+    let thread_ptr;
+    {
+        let modules = MODULES_REQUEST.get_response().unwrap().modules();
+        let initrd = modules
+            .iter()
+            .find(|module| module.path().to_bytes().ends_with(b"initrd.tar"))
+            .expect("Bootloader didn't provide the initrd image");
+        // SAFETY: The limine module is an in-memory file with the expected address and length and should be
+        // valid until bootloader reclaimable data is used.
+        let initrd = unsafe {
+            core::slice::from_raw_parts(initrd.addr(), initrd.size().try_into().unwrap())
+        };
+        log::info!("Loaded init image");
 
-    let archive = TarArchiveRef::new(initrd).expect("Invalid initrd image");
-    let proc = archive
-        .entries()
-        .filter_map(|e| {
-            e.filename()
-                .as_str()
-                .tap_err(|err| log::warn!("Invalid entry in initrd: {err}. Skipping..."))
-                .map(|_| e)
-                .ok()
-        })
-        .find(|e| e.filename().as_str().unwrap() == "init")
-        .expect("Missing init process from initrd")
-        .data();
+        let archive = TarArchiveRef::new(initrd).expect("Invalid initrd image");
+        let proc = archive
+            .entries()
+            .filter_map(|e| {
+                e.filename()
+                    .as_str()
+                    .tap_err(|err| log::warn!("Invalid entry in initrd: {err}. Skipping..."))
+                    .map(|_| e)
+                    .ok()
+            })
+            .find(|e| e.filename().as_str().unwrap() == "init")
+            .expect("Missing init process from initrd")
+            .data();
 
-    log::info!("Found init image. Loading userspace process");
-    let mut fallocator = BumpFrameAllocator::new();
+        log::info!("Found init image. Loading userspace process");
+        let mut fallocator = BumpFrameAllocator::new();
 
-    CoreLocalData::init(
-        fallocator
+        CoreLocalData::init(
+            fallocator
+                .alloc_kernel_frame()
+                .expect("Out of memory error during initialization"),
+            0,
+        );
+        system().post_init();
+
+        let prog = Program::new(proc).expect("Error reading init process as ELF Executable");
+        // SAFETY: The data will be valid for any `usize` type
+        let exception_entry = unsafe {
+            *prog
+                .get_magic::<usize>(EXCEPTION_HANDLER_ID)
+                .expect("Booter program does not have an exception handler set up")
+        };
+        log::info!("Got init exception endpoint @ ({exception_entry:#X})");
+
+        let init = Process::<ArchSystem>::load(system(), prog, 10, initrd, &mut fallocator)
+            .expect("Error loading init process");
+
+        let frame = fallocator
             .alloc_kernel_frame()
-            .expect("Out of memory error during initialization"),
-        0,
-    );
+            .expect("Out of memory error during initialization");
+        let cap_table = CapTable::default();
+        // SAFETY: The kernel frame is unused
+        let cap_table = unsafe { KPtr::new_unchecked(frame, cap_table) };
+        let resources = Resources::new(
+            init.addrspace,
+            cap_table.clone(),
+            caps::ExceptionHandler::Within {
+                entry: exception_entry,
+            },
+        );
+        let resources_frame = fallocator
+            .alloc_kernel_frame()
+            .expect("Out of memory during initialization");
+        // SAFETY: The kernel frame is unused
+        let resources = unsafe { KPtr::new_unchecked(resources_frame, resources) };
+        let thread = Thread::new(init.exec, resources.clone(), 0);
+        let thread_frame = fallocator
+            .alloc_kernel_frame()
+            .expect("Out of memory error during initialization");
+        // SAFETY: The kernel frame is unused
+        thread_ptr = unsafe { KPtr::new_unchecked(thread_frame, thread) };
+        let thread = thread_ptr
+            .bind()
+            .expect("Couldn't set init-thread affinity to core");
 
-    let prog = Program::new(proc).expect("Error reading init process as ELF Executable");
-    // SAFETY: The data will be valid for any `usize` type
-    let exception_entry = unsafe {
-        *prog
-            .get_magic::<usize>(EXCEPTION_HANDLER_ID)
-            .expect("Booter program does not have an exception handler set up")
-    };
-    log::info!("Got init exception endpoint @ ({exception_entry:#X})");
-
-    let init = Process::<ArchSystem>::load(system(), prog, 10, initrd, &mut fallocator)
-        .expect("Error loading init process");
-
-    let frame = fallocator
-        .alloc_kernel_frame()
-        .expect("Out of memory error during initialization");
-    let cap_table = CapTable::default();
-    // SAFETY: The kernel frame is unused
-    let cap_table = unsafe { KPtr::new_unchecked(frame, cap_table) };
-    let resources = Resources::new(
-        init.addrspace,
-        cap_table.clone(),
-        caps::ExceptionHandler::Within {
-            entry: exception_entry,
-        },
-    );
-    let resources_frame = fallocator
-        .alloc_kernel_frame()
-        .expect("Out of memory during initialization");
-    // SAFETY: The kernel frame is unused
-    let resources = unsafe { KPtr::new_unchecked(resources_frame, resources) };
-    let thread = Thread::new(init.exec, resources.clone(), 0);
-    let thread_frame = fallocator
-        .alloc_kernel_frame()
-        .expect("Out of memory error during initialization");
-    // SAFETY: The kernel frame is unused
-    let thread = unsafe { KPtr::new_unchecked(thread_frame, thread) };
-    thread
-        .set_affinity()
-        .expect("Couldn't set init-thread affinity to core");
-
-    // SAFETY: It's okay to cast a cap table to cap block.
-    unsafe {
-        CapBlock::at(
-            thread.active_comp().unwrap().cap_table().cast_ref(),
-            SysSlot::new(0).unwrap(),
-        )
-        .try_set(TrieSlotPayload::Data(
-            Capability::<ArchSystem>::CompResource(resources),
-        ))
-        .expect("Unable to set boot capabilities");
-        CapBlock::at(
-            thread.active_comp().unwrap().cap_table().cast_ref(),
-            SysSlot::new(1).unwrap(),
-        )
-        .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::CapBlock(
-            cap_table.cast(),
-        )))
-        .expect("Unable to set boot capabilities");
-        CapBlock::at(
-            thread.active_comp().unwrap().cap_table().cast_ref(),
-            SysSlot::new(2).unwrap(),
-        )
-        .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::Arch(
-            <ArchSystem as System>::ArchCaps::new_addrspace(
-                &*thread.active_comp().unwrap().addrspace(),
-            ),
-        )))
-        .expect("Unable to set boot capabilities");
-        CapBlock::at(
-            thread.active_comp().unwrap().cap_table().cast_ref(),
-            SysSlot::new(3).unwrap(),
-        )
-        .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::Thread(
-            KPtr::clone(&thread),
-        )))
-        .expect("Unable to set boot capabilities");
-        CapBlock::at(
-            thread.active_comp().unwrap().cap_table().cast_ref(),
-            SysSlot::new(4).unwrap(),
-        )
-        .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::Arch(
-            <ArchSystem as System>::ArchCaps::irq_ctrl().unwrap(),
-        )))
-        .expect("Unable to set boot capabilities");
+        // SAFETY: It's okay to cast a cap table to cap block.
+        unsafe {
+            CapBlock::at(
+                thread.execution_stack().lock().active().ctable().cast_ref(),
+                SysSlot::new(0).unwrap(),
+            )
+            .try_set(TrieSlotPayload::Data(
+                Capability::<ArchSystem>::CompResource(resources),
+            ))
+            .expect("Unable to set boot capabilities");
+            CapBlock::at(
+                thread.execution_stack().lock().active().ctable().cast_ref(),
+                SysSlot::new(1).unwrap(),
+            )
+            .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::CapBlock(
+                cap_table.cast(),
+            )))
+            .expect("Unable to set boot capabilities");
+            CapBlock::at(
+                thread.execution_stack().lock().active().ctable().cast_ref(),
+                SysSlot::new(2).unwrap(),
+            )
+            .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::Arch(
+                <ArchSystem as System>::ArchCaps::new_addrspace(
+                    &*thread.execution_stack().lock().active().addrspace(),
+                ),
+            )))
+            .expect("Unable to set boot capabilities");
+            CapBlock::at(
+                thread.execution_stack().lock().active().ctable().cast_ref(),
+                SysSlot::new(3).unwrap(),
+            )
+            .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::Thread(
+                KPtr::clone(&thread_ptr),
+            )))
+            .expect("Unable to set boot capabilities");
+            CapBlock::at(
+                thread.execution_stack().lock().active().ctable().cast_ref(),
+                SysSlot::new(4).unwrap(),
+            )
+            .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::Arch(
+                <ArchSystem as System>::ArchCaps::irq_ctrl().unwrap(),
+            )))
+            .expect("Unable to set boot capabilities");
+        }
     }
-    Thread::initial_dispatch(thread).expect("Thread affinity was set above.");
+    Thread::kinit_dispatch(thread_ptr).expect("Thread affinity was set above.");
 }

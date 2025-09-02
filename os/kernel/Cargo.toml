@@ -44,3 +44,4 @@ tailcall = "1.0.1"
 x86_64 = { version = "0.15.2", default-features = false, features = [
   "instructions",
 ] }
+pic8259 = "0.11.0"

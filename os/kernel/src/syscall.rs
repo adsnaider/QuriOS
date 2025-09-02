@@ -17,7 +17,7 @@ use vmtable::{vm_link, vm_set_attr, vm_unlink};
 
 use crate::arch::{ArchSystem, InvokeAbi, System};
 use crate::caps::ExceptionHandler;
-use crate::thread::{Thread, ThreadCtx};
+use crate::thread::{Thread, ThreadExecCtx};
 
 mod ctable;
 mod introspect;
@@ -63,7 +63,7 @@ pub fn ring3_exception_handler(args: ExceptionArgs, ctx: <ArchSystem as System>:
         ExceptionHandler::Within { entry } => {
             let resources = Thread::with_current(|thread| thread.active_comp().unwrap().clone());
             let exec_state = abi.invoke_with_args(args, entry);
-            ThreadCtx::new(exec_state, resources, abi)
+            ThreadExecCtx::new(exec_state, resources, abi)
         }
     };
     // TODO: If this fails, notifiy a scheduler thread instead...
