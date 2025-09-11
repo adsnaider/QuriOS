@@ -1,7 +1,8 @@
 #[cfg(target_arch = "x86_64")]
 pub use x86_64::*;
 
-use super::{PositiveIsize, new_cap_macro::ctype};
+use super::PositiveIsize;
+use super::new_cap_macro::ctype;
 ctype!(
     pub struct SyncInvokeCap;
 );

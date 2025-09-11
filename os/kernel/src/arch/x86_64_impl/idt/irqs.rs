@@ -1,4 +1,5 @@
-use crate::{arch::x86_64_impl::X64Sys, notify::Notification};
+use crate::arch::x86_64_impl::X64Sys;
+use crate::notify::Notification;
 
 #[derive(Debug, Clone)]
 pub struct IrqDispatchTable {

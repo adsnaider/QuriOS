@@ -102,6 +102,8 @@ pub enum CapError {
     ThreadBoundToOtherCore = -22,
     #[display("Attempted to sync-ret on a component with a no-return ABI")]
     SyncRetOnNoRetAbi = -23,
+    #[display("IRQ Ctrl table not bound to this core")]
+    IrqTableBindInvalid = -24,
 }
 
 impl CapError {

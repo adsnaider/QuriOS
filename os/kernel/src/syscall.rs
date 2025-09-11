@@ -1,9 +1,11 @@
 use ctable::{cap_table_cons, cap_table_copy, cap_table_drop, cap_table_link};
 use introspect::introspect;
+use irq::{irq_set, irq_unset};
 use qapi::caps::sync_ipc::{ExceptionAbi, ExceptionArgs};
 use qapi::caps::{CapError, PositiveIsize};
 use qapi::syscall::ops::ctable::{ConsOp, CopyOp, DropOp, LinkOp};
 use qapi::syscall::ops::introspect::IntrospectOp;
+use qapi::syscall::ops::irq::{IrqSet, IrqUnset};
 use qapi::syscall::ops::notify::NotifyOp;
 use qapi::syscall::ops::retype::RetypeOp;
 use qapi::syscall::ops::sync_ipc::{SyncInvokeOp, SyncRetOp};
@@ -22,6 +24,7 @@ use crate::thread::{Thread, ThreadExecCtx};
 
 mod ctable;
 mod introspect;
+mod irq;
 mod notify;
 mod retyping;
 mod sync_ipc;
@@ -53,6 +56,8 @@ pub fn syscall_handler(
         SyscallOp::SyncRet => sync_ret(SyncRetOp::try_from_args(args.args())?, ctx),
         SyscallOp::Introspect => introspect(IntrospectOp::try_from_args(args.args())?),
         SyscallOp::Notify => notify::notify(NotifyOp::try_from_args(args.args())?, ctx),
+        SyscallOp::IrqSet => irq_set(IrqSet::try_from_args(args.args())?),
+        SyscallOp::IrqUnset => irq_unset(IrqUnset::try_from_args(args.args())?),
     }
 }
 

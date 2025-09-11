@@ -15,11 +15,10 @@ use x86_64::{PrivilegeLevel, VirtAddr as VirtAddrImpl};
 
 use super::X64Sys;
 use super::exec::Interrupt;
-use crate::arch::ArchSystem;
 use crate::arch::mem::{MemorySegment, VirtAddr, user_buffer_read_page_fault_call_gate};
 use crate::arch::x86_64_impl::exec::{Exception, ExceptionCtx, IrqCtx};
 use crate::arch::x86_64_impl::gdt;
-use crate::core_local::core_cell::Lock;
+use crate::core_local::core_cell::{BindError, GetError, Lock};
 use crate::core_local::{CORE_LOCAL_SAFE_BUFFER_LOCK, CoreCell};
 use crate::notify::Notification;
 use crate::syscall::{ring3_exception_handler, syscall_handler};
@@ -27,19 +26,24 @@ use crate::syscall::{ring3_exception_handler, syscall_handler};
 const SYSCALL_INT: u8 = 0x80;
 
 pub struct IrqCtrlTable(CoreCell<Lock<[Option<Notification<X64Sys>>; 15]>>);
-static IRQ_CTRL_TABLE: IrqCtrlTable = IrqCtrlTable::new();
+pub(super) static IRQ_CTRL_TABLE: IrqCtrlTable = IrqCtrlTable::new();
 
 impl IrqCtrlTable {
     pub const fn new() -> Self {
         Self(CoreCell::new(Lock::new([const { None }; 15])))
     }
 
-    pub fn set(&self, irq: u8, notification: Option<Notification<X64Sys>>) {
-        self.0.try_get().unwrap().lock()[irq as usize] = notification;
+    pub fn bind_to_core(&self) -> Result<(), BindError> {
+        self.0.bind().map(|_| ())
     }
 
-    pub fn get(&self, irq: u8) -> Option<Notification<X64Sys>> {
-        self.0.try_get().unwrap().lock()[irq as usize].clone()
+    pub fn set(&self, irq: u8, notification: Option<Notification<X64Sys>>) -> Result<(), GetError> {
+        self.0.try_get()?.lock()[irq as usize] = notification;
+        Ok(())
+    }
+
+    pub fn get(&self, irq: u8) -> Result<Option<Notification<X64Sys>>, GetError> {
+        Ok(self.0.try_get()?.lock()[irq as usize].clone())
     }
 }
 
@@ -118,10 +122,14 @@ impl IsrHandler<Interrupt, ()> for SyscallHandler {
 pub struct IrqHandler<const IRQ: u8>;
 impl<const IRQ: u8> IsrHandler<Interrupt, ()> for IrqHandler<IRQ> {
     extern "sysv64" fn call(ctx: ExceptionCtx<Interrupt>) {
+        // IRQ Ctrl table is bound to a single core
         if let Ok(pics) = PICS.try_get() {
             let mut pics = pics.lock();
+            // SAFETY: The interrupt we are notifying is the one that has been triggered
             unsafe { pics.notify_end_of_interrupt(IRQ) };
-            let handler = IRQ_CTRL_TABLE.get(IRQ);
+            let handler = IRQ_CTRL_TABLE
+                .get(IRQ)
+                .expect("PIC and IRQ ctrl not bound to the same thread");
             if let Some(notification) = handler {
                 let _ = notification
                     .signal(IrqCtx::Interrupt(ctx))
@@ -133,6 +141,7 @@ impl<const IRQ: u8> IsrHandler<Interrupt, ()> for IrqHandler<IRQ> {
 
 const PIC_OFFSET: u8 = 32;
 
+// SAFETY: The offset provided avoids colliding with other exceptions and interrupts.
 static PICS: CoreCell<Lock<ChainedPics>> = CoreCell::new(Lock::new(unsafe {
     ChainedPics::new_contiguous(PIC_OFFSET)
 }));
@@ -219,11 +228,15 @@ fn init_idt() {
 }
 
 pub fn init_irqs() {
-    PICS.do_bound(|pics| unsafe {
+    let pics = PICS.bind().expect("Unable to bind PICS to init core");
+    IRQ_CTRL_TABLE
+        .bind_to_core()
+        .expect("Unable to bind IRQ ctrl table to init core");
+    // SAFETY: We have exclusive ownership of the PICS
+    unsafe {
         pics.lock().initialize();
         pics.lock().write_masks(0xFC, 0xFF);
-    })
-    .unwrap();
+    }
 }
 
 #[inline(always)]

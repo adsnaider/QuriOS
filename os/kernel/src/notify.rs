@@ -1,11 +1,9 @@
 use derive_where::derive_where;
 use qapi::caps::CapError;
 
-use crate::{
-    arch::{ArchSystem, System},
-    kmem::KPtr,
-    thread::Thread,
-};
+use crate::arch::{ArchSystem, System};
+use crate::kmem::KPtr;
+use crate::thread::Thread;
 
 #[derive_where(Debug, Clone)]
 pub struct Notification<S: System> {

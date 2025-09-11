@@ -2,13 +2,9 @@ use core::arch::naked_asm;
 
 #[doc(hidden)]
 pub use paste::paste;
-use qapi::{
-    caps::{
-        PositiveIsize,
-        sync_ipc::{ExceptionAbi, ExceptionArgs, StandardAbi, SyncAbi},
-    },
-    syscall::SyscallOp,
-};
+use qapi::caps::PositiveIsize;
+use qapi::caps::sync_ipc::{ExceptionAbi, ExceptionArgs, StandardAbi, SyncAbi};
+use qapi::syscall::SyscallOp;
 use stack_list::{StackList, stack_list_pop, stack_list_push};
 
 pub const IPC_STACK_BUCKETS: usize = 4;

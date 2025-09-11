@@ -149,4 +149,6 @@ pub enum SyscallOp {
     SyncRet,
     Notify,
     Introspect,
+    IrqSet,
+    IrqUnset,
 }

@@ -16,6 +16,7 @@ use qapi::syscall::ops::vmtable::PaddedPageTableOffset;
 use sync::cell::AtomicOnceCell;
 
 use crate::kmem::KPtr;
+use crate::notify::Notification;
 use crate::syscall::SyscallResp;
 
 cfg_if::cfg_if! {
@@ -92,6 +93,10 @@ pub trait ArchCaps<S: System>: Sized {
     ) -> SyscallResp;
 
     fn introspect(&self) -> IntrospectResult;
+    fn irq_set(&self, irq: usize, notification: Option<Notification<S>>) -> SyscallResp;
+    fn irq_unset(&self, irq: usize) -> SyscallResp {
+        self.irq_set(irq, None)
+    }
 }
 
 pub trait ExecState: Debug {

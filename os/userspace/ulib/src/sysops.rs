@@ -3,6 +3,8 @@ use core::mem::MaybeUninit;
 
 use extend::ext;
 use qapi::caps::ctable::CTableCap;
+use qapi::caps::irq_ctrl::IrqCtrlCap;
+use qapi::caps::notify::NotificationCap;
 use qapi::caps::resources::ResourcesCap;
 use qapi::caps::sync_ipc::SyncInvokeCap;
 use qapi::caps::thread::ThreadCap;
@@ -13,6 +15,7 @@ use qapi::syscall::ops::ctable::{
     CTableCons, ConsArgs, ConsKind, ConsOp, CopyOp, DropOp, LinkOp, SyncCallCons, ThreadCons,
 };
 use qapi::syscall::ops::introspect::{IntrospectOp, IntrospectResult};
+use qapi::syscall::ops::irq::{IrqSet, IrqUnset};
 use qapi::syscall::ops::retype::{RetypeKind, RetypeOp};
 use qapi::syscall::ops::sync_ipc::{SYNC_CALL_ARGS, SyncInvokeOp};
 use qapi::syscall::ops::thread::DispatchOp;
@@ -242,6 +245,34 @@ pub impl VMTableCap {
         };
         syscall(SyscallArgs::new_with_args(
             SyscallOp::VMSetAttr,
+            op.into_args(),
+        ))
+        .map(|_| ())
+    }
+}
+
+#[ext]
+pub impl IrqCtrlCap {
+    fn irq_set(&self, notification: NotificationCap, irq: usize) -> Result<(), CapError> {
+        let op = IrqSet {
+            irq_ctrl: *self,
+            notification,
+            irq,
+        };
+        syscall(SyscallArgs::new_with_args(
+            SyscallOp::IrqSet,
+            op.into_args(),
+        ))
+        .map(|_| ())
+    }
+
+    fn irq_unset(&self, irq: usize) -> Result<(), CapError> {
+        let op = IrqUnset {
+            irq_ctrl: *self,
+            irq,
+        };
+        syscall(SyscallArgs::new_with_args(
+            SyscallOp::IrqUnset,
             op.into_args(),
         ))
         .map(|_| ())

@@ -2,6 +2,7 @@ use core::arch::asm;
 use core::borrow::Borrow;
 
 use exec::{ExecCtx, IrqCtx};
+use idt::IRQ_CTRL_TABLE;
 use mem_impl::page_table::{AnyPageTable, PageTableOffset, X64Addrspace};
 use qapi::caps::sync_ipc::ExceptionAbi;
 use qapi::caps::{CapError, PositiveIsize};
@@ -13,6 +14,7 @@ use x86_64::instructions::interrupts;
 use x86_64::registers::model_specific::GsBase;
 
 use crate::arch::Addrspace as _;
+use crate::notify::Notification;
 
 pub mod exec;
 mod gdt;
@@ -218,6 +220,17 @@ impl super::ArchCaps<X64Sys> for ArchCaps {
 
     fn irq_ctrl() -> Result<Self, CapError> {
         Ok(Self::IrqCtrl)
+    }
+
+    fn irq_set(&self, irq: usize, notification: Option<Notification<X64Sys>>) -> SyscallResp {
+        let ArchCaps::IrqCtrl = self else {
+            return Err(CapError::InvalidCapType)?;
+        };
+        let irq = irq.try_into().map_err(|_| CapError::InvalidArg)?;
+        IRQ_CTRL_TABLE
+            .set(irq, notification)
+            .map_err(|_| CapError::IrqTableBindInvalid)?;
+        Ok(PositiveIsize::zero())
     }
 }
 

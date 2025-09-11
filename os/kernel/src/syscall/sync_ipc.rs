@@ -1,8 +1,9 @@
+use qapi::caps::CapError;
+use qapi::syscall::ops::sync_ipc::{SyncInvokeOp, SyncRetOp};
+
 use super::SyscallResp;
 use crate::arch::{ArchSystem, System};
 use crate::thread::Thread;
-use qapi::caps::CapError;
-use qapi::syscall::ops::sync_ipc::{SyncInvokeOp, SyncRetOp};
 
 pub fn sync_invoke(opts: SyncInvokeOp, ctx: <ArchSystem as System>::IrqCtx) -> SyscallResp {
     let dispatcher;
