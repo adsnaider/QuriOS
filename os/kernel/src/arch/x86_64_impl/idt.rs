@@ -122,19 +122,30 @@ impl IsrHandler<Interrupt, ()> for SyscallHandler {
 pub struct IrqHandler<const IRQ: u8>;
 impl<const IRQ: u8> IsrHandler<Interrupt, ()> for IrqHandler<IRQ> {
     extern "sysv64" fn call(ctx: ExceptionCtx<Interrupt>) {
+        let mut dispatcher = None;
+        log::trace!("IRQ - {IRQ}");
         // IRQ Ctrl table is bound to a single core
         if let Ok(pics) = PICS.try_get() {
             let mut pics = pics.lock();
+            log::trace!("{IRQ} - Notifying end of interrupt");
             // SAFETY: The interrupt we are notifying is the one that has been triggered
-            unsafe { pics.notify_end_of_interrupt(IRQ) };
+            unsafe { pics.notify_end_of_interrupt(IRQ + PIC_OFFSET) };
             let handler = IRQ_CTRL_TABLE
                 .get(IRQ)
                 .expect("PIC and IRQ ctrl not bound to the same thread");
             if let Some(notification) = handler {
-                let _ = notification
+                log::debug!("IRQ {IRQ} notification found");
+                if let Ok(d) = notification
                     .signal(IrqCtx::Interrupt(ctx))
-                    .tap_err(|e| log::warn!("Unable to notify IRQ handler: {IRQ} - {e}"));
+                    .tap_err(|e| log::warn!("Unable to notify IRQ handler: {IRQ} - {e}"))
+                {
+                    dispatcher = d;
+                }
             }
+        }
+        if let Some(dispatcher) = dispatcher {
+            log::debug!("Notifying IRQ ({IRQ}) handler");
+            dispatcher.dispatch();
         }
     }
 }

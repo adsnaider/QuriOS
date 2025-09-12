@@ -104,7 +104,10 @@ impl Thread<ArchSystem> {
     }
 
     fn replace_current(new: KPtr<Self>) -> Option<KPtr<Self>> {
-        CORE_LOCAL_CURRENT_THREAD.replace(Some(new)).unwrap()
+        log::debug!("Replacing current thread: new: {new:?}");
+        let old = CORE_LOCAL_CURRENT_THREAD.replace(Some(new)).unwrap();
+        log::debug!("old: {old:?}");
+        old
     }
 
     pub fn with_current<F, T>(fun: F) -> T
@@ -149,12 +152,14 @@ impl Thread<ArchSystem> {
         // 3. stack register needs to be whatever it was before syscall
         // 4. All callee-saved registers need to be set back (done in userspace)
 
-        let next = this.bind()?;
-        let previous = Self::current().lock();
-        let previous = previous
-            .as_ref()
-            .map(|prev| (Thread::verify_affinity(&prev).unwrap(), irq_ctx));
-        let dispatcher = LocalBoundThread::switch(previous, next)?;
+        let dispatcher = {
+            let next = this.bind()?;
+            let previous = Self::current().lock();
+            let previous = previous
+                .as_ref()
+                .map(|prev| (Thread::verify_affinity(&prev).unwrap(), irq_ctx));
+            LocalBoundThread::switch(previous, next)?
+        };
         Self::replace_current(this);
         Ok(dispatcher)
     }
@@ -302,15 +307,17 @@ impl<S: System> LocalBoundThread<S> {
             exec_stack.active().addrspace().activate();
             exec_state = exec_stack.active().exec_state.clone();
             if let Some((previous, ref irq_ctx)) = current {
-                let prev_ctx = previous.execution_stack();
-                let prev_ctx = prev_ctx.lock();
-                prev_ctx.active().exec_state.save(irq_ctx);
+                {
+                    let prev_ctx = previous.execution_stack();
+                    let prev_ctx = prev_ctx.lock();
+                    prev_ctx.active().exec_state.save(irq_ctx);
+                }
                 previous
                     .unbind()
                     .expect("Active references to previous thread preventing unbinding!");
                 // At this point, any other core may come in and execute the previous thread which is fine as it was saved above and it won't be used further
             };
-            log::info!("Set the active thread");
+            log::debug!("Set the active thread: {next:?}");
         }
 
         Ok(DispatchToken(exec_state))

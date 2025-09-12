@@ -12,7 +12,8 @@ use qapi::caps::vmtable::VMTableCap;
 use qapi::caps::{CapError, CapId, PositiveIsize, SysSlot};
 use qapi::mem::{Frame, PageFlags};
 use qapi::syscall::ops::ctable::{
-    CTableCons, ConsArgs, ConsKind, ConsOp, CopyOp, DropOp, LinkOp, SyncCallCons, ThreadCons,
+    CTableCons, ConsArgs, ConsKind, ConsOp, CopyOp, DropOp, LinkOp, NotificationCons, SyncCallCons,
+    ThreadCons,
 };
 use qapi::syscall::ops::introspect::{IntrospectOp, IntrospectResult};
 use qapi::syscall::ops::irq::{IrqSet, IrqUnset};
@@ -68,6 +69,16 @@ pub impl CTableCap {
                 frame,
                 arg0,
                 priority,
+            }),
+            slot,
+        )
+    }
+
+    fn make_notification(&self, slot: SysSlot, thread: ThreadCap) -> Result<(), CapError> {
+        self.construct(
+            ConsArgs::Notification(NotificationCons {
+                thread,
+                _padding: 0,
             }),
             slot,
         )

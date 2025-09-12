@@ -191,5 +191,6 @@ pub fn uinit() -> DispatchToken<ArchSystem> {
             )))
             .expect("Unable to set boot capabilities");
     }
+    log::debug!("Init thread: {thread_ptr:?}");
     Thread::kinit_dispatch(thread_ptr).expect("Thread affinity was set above.")
 }

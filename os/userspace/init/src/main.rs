@@ -8,12 +8,17 @@ use allocator_api2::boxed::Box;
 use derive_more::{Deref, DerefMut};
 use entry::entry;
 use loader::MagicInfo;
+use qapi::caps::notify::NotificationCap;
 use qapi::caps::slotid::SlotId;
 use qapi::caps::sync_ipc::{ExceptionAbi, StandardAbi, SyncInvokeCap};
+use qapi::caps::thread::ThreadCap;
 use qapi::caps::{CapId, PositiveIsize};
 use qapi::exception::{ExceptionInfo, ExceptionKind};
-use qapi::init::{BootArgs, BootCaps, EXCEPTION_HANDLER_ID};
+use qapi::init::{BootArgs, BootCaps, EXCEPTION_HANDLER_ID, RetypeState};
+use qapi::mem::Frame;
 use qapi::syscall::SyscallOp;
+use qapi::syscall::ops::ctable::NotificationCons;
+use qapi::syscall::ops::retype::RetypeKind;
 use qapi::syscall::ops::sync_ipc::SyncCallFun;
 use serial::sprintln;
 use stack_list::{StackList, StackNode, stack_list_pop, stack_list_push};
@@ -22,7 +27,7 @@ use ulib::alloc::caps::CapabilityMan;
 use ulib::alloc::phys::bitmap_allocator::BitmapAllocator;
 use ulib::alloc::virt::Addrspace;
 use ulib::sysops::sync_endpoint::{IPC_STACKS, SyncEndpoint};
-use ulib::sysops::{CTableCapExt, CapIdExt, SyncInvokeCapExt};
+use ulib::sysops::{CTableCapExt, CapIdExt, FrameExt, IrqCtrlCapExt, SyncInvokeCapExt};
 
 #[global_allocator]
 static ALLOCATOR: ALockedMan<BitmapAllocator> = ALockedMan::uninit();
@@ -71,9 +76,38 @@ fn main(args: &'static BootArgs) -> ! {
         .unwrap();
     log::info!("Sync response: {result}");
 
-    unsafe {
-        core::ptr::read_volatile(0xA_F00_BABE as *const u8);
+    let free_frame = args
+        .memory_map
+        .as_slice()
+        .iter()
+        .enumerate()
+        .find(|(_, r)| r.state() == RetypeState::Untyped)
+        .map(|(i, _)| Frame::from_index(i))
+        .unwrap();
+    free_frame.retype(RetypeKind::IntoKernel).unwrap();
+    let mut irq_stack: [u128; 128] = [0; 128];
+    bootcaps
+        .self_caps
+        .make_thread(
+            SlotId::new(11).unwrap(),
+            irq_handler,
+            irq_stack.as_mut_ptr() as *mut (),
+            bootcaps.self_resources,
+            free_frame,
+            0,
+            u32::MAX,
+        )
+        .unwrap();
+
+    bootcaps
+        .self_caps
+        .make_notification(SlotId::new(12).unwrap(), ThreadCap::new(CapId::new(11)))
+        .unwrap();
+    let irq_notification = NotificationCap::new(CapId::new(12));
+    for i in 0..15 {
+        bootcaps.irq_ctrl.irq_set(irq_notification, i).unwrap();
     }
+    loop {}
 
     /*
     let cspace = CapabilityMan::new_starting_at(bootcaps.self_caps, BootCaps::next_free());
@@ -109,6 +143,11 @@ fn sync_invoke(a: usize, b: usize, c: usize, d: usize) -> PositiveIsize {
 
 fn exception_handler(e: ExceptionInfo) {
     panic!("Exception: {e:?}");
+}
+
+extern "C" fn irq_handler(_: usize) -> ! {
+    log::info!("Handling IRQs");
+    loop {}
 }
 
 #[cfg(target_os = "none")]

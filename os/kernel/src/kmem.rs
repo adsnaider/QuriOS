@@ -20,9 +20,12 @@ pub struct KPtr<T> {
     inner: NonNull<T>,
 }
 
-impl<T> core::fmt::Debug for KPtr<T> {
+impl<T: core::fmt::Debug> core::fmt::Debug for KPtr<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("KPtr").field("inner", &self.inner).finish()
+        f.debug_struct("KPtr")
+            .field("inner", self.as_ref())
+            .field("addr", &self.inner)
+            .finish()
     }
 }
 

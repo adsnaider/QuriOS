@@ -3,7 +3,7 @@ use qapi::caps::CapError;
 
 use crate::arch::{ArchSystem, System};
 use crate::kmem::KPtr;
-use crate::thread::Thread;
+use crate::thread::{DispatchToken, Thread};
 
 #[derive_where(Debug, Clone)]
 pub struct Notification<S: System> {
@@ -21,12 +21,10 @@ impl<S: System> Notification<S> {
 }
 
 impl Notification<ArchSystem> {
-    pub fn signal(&self, ctx: <ArchSystem as System>::IrqCtx) -> Result<(), CapError> {
-        let dispatcher = Thread::priority_dispatch(self.waiter.clone(), ctx)?;
-        if let Some(dispatcher) = dispatcher {
-            dispatcher.dispatch();
-        } else {
-            Ok(())
-        }
+    pub fn signal(
+        &self,
+        ctx: <ArchSystem as System>::IrqCtx,
+    ) -> Result<Option<DispatchToken<ArchSystem>>, CapError> {
+        Thread::priority_dispatch(self.waiter.clone(), ctx)
     }
 }
