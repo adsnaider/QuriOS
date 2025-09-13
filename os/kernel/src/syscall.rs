@@ -14,7 +14,7 @@ use qapi::syscall::ops::vmtable::{VMLinkOp, VMSetAttr, VMUnlinkOp};
 use qapi::syscall::{SyscallArgs, SyscallArgsInit, SyscallOp, SyscallRequest};
 use retyping::retype;
 use sync_ipc::{sync_invoke, sync_ret};
-use thread::dispatch;
+use thread::{dispatch, thread_sig_wait};
 use vmtable::{vm_link, vm_set_attr, vm_unlink};
 
 use crate::arch::{ArchSystem, InvokeAbi, System};
@@ -58,6 +58,7 @@ pub fn syscall_handler(
         SyscallOp::Notify => notify::notify(NotifyOp::try_from_args(args.args())?, ctx),
         SyscallOp::IrqSet => irq_set(IrqSet::try_from_args(args.args())?),
         SyscallOp::IrqUnset => irq_unset(IrqUnset::try_from_args(args.args())?),
+        SyscallOp::ThreadSigWait => thread_sig_wait(ctx),
     }
 }
 

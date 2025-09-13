@@ -151,4 +151,5 @@ pub enum SyscallOp {
     Introspect,
     IrqSet,
     IrqUnset,
+    ThreadSigWait,
 }

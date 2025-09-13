@@ -145,7 +145,7 @@ pub fn uinit() -> DispatchToken<ArchSystem> {
         .expect("Out of memory during initialization");
     // SAFETY: The kernel frame is unused
     let resources = unsafe { KPtr::new_unchecked(resources_frame, resources) };
-    let thread = Thread::new(init.exec, resources.clone(), 0);
+    let thread = Thread::new(init.exec, resources.clone(), 0, None);
     let thread_frame = fallocator
         .alloc_kernel_frame()
         .expect("Out of memory error during initialization");
@@ -191,6 +191,5 @@ pub fn uinit() -> DispatchToken<ArchSystem> {
             )))
             .expect("Unable to set boot capabilities");
     }
-    log::debug!("Init thread: {thread_ptr:?}");
     Thread::kinit_dispatch(thread_ptr).expect("Thread affinity was set above.")
 }

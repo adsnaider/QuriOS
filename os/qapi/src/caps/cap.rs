@@ -1,4 +1,7 @@
-use core::convert::Infallible;
+use core::{
+    convert::Infallible,
+    num::{NonZero, NonZeroU32, TryFromIntError},
+};
 
 use derive_more::{Display, Error, Into, TryFrom, TryFromReprError};
 use zerocopy::{FromBytes, Immutable, IntoBytes};
@@ -24,9 +27,10 @@ impl TryFrom<usize> for CapId {
     type Error = CapError;
 
     fn try_from(value: usize) -> Result<Self, Self::Error> {
-        Ok(Self(
+        let cap_id = Ok(Self(
             value.try_into().map_err(|_| CapError::CapIndexOutOfRange)?,
-        ))
+        ));
+        cap_id
     }
 }
 
@@ -104,6 +108,8 @@ pub enum CapError {
     SyncRetOnNoRetAbi = -23,
     #[display("IRQ Ctrl table not bound to this core")]
     IrqTableBindInvalid = -24,
+    #[display("The blocking thread has no parent to switch to")]
+    SigWaitNoParent = -25,
 }
 
 impl CapError {
@@ -133,6 +139,29 @@ impl PositiveIsize {
         } else {
             Self(value)
         }
+    }
+}
+
+impl TryFrom<PositiveIsize> for u32 {
+    type Error = TryFromIntError;
+
+    fn try_from(value: PositiveIsize) -> Result<Self, Self::Error> {
+        value.0.try_into()
+    }
+}
+
+impl From<u32> for PositiveIsize {
+    fn from(value: u32) -> Self {
+        // TODO: Not good on 32-bit OS...
+        Self(value.try_into().unwrap())
+    }
+}
+
+impl From<NonZeroU32> for PositiveIsize {
+    fn from(value: NonZeroU32) -> Self {
+        // TODO: Not good on 32-bit OS...
+        let value: u32 = value.into();
+        Self::from(value)
     }
 }
 

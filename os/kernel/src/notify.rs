@@ -8,11 +8,12 @@ use crate::thread::{DispatchToken, Thread};
 #[derive_where(Debug, Clone)]
 pub struct Notification<S: System> {
     waiter: KPtr<Thread<S>>,
+    badge: u32,
 }
 
 impl<S: System> Notification<S> {
-    pub const fn new(waiter: KPtr<Thread<S>>) -> Self {
-        Self { waiter }
+    pub const fn new(waiter: KPtr<Thread<S>>, badge: u32) -> Self {
+        Self { waiter, badge }
     }
 
     pub const fn waiter(&self) -> &KPtr<Thread<S>> {
@@ -25,6 +26,6 @@ impl Notification<ArchSystem> {
         &self,
         ctx: <ArchSystem as System>::IrqCtx,
     ) -> Result<Option<DispatchToken<ArchSystem>>, CapError> {
-        Thread::priority_dispatch(self.waiter.clone(), ctx)
+        Thread::signal(&self.waiter, self.badge, ctx)
     }
 }

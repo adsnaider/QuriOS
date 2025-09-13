@@ -56,6 +56,8 @@ pub struct ThreadCons {
     pub arg0: usize,
     pub resources: ResourcesCap,
     pub priority: u32,
+    pub parent: ThreadCap,
+    pub _padding: u32,
 }
 
 #[derive(KnownLayout, IntoBytes, FromBytes, Immutable, Debug, Copy, Clone)]
@@ -83,7 +85,7 @@ pub struct CTableCons {
 #[repr(C)]
 pub struct NotificationCons {
     pub thread: ThreadCap,
-    pub _padding: u32,
+    pub badge: u32,
 }
 
 #[repr(usize)]

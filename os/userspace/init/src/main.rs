@@ -3,11 +3,13 @@
 
 use core::arch::naked_asm;
 use core::mem::MaybeUninit;
+use core::sync::atomic::{AtomicUsize, Ordering};
 
 use allocator_api2::boxed::Box;
 use derive_more::{Deref, DerefMut};
 use entry::entry;
 use loader::MagicInfo;
+use qapi::caps::irq_ctrl::IrqCtrlCap;
 use qapi::caps::notify::NotificationCap;
 use qapi::caps::slotid::SlotId;
 use qapi::caps::sync_ipc::{ExceptionAbi, StandardAbi, SyncInvokeCap};
@@ -27,7 +29,9 @@ use ulib::alloc::caps::CapabilityMan;
 use ulib::alloc::phys::bitmap_allocator::BitmapAllocator;
 use ulib::alloc::virt::Addrspace;
 use ulib::sysops::sync_endpoint::{IPC_STACKS, SyncEndpoint};
-use ulib::sysops::{CTableCapExt, CapIdExt, FrameExt, IrqCtrlCapExt, SyncInvokeCapExt};
+use ulib::sysops::{
+    CTableCapExt, CapIdExt, FrameExt, IrqCtrlCapExt, SyncInvokeCapExt, ThreadCapExt,
+};
 
 #[global_allocator]
 static ALLOCATOR: ALockedMan<BitmapAllocator> = ALockedMan::uninit();
@@ -94,17 +98,22 @@ fn main(args: &'static BootArgs) -> ! {
             irq_stack.as_mut_ptr() as *mut (),
             bootcaps.self_resources,
             free_frame,
-            0,
+            bootcaps.irq_ctrl.cap().into(),
             u32::MAX,
+            bootcaps.self_thread,
         )
         .unwrap();
 
-    bootcaps
-        .self_caps
-        .make_notification(SlotId::new(12).unwrap(), ThreadCap::new(CapId::new(11)))
-        .unwrap();
-    let irq_notification = NotificationCap::new(CapId::new(12));
     for i in 0..15 {
+        bootcaps
+            .self_caps
+            .make_notification(
+                SlotId::new(i as usize + 12).unwrap(),
+                ThreadCap::new(CapId::new(11)),
+                1 << i,
+            )
+            .unwrap();
+        let irq_notification = NotificationCap::new(CapId::new(12 + i as u32));
         bootcaps.irq_ctrl.irq_set(irq_notification, i).unwrap();
     }
     loop {}
@@ -146,8 +155,10 @@ fn exception_handler(e: ExceptionInfo) {
 }
 
 extern "C" fn irq_handler(_: usize) -> ! {
-    log::info!("Handling IRQs");
-    loop {}
+    loop {
+        let signals = ThreadCap::sig_wait().unwrap();
+        log::info!("Handling IRQs: {signals}");
+    }
 }
 
 #[cfg(target_os = "none")]

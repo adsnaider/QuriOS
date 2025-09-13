@@ -27,17 +27,23 @@ pub fn cap_table_cons(opts: ConsOp) -> SyscallResp {
                 frame,
                 arg0,
                 priority,
+                parent,
                 ..
             } = opts.cons_args.cast::<ThreadCons>().verify()?.safe_read()?;
             let resources = Thread::with_current(|thread| thread.get_cap(resources.cap()))
                 .ok_or(CapError::CapNotFound)?;
             let resources = resources.as_resources()?;
 
+            let parent = Thread::with_current(|thread| thread.get_cap(parent.cap()))
+                .ok_or(CapError::CapNotFound)?;
+            let parent = parent.as_thread()?;
+
             let thread = Thread::new(
                 <ArchSystem as System>::ExecState::new_thread(entry, rsp, arg0),
                 // SAFETY: It's okay to cast a CapBlock to a CapTable
                 resources.clone(),
                 priority,
+                Some(parent.clone()),
             );
             let thread = KPtr::new(frame.into(), thread)?;
             CapBlock::at(ctable, opts.slot_id)
@@ -79,7 +85,7 @@ pub fn cap_table_cons(opts: ConsOp) -> SyscallResp {
         ConsKind::Notification => {
             let NotificationCons {
                 thread: thread_cap,
-                _padding,
+                badge,
             } = opts
                 .cons_args
                 .cast::<NotificationCons>()
@@ -88,7 +94,7 @@ pub fn cap_table_cons(opts: ConsOp) -> SyscallResp {
             let waiter = Thread::with_current(|thread| thread.get_cap(thread_cap.cap()))
                 .ok_or(CapError::CapNotFound)?;
             let waiter = waiter.as_thread()?;
-            let notification = Notification::new(waiter.clone());
+            let notification = Notification::new(waiter.clone(), badge);
             CapBlock::at(ctable, opts.slot_id).try_set(TrieSlotPayload::Data(
                 Capability::Notification(notification),
             ))?;

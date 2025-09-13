@@ -1,10 +1,12 @@
+use core::num::NonZeroU32;
 use core::ops::Deref;
+use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 use derive_more::{Display, Error};
 use derive_where::derive_where;
 use heapless::Vec;
 use qapi::caps::sync_ipc::{ExceptionAbi, StandardAbi};
-use qapi::caps::{CapError, CapId};
+use qapi::caps::{CapError, CapId, PositiveIsize};
 use qapi::syscall::ops::introspect;
 use qapi::syscall::ops::sync_ipc::SyncRetOp;
 
@@ -92,6 +94,8 @@ impl<S: System> ThreadExecCtx<S> {
 pub struct Thread<S: System> {
     execution_stack: CoreCell<Lock<ThreadExecStack<S>>>,
     flat_priority: u32,
+    signals: AtomicU32,
+    parent: Option<KPtr<Self>>,
 }
 
 #[derive_where(Debug)]
@@ -165,12 +169,25 @@ impl Thread<ArchSystem> {
     }
 
     pub fn priority_dispatch(
-        next: KPtr<Self>,
+        next: &KPtr<Self>,
         ctx: <ArchSystem as System>::IrqCtx,
     ) -> Result<Option<DispatchToken<ArchSystem>>, CapError> {
         let dispatch = Self::with_current(|current| next.flat_priority() > current.flat_priority());
         if dispatch {
-            Ok(Some(Self::dispatch(next, ctx)?))
+            Ok(Some(Self::dispatch(next.clone(), ctx)?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn signal(
+        this: &KPtr<Self>,
+        badge: u32,
+        irq_ctx: <ArchSystem as System>::IrqCtx,
+    ) -> Result<Option<DispatchToken<ArchSystem>>, CapError> {
+        if badge != 0 {
+            this.signals.fetch_or(badge, Ordering::Relaxed);
+            Thread::priority_dispatch(this, irq_ctx)
         } else {
             Ok(None)
         }
@@ -178,7 +195,12 @@ impl Thread<ArchSystem> {
 }
 
 impl<S: System> Thread<S> {
-    pub fn new(exec_state: S::ExecState, comp: KPtr<Resources<S>>, priority: u32) -> Self {
+    pub fn new(
+        exec_state: S::ExecState,
+        comp: KPtr<Resources<S>>,
+        priority: u32,
+        parent: Option<KPtr<Self>>,
+    ) -> Self {
         let mut ctx = Vec::new();
         ctx.push(ThreadExecCtx {
             exec_state,
@@ -189,6 +211,8 @@ impl<S: System> Thread<S> {
         Self {
             execution_stack: CoreCell::new(Lock::new(ThreadExecStack(ctx))),
             flat_priority: priority,
+            signals: AtomicU32::new(0),
+            parent,
         }
     }
 
@@ -207,11 +231,6 @@ impl<S: System> Thread<S> {
 
     fn verify_affinity(&self) -> Result<&LocalBoundThread<S>, FugitiveThread> {
         LocalBoundThread::new(self)
-    }
-
-    fn verify_affinity_kptr(this: KPtr<Self>) -> Result<KPtr<LocalBoundThread<S>>, FugitiveThread> {
-        this.verify_affinity()?;
-        Ok(unsafe { this.cast() })
     }
 
     pub fn flat_priority(&self) -> u32 {
@@ -322,6 +341,27 @@ impl<S: System> LocalBoundThread<S> {
 
         Ok(DispatchToken(exec_state))
     }
+
+    pub fn sig_wait(&self, irq_ctx: S::IrqCtx) -> Result<SigWaitResult<S>, CapError> {
+        let signals = self.0.signals.load(Ordering::Relaxed);
+        if signals != 0 {
+            Ok(SigWaitResult::Signalled(signals))
+        } else {
+            let Some(parent) = &self.0.parent else {
+                return Err(CapError::SigWaitNoParent);
+            };
+            let parent = parent.bind().unwrap();
+            Ok(SigWaitResult::Blocked(Self::switch(
+                Some((self, irq_ctx)),
+                parent,
+            )?))
+        }
+    }
+}
+
+pub enum SigWaitResult<S: System> {
+    Blocked(DispatchToken<S>),
+    Signalled(u32),
 }
 
 #[derive(Debug)]

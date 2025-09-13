@@ -46,6 +46,11 @@ pub impl ThreadCap {
         let args = DispatchOp { thread_cap: *self }.into_args();
         syscall(SyscallArgs::new_with_args(SyscallOp::ThreadDispatch, args)).map(|_| ())
     }
+
+    fn sig_wait() -> Result<u32, CapError> {
+        syscall(SyscallArgs::new_uninit(SyscallOp::ThreadSigWait))
+            .map(|sigs| sigs.try_into().unwrap())
+    }
 }
 
 #[ext]
@@ -60,6 +65,7 @@ pub impl CTableCap {
         frame: Frame,
         arg0: usize,
         priority: u32,
+        parent: ThreadCap,
     ) -> Result<(), CapError> {
         self.construct(
             ConsArgs::Thread(ThreadCons {
@@ -69,17 +75,21 @@ pub impl CTableCap {
                 frame,
                 arg0,
                 priority,
+                parent,
+                _padding: 0,
             }),
             slot,
         )
     }
 
-    fn make_notification(&self, slot: SysSlot, thread: ThreadCap) -> Result<(), CapError> {
+    fn make_notification(
+        &self,
+        slot: SysSlot,
+        thread: ThreadCap,
+        badge: u32,
+    ) -> Result<(), CapError> {
         self.construct(
-            ConsArgs::Notification(NotificationCons {
-                thread,
-                _padding: 0,
-            }),
+            ConsArgs::Notification(NotificationCons { thread, badge }),
             slot,
         )
     }
