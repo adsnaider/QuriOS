@@ -1,12 +1,11 @@
-use core::num::NonZeroU32;
 use core::ops::Deref;
-use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use core::sync::atomic::{AtomicU32, Ordering};
 
 use derive_more::{Display, Error};
 use derive_where::derive_where;
 use heapless::Vec;
 use qapi::caps::sync_ipc::{ExceptionAbi, StandardAbi};
-use qapi::caps::{CapError, CapId, PositiveIsize};
+use qapi::caps::{CapError, CapId};
 use qapi::syscall::ops::introspect;
 use qapi::syscall::ops::sync_ipc::SyncRetOp;
 
@@ -180,14 +179,19 @@ impl Thread<ArchSystem> {
         }
     }
 
-    pub fn signal(
+    pub fn notify(
         this: &KPtr<Self>,
-        badge: u32,
+        signals: u32,
         irq_ctx: <ArchSystem as System>::IrqCtx,
     ) -> Result<Option<DispatchToken<ArchSystem>>, CapError> {
-        if badge != 0 {
-            this.signals.fetch_or(badge, Ordering::Relaxed);
-            Thread::priority_dispatch(this, irq_ctx)
+        let old_sigs = this.signals.fetch_or(signals, Ordering::AcqRel);
+        let signals = old_sigs | signals;
+        if signals != 0 {
+            match Thread::priority_dispatch(this, irq_ctx) {
+                Ok(token) => Ok(token),
+                Err(CapError::ThreadBoundToOtherCore) => Ok(None),
+                Err(e) => Err(e),
+            }
         } else {
             Ok(None)
         }
@@ -343,18 +347,36 @@ impl<S: System> LocalBoundThread<S> {
     }
 
     pub fn sig_wait(&self, irq_ctx: S::IrqCtx) -> Result<SigWaitResult<S>, CapError> {
-        let signals = self.0.signals.load(Ordering::Relaxed);
+        let signals = self.0.signals.swap(0, Ordering::Relaxed);
         if signals != 0 {
             Ok(SigWaitResult::Signalled(signals))
         } else {
-            let Some(parent) = &self.0.parent else {
-                return Err(CapError::SigWaitNoParent);
-            };
-            let parent = parent.bind().unwrap();
-            Ok(SigWaitResult::Blocked(Self::switch(
-                Some((self, irq_ctx)),
-                parent,
-            )?))
+            self.unbind().unwrap();
+            let signals = self.0.signals.swap(0, Ordering::AcqRel);
+            if signals == 0 {
+                let Some(parent) = &self.0.parent else {
+                    return Err(CapError::SigWaitNoParent);
+                };
+                let parent = parent.bind().unwrap();
+                Ok(SigWaitResult::Blocked(Self::switch(
+                    Some((self, irq_ctx)),
+                    parent,
+                )?))
+            } else {
+                match self.0.bind() {
+                    Ok(_) => Ok(SigWaitResult::Signalled(signals)),
+                    Err(BindError::Bound { affinity: _ }) => {
+                        let Some(parent) = &self.0.parent else {
+                            return Err(CapError::SigWaitNoParent);
+                        };
+                        let parent = parent.bind().unwrap();
+                        Ok(SigWaitResult::Blocked(Self::switch(
+                            Some((self, irq_ctx)),
+                            parent,
+                        )?))
+                    }
+                }
+            }
         }
     }
 }

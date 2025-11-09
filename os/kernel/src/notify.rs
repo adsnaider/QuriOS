@@ -26,6 +26,6 @@ impl Notification<ArchSystem> {
         &self,
         ctx: <ArchSystem as System>::IrqCtx,
     ) -> Result<Option<DispatchToken<ArchSystem>>, CapError> {
-        Thread::signal(&self.waiter, self.badge, ctx)
+        Thread::notify(&self.waiter, self.badge, ctx)
     }
 }

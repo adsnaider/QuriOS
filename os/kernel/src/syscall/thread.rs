@@ -1,10 +1,9 @@
 use qapi::caps::CapError;
 use qapi::syscall::ops::thread::DispatchOp;
 
+use super::SyscallResp;
 use crate::arch::{ArchSystem, System};
 use crate::thread::{SigWaitResult, Thread};
-
-use super::SyscallResp;
 
 pub fn dispatch(
     DispatchOp { thread_cap }: DispatchOp,

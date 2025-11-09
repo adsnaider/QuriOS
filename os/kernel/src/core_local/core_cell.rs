@@ -137,6 +137,7 @@ impl<T> CoreCell<T> {
                 // Bound to this core
                 let refs = self.refs.get();
                 if refs == 0 {
+                    self.affinity.store(NO_AFFINITY, Ordering::Release);
                     Ok(())
                 } else {
                     Err(UnbindError::RefsAlive { refs })
