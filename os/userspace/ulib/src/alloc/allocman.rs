@@ -1,3 +1,4 @@
+#![allow(unused)]
 use core::alloc::{GlobalAlloc, Layout};
 use core::marker::PhantomPinned;
 use core::ptr::NonNull;
@@ -42,6 +43,7 @@ impl ReservedHeap {
     }
 }
 
+// SAFETY: Implementation of `allocate`/`deallocate` is correct as per `LockedHeap`
 unsafe impl Allocator for ReservedHeap {
     fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
         match self.0.lock().allocate_first_fit(layout) {
@@ -51,7 +53,8 @@ unsafe impl Allocator for ReservedHeap {
     }
 
     unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
-        self.0.lock().deallocate(ptr, layout)
+        // SAFETY: Precondition
+        unsafe { self.0.lock().deallocate(ptr, layout) }
     }
 }
 
@@ -63,16 +66,12 @@ pub struct Allocman<F: FrameAllocator> {
     _pinned: PhantomPinned,
 }
 
-unsafe fn extend_life<'a, 'b, T>(payload: &'a T) -> &'b T {
-    core::mem::transmute(payload)
-}
-
 impl<F: FrameAllocator> Allocman<F> {
     pub fn new(
         falloc: F,
         addrspace: Addrspace<ReservedHeap>,
         caps: CapabilityMan<ReservedHeap>,
-    ) -> Self {
+    ) -> Result<Self, HeapError> {
         let mut this = Self {
             falloc,
             addrspace,
@@ -80,8 +79,8 @@ impl<F: FrameAllocator> Allocman<F> {
             main_heap: Heap::empty(),
             _pinned: PhantomPinned,
         };
-        this.hydrate_reserves();
-        this
+        this.hydrate_reserves()?;
+        Ok(this)
     }
 
     pub fn malloc(&mut self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
@@ -105,27 +104,36 @@ impl<F: FrameAllocator> Allocman<F> {
         Ok(())
     }
 
+    /// # Safety
+    ///
+    /// `ptr` must be a pointer returned by a call to the [`malloc`] function with
+    /// identical layout. Undefined behavior may occur for invalid arguments.
     pub unsafe fn free(&mut self, ptr: NonNull<u8>, layout: Layout) {
-        self.main_heap.deallocate(ptr, layout)
+        // SAFETY: Precondition
+        unsafe { self.main_heap.deallocate(ptr, layout) }
     }
 
     pub fn cap_alloc(&mut self) -> Result<CapNode, CAllocError> {
         self.caps.alloc_cap()
     }
 
+    /// # Safety
+    ///
+    /// Capabilities may cause underlying changes to the memory space. Care must
+    /// be taken to guarantee this is safe
     pub unsafe fn cap_free(&mut self, cap: CapNode) {
         self.caps.cap_free(cap)
     }
 }
 
 #[derive(Debug, Clone, Error, Display)]
-enum HeapError {
+pub enum HeapError {
     #[display("Out of available memory in the component")]
     OutOfMemory,
 }
 
 impl From<HeapError> for AllocError {
-    fn from(value: HeapError) -> Self {
+    fn from(_value: HeapError) -> Self {
         Self
     }
 }

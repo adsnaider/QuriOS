@@ -1,5 +1,5 @@
 use core::convert::Infallible;
-use core::num::{NonZero, NonZeroU32, TryFromIntError};
+use core::num::{NonZeroU32, TryFromIntError};
 
 use derive_more::{Display, Error, Into, TryFrom, TryFromReprError};
 use zerocopy::{FromBytes, Immutable, IntoBytes};

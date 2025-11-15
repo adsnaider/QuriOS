@@ -1,10 +1,9 @@
-use core::cell::{Cell, Ref, RefCell, RefMut, UnsafeCell};
+use core::cell::{Cell, UnsafeCell};
 use core::marker::PhantomData;
-use core::mem::ManuallyDrop;
 use core::ops::{Deref, DerefMut};
 use core::sync::atomic::{AtomicU16, Ordering};
 
-use derive_more::{Display, Error, From};
+use derive_more::{Display, Error};
 use qapi::caps::CapError;
 use tap::TapFallible;
 

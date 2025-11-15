@@ -1,37 +1,24 @@
 #![no_std]
 #![no_main]
 
-use core::arch::naked_asm;
 use core::mem::MaybeUninit;
-use core::sync::atomic::{AtomicUsize, Ordering};
 
-use allocator_api2::boxed::Box;
-use derive_more::{Deref, DerefMut};
 use entry::entry;
 use loader::MagicInfo;
-use qapi::caps::irq_ctrl::IrqCtrlCap;
 use qapi::caps::notify::NotificationCap;
 use qapi::caps::slotid::SlotId;
 use qapi::caps::sync_ipc::{ExceptionAbi, StandardAbi, SyncInvokeCap};
 use qapi::caps::thread::ThreadCap;
 use qapi::caps::{CapId, PositiveIsize};
-use qapi::exception::{ExceptionInfo, ExceptionKind};
+use qapi::exception::ExceptionInfo;
 use qapi::init::{BootArgs, BootCaps, EXCEPTION_HANDLER_ID, RetypeState};
 use qapi::mem::Frame;
-use qapi::syscall::SyscallOp;
-use qapi::syscall::ops::ctable::NotificationCons;
 use qapi::syscall::ops::retype::RetypeKind;
-use qapi::syscall::ops::sync_ipc::SyncCallFun;
-use serial::sprintln;
-use stack_list::{StackList, StackNode, stack_list_pop, stack_list_push};
-use ulib::alloc::allocman::{ALockedMan, Allocman, ReservedHeap};
-use ulib::alloc::caps::CapabilityMan;
+use stack_list::StackNode;
+use ulib::alloc::allocman::ALockedMan;
 use ulib::alloc::phys::bitmap_allocator::BitmapAllocator;
-use ulib::alloc::virt::Addrspace;
 use ulib::sysops::sync_endpoint::{IPC_STACKS, SyncEndpoint};
-use ulib::sysops::{
-    CTableCapExt, CapIdExt, FrameExt, IrqCtrlCapExt, SyncInvokeCapExt, ThreadCapExt,
-};
+use ulib::sysops::{CTableCapExt, FrameExt, IrqCtrlCapExt, SyncInvokeCapExt, ThreadCapExt};
 
 #[global_allocator]
 static ALLOCATOR: ALockedMan<BitmapAllocator> = ALockedMan::uninit();
@@ -141,8 +128,6 @@ fn main(args: &'static BootArgs) -> ! {
     let foo = Box::new(10);
     assert_eq!(*foo, 10);
     */
-
-    todo!();
 }
 
 fn sync_invoke(a: usize, b: usize, c: usize, d: usize) -> PositiveIsize {

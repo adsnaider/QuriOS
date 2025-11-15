@@ -1,5 +1,4 @@
 mod handlers;
-pub mod irqs;
 
 use handlers::{Isr, IsrHandler, PanicHandler};
 use pic8259::ChainedPics;

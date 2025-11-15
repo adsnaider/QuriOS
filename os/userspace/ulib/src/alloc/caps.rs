@@ -1,3 +1,4 @@
+#![allow(unused)]
 use core::marker::PhantomData;
 
 use allocator_api2::alloc::Allocator;

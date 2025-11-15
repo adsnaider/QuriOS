@@ -1,3 +1,4 @@
+#![allow(unused)]
 use allocator_api2::alloc::Allocator;
 use derive_more::{Display, Error, From};
 use hashbrown::{DefaultHashBuilder, HashMap};
@@ -34,6 +35,9 @@ impl<A: Allocator> Addrspace<A> {
         }
     }
 
+    /// # Safety
+    ///
+    /// Modifying the address space is intrinsically unsafe
     pub unsafe fn map_to<F: FrameAllocator, C: CapAlloc>(
         &mut self,
         page: Page,

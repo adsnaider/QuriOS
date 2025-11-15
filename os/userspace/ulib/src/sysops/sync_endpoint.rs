@@ -19,7 +19,7 @@ pub trait AbiImpl {
     extern "C" fn stackfull_entry();
 }
 
-trait AbiFn<Abi: SyncAbi>: Fn(<Abi as SyncAbi>::Args) -> <Abi as SyncAbi>::Ret {}
+pub trait AbiFn<Abi: SyncAbi>: Fn(<Abi as SyncAbi>::Args) -> <Abi as SyncAbi>::Ret {}
 impl<F, Abi> AbiFn<Abi> for F
 where
     F: Fn(<Abi as SyncAbi>::Args) -> <Abi as SyncAbi>::Ret,
