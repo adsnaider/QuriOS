@@ -37,6 +37,9 @@ check:
 	cargo check --workspace --tests
 	cargo +nightly fmt --all --check
 
+fix:
+	cargo fix --workspace --target {{target}}
+
 clippy:
 	cargo clippy  --workspace --target {{target}}
 	cargo clippy  --workspace --tests
