@@ -97,10 +97,6 @@ pub struct Thread<S: System> {
     parent: Option<KPtr<Self>>,
 }
 
-#[derive_where(Debug)]
-#[repr(transparent)]
-pub struct LocalBoundThread<S: System>(Thread<S>);
-
 impl Thread<ArchSystem> {
     pub fn current() -> &'static CoreLocalThread {
         &CORE_LOCAL_CURRENT_THREAD
@@ -242,10 +238,15 @@ impl<S: System> Thread<S> {
     }
 }
 
+#[derive_where(Debug)]
+#[repr(transparent)]
+pub struct LocalBoundThread<S: System>(Thread<S>);
+
 impl<S: System> LocalBoundThread<S> {
     pub fn new(thread: &Thread<S>) -> Result<&Self, FugitiveThread> {
         if thread.execution_stack.is_locally_bound() {
-            Ok(unsafe { core::mem::transmute(thread) })
+            // SAFETY: repr(transparent) guarantees this is okay.
+            Ok(unsafe { core::mem::transmute::<&Thread<S>, &LocalBoundThread<S>>(thread) })
         } else {
             Err(FugitiveThread)
         }

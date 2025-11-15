@@ -54,7 +54,7 @@ setup:
 init: setup
 	#!/usr/bin/env bash
 	set -euo pipefail
-	export RUSTFLAGS="-Crelocation-model=static"
+	export RUSTFLAGS="-Crelocation-model=static -Cforce-frame-pointers=yes"
 	BIN=`cargo build -p init --profile {{profile}} --target {{target}} --message-format=json | {{extractor}}`
 	cp -f "$BIN" "{{build_dir}}/init"
 
@@ -63,8 +63,9 @@ initrd: init
 
 kernel: setup
 	#!/usr/bin/env bash
+	export RUSTFLAGS="-Cforce-frame-pointers=yes"
 	set -euo pipefail
-	BIN=`cargo build --profile {{profile}} --target {{target}} --bin kmain --message-format=json | {{extractor}}`
+	BIN=`cargo build --profile {{profile}} --target {{target}} --bin kmain --message-format=json| {{extractor}}`
 	cp -f "$BIN" "{{build_dir}}/kernel"
 
 build: kernel initrd
@@ -90,7 +91,10 @@ emulate: dbg_dir iso
 		-bios /usr/share/ovmf/OVMF.fd \
 		-chardev stdio,id=char0,logfile={{artifact_dir}}/serial.log,signal=off \
 		-serial chardev:char0 \
-		{{qemu_args}}
+		{{qemu_args}} | tee .build/serial.out
+	@awk '/======== BACKTRACE ========/{flag=1; next}/======== END BACKTRACE ========/{flag=0} flag' .build/serial.out | xargs addr2line -C -f -p -i -e {{artifact_dir}}/debugger/kernel
+
+	
 
 ktest: test-iso
 	@./go.sh 33 qemu-system-x86_64 \
