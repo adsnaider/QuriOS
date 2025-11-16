@@ -184,7 +184,6 @@ dependencies = [
  "loader",
  "log",
  "qapi",
- "selfie",
  "serial",
  "spin",
  "stack_list",
@@ -379,14 +378,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "selfie"
-version = "0.1.0"
-dependencies = [
- "derive_more",
- "sealed",
-]
-
-[[package]]
 name = "serial"
 version = "0.1.0"
 dependencies = [
@@ -514,7 +505,6 @@ dependencies = [
  "log",
  "paste",
  "qapi",
- "selfie",
  "spin",
  "stack_list",
  "zerocopy",

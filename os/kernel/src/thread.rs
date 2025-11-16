@@ -160,7 +160,7 @@ impl Thread<ArchSystem> {
             let previous = Self::current().lock();
             let previous = previous
                 .as_ref()
-                .map(|prev| (Thread::verify_affinity(&prev).unwrap(), irq_ctx));
+                .map(|prev| (Thread::verify_affinity(prev).unwrap(), irq_ctx));
             LocalBoundThread::switch(previous, next)?
         };
         Self::replace_current(this);
@@ -184,6 +184,7 @@ impl Thread<ArchSystem> {
         signals: u32,
         irq_ctx: <ArchSystem as System>::IrqCtx,
     ) -> Result<Option<DispatchToken<ArchSystem>>, CapError> {
+        // TODO: Fix race condition with sig_wait where thread may not be awaken at all...
         log::trace!("Notifying thread: sigs {signals}");
         let old_sigs = this.signals.fetch_or(signals, Ordering::AcqRel);
         let signals = old_sigs | signals;
@@ -297,10 +298,6 @@ impl<S: System> LocalBoundThread<S> {
         self.execution_stack().lock().active().resources().clone()
     }
 
-    pub fn unbind(&self) -> Result<(), UnbindError> {
-        self.0.unbind()
-    }
-
     pub fn execution_stack(&self) -> CoreGuard<'_, Lock<ThreadExecStack<S>>> {
         self.0.execution_stack.try_get().unwrap()
     }
@@ -365,6 +362,7 @@ impl<S: System> LocalBoundThread<S> {
                     prev_ctx.active().exec_state.save(irq_ctx);
                 }
                 previous
+                    .0
                     .unbind()
                     .expect("Active references to previous thread preventing unbinding!");
                 // At this point, any other core may come in and execute the previous thread which is fine as it was saved above and it won't be used further

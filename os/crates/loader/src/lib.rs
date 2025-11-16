@@ -32,10 +32,12 @@ impl<T> Deref for MagicInfo<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
+        // SAFETY: Only giving out shared references.
         unsafe { &*self.data.get() }
     }
 }
 
+// SAFETY: Only giving out shared references.
 unsafe impl<T: Sync> Sync for MagicInfo<T> {}
 
 impl<T> MagicInfo<T> {
@@ -134,6 +136,11 @@ impl<'a> Program<'a> {
         })
     }
 
+    /// Finds the specific magic number in the loaded image.
+    ///
+    /// # Safety
+    ///
+    /// The contents following the magic number must be castable into `&T`
     pub unsafe fn get_magic<T>(&self, magic: LoadedMagic) -> Result<&T, FindMagicError> {
         const {
             assert!(align_of::<T>() <= align_of::<u64>());

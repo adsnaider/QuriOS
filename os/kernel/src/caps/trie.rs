@@ -62,6 +62,7 @@ pub struct TrieSlot<const COUNT: usize, T> {
     state: AtomicU64,
 }
 
+// SAFETY: All of the access to the payload is guarded by the atomic state.
 unsafe impl<const COUNT: usize, T: Sync> Sync for TrieSlot<COUNT, T> {}
 
 #[derive(Debug)]

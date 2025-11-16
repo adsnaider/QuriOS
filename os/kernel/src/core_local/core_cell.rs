@@ -192,8 +192,6 @@ pub struct Lock<T> {
     locked: Cell<bool>,
 }
 
-unsafe impl<T: Send> Send for Lock<T> {}
-
 impl<T> Lock<T> {
     pub const fn new(inner: T) -> Self {
         Self {
@@ -256,12 +254,14 @@ impl<T> Deref for LockGuard<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
+        // SAFETY: Lockguard guarantees exclusive access
         unsafe { &*self.cell.inner.get() }
     }
 }
 
 impl<T> DerefMut for LockGuard<'_, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
+        // SAFETY: Lockguard guarantees exclusive access
         unsafe { &mut *self.cell.inner.get() }
     }
 }

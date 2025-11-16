@@ -51,6 +51,7 @@ where
     #[unsafe(naked)]
     extern "C" fn stackfull_entry() {
         #[allow(unused_unsafe)]
+        // SAFETY: Proper conditions for a synchronous invocation call gate
         unsafe {
             naked_asm!(
                 "mov r12, rdi",
@@ -113,6 +114,7 @@ where
     #[unsafe(naked)]
     extern "C" fn stackfull_entry() {
         #[allow(unused_unsafe)]
+        // SAFETY: Proper conditions for a synchronous invocation call gate
         unsafe {
             naked_asm!(
                 "mov r12, rdi",

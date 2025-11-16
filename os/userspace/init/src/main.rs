@@ -37,12 +37,13 @@ static EXCEPTION_HANDLER: MagicInfo<extern "C" fn()> = const {
 fn main(args: &'static BootArgs) -> ! {
     // Aparently #[used] is not good enough...
     EXCEPTION_HANDLER.keep();
+    #[allow(static_mut_refs)]
     {
         static mut SNODE1: [u128; 4096] = [0; 4096];
         static mut SEXCEPT1: [u128; 128] = [0; 128];
-        #[allow(static_mut_refs)]
+        // SAFETY: Only used as part of the IPC stacks.
         IPC_STACKS[0].push_front(StackNode::new(unsafe { &mut SNODE1 }).unwrap());
-        #[allow(static_mut_refs)]
+        // SAFETY: Only used as part of the IPC stacks.
         IPC_STACKS[1].push_front(StackNode::new(unsafe { &mut SEXCEPT1 }).unwrap());
     }
     serial::init();
@@ -97,7 +98,7 @@ fn main(args: &'static BootArgs) -> ! {
         bootcaps
             .self_caps
             .make_notification(
-                SlotId::new(i as usize + 12).unwrap(),
+                SlotId::new(i + 12).unwrap(),
                 ThreadCap::new(CapId::new(11)),
                 1 << i,
             )
@@ -105,6 +106,7 @@ fn main(args: &'static BootArgs) -> ! {
         let irq_notification = NotificationCap::new(CapId::new(12 + i as u32));
         bootcaps.irq_ctrl.irq_set(irq_notification, i).unwrap();
     }
+    #[allow(clippy::empty_loop)]
     loop {}
 
     /*
@@ -149,6 +151,7 @@ extern "C" fn irq_handler(_: usize) -> ! {
         }
         if signals & 0b10 > 0 {
             let mut port = Port::new(0x60);
+            // SAFETY: Only place accessing the port is here.
             let scancode: u8 = unsafe { port.read() };
             sprint!("{}", scancode);
         }
@@ -160,5 +163,7 @@ extern "C" fn irq_handler(_: usize) -> ! {
 fn panic(info: &core::panic::PanicInfo) -> ! {
     use serial::sprintln;
     sprintln!("{}", info);
+    // TODO: Reboot or something...
+    #[allow(clippy::empty_loop)]
     loop {}
 }

@@ -25,10 +25,9 @@ impl TryFrom<usize> for CapId {
     type Error = CapError;
 
     fn try_from(value: usize) -> Result<Self, Self::Error> {
-        let cap_id = Ok(Self(
+        Ok(Self(
             value.try_into().map_err(|_| CapError::CapIndexOutOfRange)?,
-        ));
-        cap_id
+        ))
     }
 }
 

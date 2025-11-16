@@ -33,8 +33,8 @@ install-deps:
 
 
 check:
-	cargo check --workspace --target {{target}}
-	cargo check --workspace --tests
+	cargo clippy --workspace --target {{target}}
+	cargo clippy --workspace --tests
 	cargo +nightly fmt --all --check
 
 fix:

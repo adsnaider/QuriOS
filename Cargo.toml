@@ -14,7 +14,6 @@ serial = { path = "os/crates/serial" }
 sync = { path = "os/crates/sync" }
 entry = { path = "os/crates/entry" }
 loader = { path = "os/crates/loader" }
-selfie = { path = "os/crates/selfie" }
 qapi = { path = "os/qapi" }
 ulib = { path = "os/userspace/ulib" }
 stack_list = { path = "os/crates/stack_list" }
