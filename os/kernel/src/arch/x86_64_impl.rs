@@ -16,6 +16,7 @@ use x86_64::registers::model_specific::GsBase;
 use crate::arch::Addrspace as _;
 use crate::notify::Notification;
 
+pub mod backtrace;
 pub mod exec;
 mod gdt;
 mod idt;

@@ -20,8 +20,8 @@ pub fn dispatch(
 }
 
 pub fn thread_sig_wait(ctx: <ArchSystem as System>::IrqCtx) -> SyscallResp {
-    let action = Thread::with_current(|t| t.sig_wait(ctx))?;
-    match action {
+    let thread = Thread::get_current();
+    match Thread::sig_wait(thread, ctx)? {
         SigWaitResult::Blocked(dispatch_token) => dispatch_token.dispatch(),
         SigWaitResult::Signalled(signals) => Ok(signals.into()),
     }

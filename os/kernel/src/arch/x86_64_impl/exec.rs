@@ -263,6 +263,13 @@ impl ExecState for ExecCtx {
             regs: Cell::new(regs),
         }
     }
+
+    fn set_out_reg(&self, value: usize) {
+        self.regs.update(|mut regs| {
+            regs.scratch.rax = value as u64;
+            regs
+        });
+    }
 }
 
 impl ExecCtx {

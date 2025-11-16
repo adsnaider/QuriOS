@@ -110,7 +110,7 @@ impl IsrHandler<Interrupt, ()> for SyscallHandler {
                     ],
                 );
                 let res = syscall_handler(args, IrqCtx::Interrupt(ctx));
-                log::info!("Syscall response: {res:?}");
+                log::debug!("Syscall response: {res:?}");
                 // SAFETY: Done handling syscall so we have exclusive asccess to the interrupt stack frame
                 unsafe { ctx.scratch_regs_mut().rax = res.into_isize() as u64 };
             }
@@ -133,7 +133,7 @@ impl<const IRQ: u8> IsrHandler<Interrupt, ()> for IrqHandler<IRQ> {
                 .get(IRQ)
                 .expect("PIC and IRQ ctrl not bound to the same thread");
             if let Some(notification) = handler {
-                log::debug!("IRQ {IRQ} notification found");
+                log::trace!("Found IRQ handler");
                 if let Ok(d) = notification
                     .signal(IrqCtx::Interrupt(ctx))
                     .tap_err(|e| log::warn!("Unable to notify IRQ handler: {IRQ} - {e}"))
@@ -143,7 +143,7 @@ impl<const IRQ: u8> IsrHandler<Interrupt, ()> for IrqHandler<IRQ> {
             }
         }
         if let Some(dispatcher) = dispatcher {
-            log::debug!("Notifying IRQ ({IRQ}) handler");
+            log::trace!("Notifying IRQ ({IRQ}) handler");
             dispatcher.dispatch();
         }
     }

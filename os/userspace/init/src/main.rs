@@ -14,11 +14,13 @@ use qapi::exception::ExceptionInfo;
 use qapi::init::{BootArgs, BootCaps, EXCEPTION_HANDLER_ID, RetypeState};
 use qapi::mem::Frame;
 use qapi::syscall::ops::retype::RetypeKind;
+use serial::sprint;
 use stack_list::StackNode;
 use ulib::alloc::allocman::ALockedMan;
 use ulib::alloc::phys::bitmap_allocator::BitmapAllocator;
 use ulib::sysops::sync_endpoint::{IPC_STACKS, SyncEndpoint};
 use ulib::sysops::{CTableCapExt, FrameExt, IrqCtrlCapExt, SyncInvokeCapExt, ThreadCapExt};
+use x86_64::instructions::port::Port;
 
 #[global_allocator]
 static ALLOCATOR: ALockedMan<BitmapAllocator> = ALockedMan::uninit();
@@ -142,7 +144,14 @@ fn exception_handler(e: ExceptionInfo) {
 extern "C" fn irq_handler(_: usize) -> ! {
     loop {
         let signals = ThreadCap::sig_wait().unwrap();
-        log::info!("Handling IRQs: {signals}");
+        if signals & 0b1 > 0 {
+            sprint!(".");
+        }
+        if signals & 0b10 > 0 {
+            let mut port = Port::new(0x60);
+            let scancode: u8 = unsafe { port.read() };
+            sprint!("{}", scancode);
+        }
     }
 }
 

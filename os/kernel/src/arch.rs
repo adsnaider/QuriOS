@@ -1,5 +1,7 @@
 #[cfg(target_arch = "x86_64")]
 mod x86_64_impl;
+#[cfg(target_arch = "x86_64")]
+pub use x86_64_impl::backtrace;
 
 pub mod mem;
 
@@ -106,6 +108,7 @@ pub trait ExecState: Debug {
     fn for_init_comp(entry_fun: EntryFn, stack_top: *const (), arg0: *const BootArgs) -> Self;
     fn save(&self, ctx: &<Self::Sys as System>::IrqCtx);
     fn dispatch(&self) -> !;
+    fn set_out_reg(&self, value: usize);
 }
 
 pub trait InvokeAbi<Sys: System>: SyncAbi {

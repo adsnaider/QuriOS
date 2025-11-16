@@ -108,6 +108,8 @@ pub enum CapError {
     IrqTableBindInvalid = -24,
     #[display("The blocking thread has no parent to switch to")]
     SigWaitNoParent = -25,
+    #[display("The blocking thread's parent is already bound to some other core")]
+    ThreadParentAlreadyBound = -26,
 }
 
 impl CapError {

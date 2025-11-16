@@ -28,5 +28,10 @@ ulib.workspace = true
 stack_list.workspace = true
 loader.workspace = true
 
+[target.'cfg(target_arch = "x86_64")'.dependencies]
+x86_64 = { version = "0.15.2", default-features = false, features = [
+  "instructions",
+] }
+
 [lints]
 workspace = true

@@ -190,6 +190,7 @@ dependencies = [
  "stack_list",
  "sync",
  "ulib",
+ "x86_64",
 ]
 
 [[package]]

@@ -121,6 +121,10 @@ impl Thread<ArchSystem> {
         })
     }
 
+    pub fn get_current() -> KPtr<Self> {
+        Self::current().locked(|current| current.clone().unwrap())
+    }
+
     pub fn kinit_dispatch(this: KPtr<Self>) -> Result<DispatchToken<ArchSystem>, BindError> {
         let next = this.bind()?;
         let dispatcher =
@@ -180,16 +184,40 @@ impl Thread<ArchSystem> {
         signals: u32,
         irq_ctx: <ArchSystem as System>::IrqCtx,
     ) -> Result<Option<DispatchToken<ArchSystem>>, CapError> {
+        log::trace!("Notifying thread: sigs {signals}");
         let old_sigs = this.signals.fetch_or(signals, Ordering::AcqRel);
         let signals = old_sigs | signals;
         if signals != 0 {
             match Thread::priority_dispatch(this, irq_ctx) {
-                Ok(token) => Ok(token),
+                Ok(Some(token)) => {
+                    let sigs = this.signals.swap(0, Ordering::AcqRel);
+                    token.set_out_reg(sigs as usize);
+                    Ok(Some(token))
+                }
+                Ok(None) => Ok(None),
                 Err(CapError::ThreadBoundToOtherCore) => Ok(None),
                 Err(e) => Err(e),
             }
         } else {
             Ok(None)
+        }
+    }
+
+    pub fn sig_wait(
+        this: KPtr<Self>,
+        irq_ctx: <ArchSystem as System>::IrqCtx,
+    ) -> Result<SigWaitResult<ArchSystem>, CapError> {
+        let signals = this.signals.swap(0, Ordering::Relaxed);
+        if signals != 0 {
+            Ok(SigWaitResult::Signalled(signals))
+        } else {
+            let Some(parent) = &this.parent else {
+                return Err(CapError::SigWaitNoParent);
+            };
+            Ok(SigWaitResult::Blocked(Thread::dispatch(
+                parent.clone(),
+                irq_ctx,
+            )?))
         }
     }
 }
@@ -341,46 +369,13 @@ impl<S: System> LocalBoundThread<S> {
                     .expect("Active references to previous thread preventing unbinding!");
                 // At this point, any other core may come in and execute the previous thread which is fine as it was saved above and it won't be used further
             };
-            log::debug!("Set the active thread: {next:?}");
         }
 
         Ok(DispatchToken(exec_state))
     }
-
-    pub fn sig_wait(&self, irq_ctx: S::IrqCtx) -> Result<SigWaitResult<S>, CapError> {
-        let signals = self.0.signals.swap(0, Ordering::Relaxed);
-        if signals != 0 {
-            Ok(SigWaitResult::Signalled(signals))
-        } else {
-            self.unbind().unwrap();
-            let signals = self.0.signals.swap(0, Ordering::AcqRel);
-            if signals == 0 {
-                let Some(parent) = &self.0.parent else {
-                    return Err(CapError::SigWaitNoParent);
-                };
-                let parent = parent.bind().unwrap();
-                Ok(SigWaitResult::Blocked(Self::switch(
-                    Some((self, irq_ctx)),
-                    parent,
-                )?))
-            } else {
-                match self.0.bind() {
-                    Ok(_) => Ok(SigWaitResult::Signalled(signals)),
-                    Err(BindError::Bound { affinity: _ }) => {
-                        let Some(parent) = &self.0.parent else {
-                            return Err(CapError::SigWaitNoParent);
-                        };
-                        let parent = parent.bind().unwrap();
-                        Ok(SigWaitResult::Blocked(Self::switch(
-                            Some((self, irq_ctx)),
-                            parent,
-                        )?))
-                    }
-                }
-            }
-        }
-    }
 }
+
+impl LocalBoundThread<ArchSystem> {}
 
 pub enum SigWaitResult<S: System> {
     Blocked(DispatchToken<S>),
@@ -394,6 +389,10 @@ pub struct DispatchToken<S: System>(S::ExecState);
 impl<S: System> DispatchToken<S> {
     pub fn dispatch(&self) -> ! {
         self.0.dispatch();
+    }
+
+    fn set_out_reg(&self, value: usize) {
+        self.0.set_out_reg(value);
     }
 }
 
