@@ -1,3 +1,4 @@
+use core::mem::ManuallyDrop;
 use core::ops::Deref;
 use core::sync::atomic::{AtomicU32, Ordering, fence};
 
@@ -16,38 +17,48 @@ use crate::core_local::core_cell::{BindError, CoreGuard, Lock, UnbindError};
 use crate::core_local::{CORE_LOCAL_CURRENT_THREAD, CoreCell};
 use crate::kmem::KPtr;
 use crate::sync_call::AnyAbi;
+use crate::util::{OptionExt as _, ResultExt};
 
 pub type CoreLocalThread = Lock<Option<KPtr<Thread<ArchSystem>>>>;
 
 #[derive_where(Debug)]
-pub struct ThreadExecStack<S: System>(Vec<ThreadExecCtx<S>, 16>);
+pub struct ThreadExecStack<S: System> {
+    exec_stack: Vec<ThreadExecCtx<S>, 16>,
+    run_state: RunState,
+}
 
 impl<S: System> ThreadExecStack<S> {
+    pub const fn new(exec_stack: Vec<ThreadExecCtx<S>, 16>) -> Self {
+        Self {
+            exec_stack,
+            run_state: RunState::Runnable,
+        }
+    }
     pub fn active(&self) -> &ThreadExecCtx<S> {
-        self.0.last().unwrap()
+        self.exec_stack.last().unwrap()
     }
 
     pub fn active_mut(&mut self) -> &mut ThreadExecCtx<S> {
-        self.0.last_mut().unwrap()
+        self.exec_stack.last_mut().unwrap()
     }
 
     pub fn is_full(&self) -> bool {
-        self.0.is_full()
+        self.exec_stack.is_full()
     }
 
     pub fn is_base(&self) -> bool {
-        self.0.len() == 1
+        self.exec_stack.len() == 1
     }
 
     pub fn push(&mut self, ctx: ThreadExecCtx<S>) -> Result<(), ThreadExecCtx<S>> {
-        self.0.push(ctx)
+        self.exec_stack.push(ctx)
     }
 
     pub fn pop(&mut self) -> Option<ThreadExecCtx<S>> {
         if self.is_base() {
             None
         } else {
-            Some(self.0.pop().unwrap())
+            Some(self.exec_stack.pop().unwrap())
         }
     }
 }
@@ -104,6 +115,8 @@ impl Thread<ArchSystem> {
 
     fn replace_current(new: KPtr<Self>) -> Option<KPtr<Self>> {
         log::debug!("Replacing current thread: new: {new:?}");
+        // SAFETY: Affinity should be set before replacing thread.
+        unsafe { new.verify_affinity().unwrap_debug() };
         let old = CORE_LOCAL_CURRENT_THREAD.replace(Some(new)).unwrap();
         log::debug!("old: {old:?}");
         old
@@ -114,14 +127,16 @@ impl Thread<ArchSystem> {
         F: FnOnce(&Thread<ArchSystem>) -> T,
     {
         Self::current().locked(|current| {
-            let current = current.as_mut().unwrap();
-            current.verify_affinity().unwrap();
+            // SAFETY: This should only be called after the initial kernel dispatch.
+            let current = unsafe { current.as_mut().unwrap_debug() };
+            // SAFETY: Affinity should be set on current thread
+            unsafe { current.verify_affinity().unwrap_debug() };
             fun(current)
         })
     }
 
-    pub fn get_current() -> KPtr<Self> {
-        Self::current().locked(|current| current.clone().unwrap())
+    pub fn get_current() -> Option<KPtr<Self>> {
+        Self::current().locked(|current| current.clone())
     }
 
     pub fn kinit_dispatch(this: KPtr<Self>) -> Result<DispatchToken<ArchSystem>, BindError> {
@@ -159,9 +174,20 @@ impl Thread<ArchSystem> {
         if signals != 0 {
             match Thread::priority_dispatch(this, irq_ctx) {
                 Ok(Some(mut token)) => {
-                    let sigs = this.signals.swap(0, Ordering::Relaxed);
-                    token.set_out_reg(sigs as usize);
-                    Ok(Some(token))
+                    let state = this.execution_stack().locked(|s| s.run_state);
+                    match state {
+                        RunState::Runnable => {
+                            // Thread isn't actually waiting for signals, so let the scheduler decide if it should be run
+                            Ok(None)
+                        }
+                        RunState::SigBlocked => {
+                            this.execution_stack()
+                                .locked(|s| s.run_state = RunState::Runnable);
+                            let sigs = this.signals.swap(0, Ordering::Relaxed);
+                            token.set_out_reg(sigs as usize);
+                            Ok(Some(token))
+                        }
+                    }
                 }
                 Ok(None) => Ok(None),
                 Err(CapError::ThreadBoundToOtherCore) => Ok(None),
@@ -184,6 +210,8 @@ impl Thread<ArchSystem> {
                 return Err(CapError::SigWaitNoParent);
             };
 
+            this.execution_stack()
+                .locked(|s| s.run_state = RunState::SigBlocked);
             let dispatch = Thread::dispatch(parent.clone(), irq_ctx)?;
             // If we, the waiter (W), are racing against a notifier N, a load observing a zero here
             // must be guaranteed to happen  before N attempts the priority dispatch. Acquire/Release
@@ -206,12 +234,24 @@ impl Thread<ArchSystem> {
             } else {
                 match this.bind() {
                     Ok(()) => {
-                        let signals = this.signals.swap(0, Ordering::Relaxed);
-                        assert!(
-                            signals > 0,
-                            "Got reawaken notification. Expected some signals: {signals:#b}"
-                        );
-                        Ok(SigWaitResult::Signalled(signals))
+                        let state = this.execution_stack().locked(|s| s.run_state);
+                        match state {
+                            RunState::Runnable => {
+                                // In the interim another core bound to this and somehow ended up doing something like
+                                // yielding. Jump back to the scheduler (parent)...
+                                Ok(SigWaitResult::Blocked(dispatch))
+                            }
+                            RunState::SigBlocked => {
+                                this.execution_stack()
+                                    .locked(|s| s.run_state = RunState::Runnable);
+                                let signals = this.signals.swap(0, Ordering::Relaxed);
+                                let mut alternate_dispatch = SameThreadDispatchToken::new(
+                                    this.execution_stack().lock().active().exec_state.clone(),
+                                );
+                                alternate_dispatch.set_out_reg(signals as usize);
+                                Ok(SigWaitResult::Redispatch(dispatch.bail(alternate_dispatch)))
+                            }
+                        }
                     }
                     Err(BindError::Bound { affinity: _ }) => Ok(SigWaitResult::Blocked(dispatch)),
                 }
@@ -235,7 +275,7 @@ impl<S: System> Thread<S> {
         })
         .unwrap();
         Self {
-            execution_stack: CoreCell::new(Lock::new(ThreadExecStack(ctx))),
+            execution_stack: CoreCell::new(Lock::new(ThreadExecStack::new(ctx))),
             flat_priority: priority,
             signals: AtomicU32::new(0),
             parent,
@@ -332,31 +372,26 @@ impl<S: System> Thread<S> {
 pub enum SigWaitResult<S: System> {
     Blocked(DispatchToken<S>),
     Signalled(u32),
+    Redispatch(SameThreadDispatchToken<S>),
 }
 
 #[must_use]
 #[derive(Debug)]
 pub struct DispatchToken<S: System> {
     next: KPtr<Thread<S>>,
-    ctx: Option<S::IrqCtx>,
-    out_reg: Option<usize>,
+    exec_state: S::ExecState,
 }
 
-impl<S: System> DispatchToken<S> {
-    pub fn new(next: KPtr<Thread<S>>, ctx: Option<S::IrqCtx>) -> Result<Self, BindError> {
-        next.bind()?;
-        Ok(Self {
-            next,
-            ctx,
-            out_reg: None,
-        })
-    }
-}
 impl DispatchToken<ArchSystem> {
-    pub fn dispatch(self) -> ! {
+    pub fn new(
+        next: KPtr<Thread<ArchSystem>>,
+        ctx: Option<<ArchSystem as System>::IrqCtx>,
+    ) -> Result<Self, BindError> {
+        next.bind()?;
+
         let exec_state;
         {
-            let exec_stack = self.next.execution_stack();
+            let exec_stack = next.execution_stack();
             let exec_stack = exec_stack.lock();
             exec_stack.active().addrspace().activate();
             exec_state = exec_stack.active().exec_state.clone();
@@ -364,10 +399,10 @@ impl DispatchToken<ArchSystem> {
                 {
                     let prev_ctx = previous.execution_stack();
                     let prev_ctx = prev_ctx.lock();
-                    prev_ctx
-                        .active()
-                        .exec_state
-                        .save(&self.ctx.expect("Missing IRQ context past initial dispatch"));
+                    prev_ctx.active().exec_state.save(
+                        ctx.as_ref()
+                            .expect("Missing IRQ context past initial dispatch"),
+                    );
                 }
                 previous
                     .unbind()
@@ -375,15 +410,36 @@ impl DispatchToken<ArchSystem> {
                 // At this point, any other core may come in and execute the previous thread which is fine as it was saved above and it won't be used further
             };
         }
-        Thread::replace_current(self.next);
-        if let Some(out_reg) = self.out_reg {
-            exec_state.set_out_reg(out_reg);
-        }
-        exec_state.dispatch();
+        Ok(Self { next, exec_state })
+    }
+
+    pub fn dispatch(self) -> ! {
+        let this = ManuallyDrop::new(self);
+        // SAFETY: Manually drop protects this ptr read.
+        let next = unsafe { core::ptr::read(&this.next) };
+        Thread::replace_current(next);
+        this.exec_state.dispatch();
+    }
+
+    // Assumes that D is another dispatcher and bails the current one
+    //
+    // In general, if we unbound from the thread (which was done in ::new), we are not
+    // allowed to return back to the caller without a dispatcher as the current thread may have changed (in another core). For that reason, this is a soft-check that another dispatcher is available to return to the other
+    // thread's execution. It's really hard to define a hard check for this though since it's
+    // easy enough to ignore the dispatcher altogether.
+    pub fn bail<D>(self, other_dispatcher: D) -> D {
+        core::mem::forget(self);
+        other_dispatcher
     }
 
     pub fn set_out_reg(&mut self, value: usize) {
-        self.out_reg.replace(value);
+        self.exec_state.set_out_reg(value);
+    }
+}
+
+impl<S: System> Drop for DispatchToken<S> {
+    fn drop(&mut self) {
+        panic!("Dropping the dispatch token isn't allowed");
     }
 }
 
@@ -391,30 +447,39 @@ impl DispatchToken<ArchSystem> {
 #[derive(Debug)]
 pub struct SameThreadDispatchToken<S: System> {
     exec_state: S::ExecState,
-    out_reg: Option<usize>,
 }
 
 impl<S: System> SameThreadDispatchToken<S> {
     pub fn new(exec_state: S::ExecState) -> Self {
-        Self {
-            exec_state,
-            out_reg: None,
-        }
+        Self { exec_state }
     }
 }
 impl SameThreadDispatchToken<ArchSystem> {
     pub fn dispatch(self) -> ! {
-        if let Some(out_reg) = self.out_reg {
-            self.exec_state.set_out_reg(out_reg);
-        }
         self.exec_state.dispatch();
     }
 
     pub fn set_out_reg(&mut self, value: usize) {
-        self.out_reg.replace(value);
+        self.exec_state.set_out_reg(value);
+    }
+
+    pub fn bail(self) {
+        core::mem::forget(self);
+    }
+}
+
+impl<S: System> Drop for SameThreadDispatchToken<S> {
+    fn drop(&mut self) {
+        panic!("Dropping the dispatch token isn't allowed");
     }
 }
 
 #[derive(Debug, Display, Error)]
 #[display("Found a fugitive thread not boiund to the expected core")]
 pub struct FugitiveThread;
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+enum RunState {
+    Runnable,
+    SigBlocked,
+}

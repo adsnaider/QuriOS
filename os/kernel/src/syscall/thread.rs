@@ -4,6 +4,7 @@ use qapi::syscall::ops::thread::DispatchOp;
 use super::SyscallResp;
 use crate::arch::{ArchSystem, System};
 use crate::thread::{SigWaitResult, Thread};
+use crate::util::OptionExt as _;
 
 pub fn dispatch(
     DispatchOp { thread_cap }: DispatchOp,
@@ -20,9 +21,11 @@ pub fn dispatch(
 }
 
 pub fn thread_sig_wait(ctx: <ArchSystem as System>::IrqCtx) -> SyscallResp {
-    let thread = Thread::get_current();
+    // SAFETY: Should always have a current thread on an Irq context
+    let thread = unsafe { Thread::get_current().unwrap_debug() };
     match Thread::sig_wait(thread, ctx)? {
         SigWaitResult::Blocked(dispatch_token) => dispatch_token.dispatch(),
         SigWaitResult::Signalled(signals) => Ok(signals.into()),
+        SigWaitResult::Redispatch(dispatch_token) => dispatch_token.dispatch(),
     }
 }

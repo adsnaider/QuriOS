@@ -94,6 +94,8 @@ fn main(args: &'static BootArgs) -> ! {
         )
         .unwrap();
 
+    let irq_thread = ThreadCap::new(CapId::new(11));
+
     for i in 0..15 {
         bootcaps
             .self_caps
@@ -106,6 +108,7 @@ fn main(args: &'static BootArgs) -> ! {
         let irq_notification = NotificationCap::new(CapId::new(12 + i as u32));
         bootcaps.irq_ctrl.irq_set(irq_notification, i).unwrap();
     }
+    irq_thread.dispatch().unwrap();
     #[allow(clippy::empty_loop)]
     loop {}
 
