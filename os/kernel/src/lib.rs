@@ -150,8 +150,8 @@ pub fn uinit() -> DispatchToken<ArchSystem> {
         .alloc_kernel_frame()
         .expect("Out of memory error during initialization");
     // SAFETY: The kernel frame is unused
-    let thread_ptr = unsafe { KPtr::new_unchecked(thread_frame, thread) };
-    let thread = thread_ptr
+    let thread = unsafe { KPtr::new_unchecked(thread_frame, thread) };
+    thread
         .bind()
         .expect("Couldn't set init-thread affinity to core");
 
@@ -182,7 +182,7 @@ pub fn uinit() -> DispatchToken<ArchSystem> {
             .expect("Unable to set boot capabilities");
         CapBlock::at(croot, SysSlot::new(3).unwrap())
             .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::Thread(
-                KPtr::clone(&thread_ptr),
+                KPtr::clone(&thread),
             )))
             .expect("Unable to set boot capabilities");
         CapBlock::at(croot, SysSlot::new(4).unwrap())
@@ -191,5 +191,5 @@ pub fn uinit() -> DispatchToken<ArchSystem> {
             )))
             .expect("Unable to set boot capabilities");
     }
-    Thread::kinit_dispatch(thread_ptr).expect("Thread affinity was set above.")
+    Thread::kinit_dispatch(thread).expect("Thread affinity was set above.")
 }

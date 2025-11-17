@@ -111,12 +111,11 @@ impl Thread<ArchSystem> {
 
     pub fn with_current<F, T>(fun: F) -> T
     where
-        F: FnOnce(&LocalBoundThread<ArchSystem>) -> T,
+        F: FnOnce(&Thread<ArchSystem>) -> T,
     {
         Self::current().locked(|current| {
             let current = current.as_mut().unwrap();
-            let current = current.verify_affinity().unwrap();
-            // SAFETY: repr transparent and identical semantics over
+            current.verify_affinity().unwrap();
             fun(current)
         })
     }
@@ -126,9 +125,8 @@ impl Thread<ArchSystem> {
     }
 
     pub fn kinit_dispatch(this: KPtr<Self>) -> Result<DispatchToken<ArchSystem>, BindError> {
-        let next = this.bind()?;
-        let dispatcher =
-            LocalBoundThread::switch(None, next).expect("Couldn't switch to starting thread");
+        this.bind()?;
+        let dispatcher = Self::switch(None, &this).expect("Couldn't switch to starting thread");
         Self::replace_current(this);
         Ok(dispatcher)
     }
@@ -156,12 +154,18 @@ impl Thread<ArchSystem> {
         // 4. All callee-saved registers need to be set back (done in userspace)
 
         let dispatcher = {
-            let next = this.bind()?;
+            this.bind()?;
             let previous = Self::current().lock();
-            let previous = previous
-                .as_ref()
-                .map(|prev| (Thread::verify_affinity(prev).unwrap(), irq_ctx));
-            LocalBoundThread::switch(previous, next)?
+            let previous = previous.as_ref().map(|prev| {
+                (
+                    {
+                        prev.verify_affinity().unwrap();
+                        prev.as_ref()
+                    },
+                    irq_ctx,
+                )
+            });
+            Self::switch(previous, &this)?
         };
         Self::replace_current(this);
         Ok(dispatcher)
@@ -249,49 +253,26 @@ impl<S: System> Thread<S> {
         introspect::Thread
     }
 
-    pub fn bind(&self) -> Result<&LocalBoundThread<S>, BindError> {
+    pub fn bind(&self) -> Result<(), BindError> {
         self.execution_stack.bind()?;
-        Ok(self.verify_affinity().unwrap())
+        self.verify_affinity().unwrap();
+        Ok(())
     }
 
     pub fn unbind(&self) -> Result<(), UnbindError> {
         self.execution_stack.unbind()
     }
 
-    fn verify_affinity(&self) -> Result<&LocalBoundThread<S>, FugitiveThread> {
-        LocalBoundThread::new(self)
-    }
-
-    pub fn flat_priority(&self) -> u32 {
-        self.flat_priority
-    }
-}
-
-#[derive_where(Debug)]
-#[repr(transparent)]
-pub struct LocalBoundThread<S: System>(Thread<S>);
-
-impl<S: System> LocalBoundThread<S> {
-    pub fn new(thread: &Thread<S>) -> Result<&Self, FugitiveThread> {
-        if thread.execution_stack.is_locally_bound() {
-            // SAFETY: repr(transparent) guarantees this is okay.
-            Ok(unsafe { core::mem::transmute::<&Thread<S>, &LocalBoundThread<S>>(thread) })
+    fn verify_affinity(&self) -> Result<(), FugitiveThread> {
+        if self.execution_stack.is_locally_bound() {
+            Ok(())
         } else {
             Err(FugitiveThread)
         }
     }
 
-    pub fn get_cap(&self, cap: CapId) -> Option<CapRef<S>> {
-        self.execution_stack().lock().active().get_cap(cap)
-    }
-
-    pub fn exception_handler(&self) -> ExceptionHandler {
-        self.execution_stack()
-            .lock()
-            .active()
-            .resources()
-            .exception_handler()
-            .clone()
+    pub fn flat_priority(&self) -> u32 {
+        self.flat_priority
     }
 
     pub fn resources(&self) -> KPtr<Resources<S>> {
@@ -299,7 +280,7 @@ impl<S: System> LocalBoundThread<S> {
     }
 
     pub fn execution_stack(&self) -> CoreGuard<'_, Lock<ThreadExecStack<S>>> {
-        self.0.execution_stack.try_get().unwrap()
+        self.execution_stack.try_get().unwrap()
     }
 
     pub fn invoke(
@@ -341,8 +322,17 @@ impl<S: System> LocalBoundThread<S> {
         Ok(DispatchToken(caller_ctx.exec_state.clone()))
     }
 
-    pub fn flat_priority(&self) -> u32 {
-        self.0.flat_priority
+    pub fn exception_handler(&self) -> ExceptionHandler {
+        self.execution_stack()
+            .lock()
+            .active()
+            .resources()
+            .exception_handler()
+            .clone()
+    }
+
+    pub fn get_cap(&self, cap: CapId) -> Option<CapRef<S>> {
+        self.execution_stack().lock().active().get_cap(cap)
     }
 
     pub fn switch(
@@ -362,7 +352,6 @@ impl<S: System> LocalBoundThread<S> {
                     prev_ctx.active().exec_state.save(irq_ctx);
                 }
                 previous
-                    .0
                     .unbind()
                     .expect("Active references to previous thread preventing unbinding!");
                 // At this point, any other core may come in and execute the previous thread which is fine as it was saved above and it won't be used further
@@ -372,8 +361,6 @@ impl<S: System> LocalBoundThread<S> {
         Ok(DispatchToken(exec_state))
     }
 }
-
-impl LocalBoundThread<ArchSystem> {}
 
 pub enum SigWaitResult<S: System> {
     Blocked(DispatchToken<S>),
