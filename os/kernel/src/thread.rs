@@ -1,5 +1,5 @@
 use core::ops::Deref;
-use core::sync::atomic::{AtomicU32, Ordering};
+use core::sync::atomic::{AtomicU32, Ordering, fence};
 
 use derive_more::{Display, Error};
 use derive_where::derive_where;
@@ -125,50 +125,14 @@ impl Thread<ArchSystem> {
     }
 
     pub fn kinit_dispatch(this: KPtr<Self>) -> Result<DispatchToken<ArchSystem>, BindError> {
-        this.bind()?;
-        let dispatcher = Self::switch(None, &this).expect("Couldn't switch to starting thread");
-        Self::replace_current(this);
-        Ok(dispatcher)
+        DispatchToken::new(this, None)
     }
 
     pub fn dispatch(
         this: KPtr<Self>,
         irq_ctx: <ArchSystem as System>::IrqCtx,
     ) -> Result<DispatchToken<ArchSystem>, CapError> {
-        // Our kernel is non-preemptive which makes every other case really
-        // simple as it's a completely synchronous call-response. However, thread
-        // dispatching is somewhat weird because we exit the kernel early on the
-        // dispatch and never return back to the caller in a traditional sense (i.e.
-        // dispatch returns !). The way we come back is by having another dispatch
-        // call back into the original thread. Note, we have a singular kernel
-        // execution stack, so once we leave here, the stack will be mangled and
-        // can't come back to the kernel to return to the normal flow of execution.
-        //
-        // When that happens, the state of the (current) thread needs to be valid,
-        // specifically, to the thread it needs to look like the original Activate
-        // call returned with a success status code. So here's what needs to happen
-        //
-        // 1. Return register needs to be 0.
-        // 2. rflags register needs to be valid (interrupts enabled, ring 3 execution, etc.)
-        // 3. stack register needs to be whatever it was before syscall
-        // 4. All callee-saved registers need to be set back (done in userspace)
-
-        let dispatcher = {
-            this.bind()?;
-            let previous = Self::current().lock();
-            let previous = previous.as_ref().map(|prev| {
-                (
-                    {
-                        prev.verify_affinity().unwrap();
-                        prev.as_ref()
-                    },
-                    irq_ctx,
-                )
-            });
-            Self::switch(previous, &this)?
-        };
-        Self::replace_current(this);
-        Ok(dispatcher)
+        Ok(DispatchToken::new(this, Some(irq_ctx))?)
     }
 
     pub fn priority_dispatch(
@@ -188,14 +152,14 @@ impl Thread<ArchSystem> {
         signals: u32,
         irq_ctx: <ArchSystem as System>::IrqCtx,
     ) -> Result<Option<DispatchToken<ArchSystem>>, CapError> {
-        // TODO: Fix race condition with sig_wait where thread may not be awaken at all...
-        log::trace!("Notifying thread: sigs {signals}");
-        let old_sigs = this.signals.fetch_or(signals, Ordering::AcqRel);
+        log::trace!("Notifying thread: sigs {signals:#b}");
+        let old_sigs = this.signals.fetch_or(signals, Ordering::Relaxed);
+        fence(Ordering::SeqCst);
         let signals = old_sigs | signals;
         if signals != 0 {
             match Thread::priority_dispatch(this, irq_ctx) {
-                Ok(Some(token)) => {
-                    let sigs = this.signals.swap(0, Ordering::AcqRel);
+                Ok(Some(mut token)) => {
+                    let sigs = this.signals.swap(0, Ordering::Relaxed);
                     token.set_out_reg(sigs as usize);
                     Ok(Some(token))
                 }
@@ -219,10 +183,39 @@ impl Thread<ArchSystem> {
             let Some(parent) = &this.parent else {
                 return Err(CapError::SigWaitNoParent);
             };
-            Ok(SigWaitResult::Blocked(Thread::dispatch(
-                parent.clone(),
-                irq_ctx,
-            )?))
+
+            let dispatch = Thread::dispatch(parent.clone(), irq_ctx)?;
+            // If we, the waiter (W), are racing against a notifier N, a load observing a zero here
+            // must be guaranteed to happen  before N attempts the priority dispatch. Acquire/Release
+            // isn't sufficient here. There must be a total  order defined between the dispatch
+            // (bind/unbind) atomic and the signal such that for W:  load 0 -> unbind -> load 0, and for N:
+            // store sigs -> bind.
+            //
+            // The conflicting situation with weaker orderings is the following
+            // W observes: Load 0 -> unbind -> load 0
+            // N observes: Store sigs -> bind fails due to already bound
+            // For this to happen, the order of atomics would have to be load 0 (W) -> bind fails (N) -> load 0 (W) -> store sigs (N),
+            // but this ordering conflicts with N's perspected which is store sigs -> bind fails.
+            //
+            // The only way this may happen with SeqCst is if there exists another core that binds to the thread first which would be
+            // accepted.
+            fence(Ordering::SeqCst);
+            let signals = this.signals.load(Ordering::Relaxed);
+            if signals == 0 {
+                Ok(SigWaitResult::Blocked(dispatch))
+            } else {
+                match this.bind() {
+                    Ok(()) => {
+                        let signals = this.signals.swap(0, Ordering::Relaxed);
+                        assert!(
+                            signals > 0,
+                            "Got reawaken notification. Expected some signals: {signals:#b}"
+                        );
+                        Ok(SigWaitResult::Signalled(signals))
+                    }
+                    Err(BindError::Bound { affinity: _ }) => Ok(SigWaitResult::Blocked(dispatch)),
+                }
+            }
         }
     }
 }
@@ -287,7 +280,7 @@ impl<S: System> Thread<S> {
         &self,
         invocation: ThreadExecCtx<S>,
         ctx: S::IrqCtx,
-    ) -> Result<DispatchToken<S>, CapError> {
+    ) -> Result<SameThreadDispatchToken<S>, CapError> {
         let curr_ctx = self.execution_stack();
         let mut curr_ctx = curr_ctx.lock();
         if curr_ctx.is_full() {
@@ -297,14 +290,14 @@ impl<S: System> Thread<S> {
         invocation.resources.addrspace().activate();
         let xstate = invocation.exec_state.clone();
         curr_ctx.push(invocation).unwrap();
-        Ok(DispatchToken(xstate))
+        Ok(SameThreadDispatchToken::new(xstate))
     }
 
     pub fn sync_ret(
         &self,
         _args: SyncRetOp,
         callee_ctx: S::IrqCtx,
-    ) -> Result<DispatchToken<S>, CapError>
+    ) -> Result<SameThreadDispatchToken<S>, CapError>
     where
         StandardAbi: InvokeAbi<S>,
         ExceptionAbi: InvokeAbi<S>,
@@ -319,7 +312,7 @@ impl<S: System> Thread<S> {
         let caller_ctx = thread_ctx.active_mut();
         abi.ret_to(&callee_ctx, &caller_ctx.exec_state)?;
         caller_ctx.resources.addrspace().activate();
-        Ok(DispatchToken(caller_ctx.exec_state.clone()))
+        Ok(SameThreadDispatchToken::new(caller_ctx.exec_state.clone()))
     }
 
     pub fn exception_handler(&self) -> ExceptionHandler {
@@ -334,32 +327,6 @@ impl<S: System> Thread<S> {
     pub fn get_cap(&self, cap: CapId) -> Option<CapRef<S>> {
         self.execution_stack().lock().active().get_cap(cap)
     }
-
-    pub fn switch(
-        current: Option<(&Self, S::IrqCtx)>,
-        next: &Self,
-    ) -> Result<DispatchToken<S>, CapError> {
-        let exec_state;
-        {
-            let exec_stack = next.execution_stack();
-            let exec_stack = exec_stack.lock();
-            exec_stack.active().addrspace().activate();
-            exec_state = exec_stack.active().exec_state.clone();
-            if let Some((previous, ref irq_ctx)) = current {
-                {
-                    let prev_ctx = previous.execution_stack();
-                    let prev_ctx = prev_ctx.lock();
-                    prev_ctx.active().exec_state.save(irq_ctx);
-                }
-                previous
-                    .unbind()
-                    .expect("Active references to previous thread preventing unbinding!");
-                // At this point, any other core may come in and execute the previous thread which is fine as it was saved above and it won't be used further
-            };
-        }
-
-        Ok(DispatchToken(exec_state))
-    }
 }
 
 pub enum SigWaitResult<S: System> {
@@ -367,17 +334,84 @@ pub enum SigWaitResult<S: System> {
     Signalled(u32),
 }
 
-#[derive(Debug)]
 #[must_use]
-pub struct DispatchToken<S: System>(S::ExecState);
+#[derive(Debug)]
+pub struct DispatchToken<S: System> {
+    next: KPtr<Thread<S>>,
+    ctx: Option<S::IrqCtx>,
+    out_reg: Option<usize>,
+}
 
 impl<S: System> DispatchToken<S> {
-    pub fn dispatch(&self) -> ! {
-        self.0.dispatch();
+    pub fn new(next: KPtr<Thread<S>>, ctx: Option<S::IrqCtx>) -> Result<Self, BindError> {
+        next.bind()?;
+        Ok(Self {
+            next,
+            ctx,
+            out_reg: None,
+        })
+    }
+}
+impl DispatchToken<ArchSystem> {
+    pub fn dispatch(self) -> ! {
+        let exec_state;
+        {
+            let exec_stack = self.next.execution_stack();
+            let exec_stack = exec_stack.lock();
+            exec_stack.active().addrspace().activate();
+            exec_state = exec_stack.active().exec_state.clone();
+            if let Some(ref previous) = *Thread::current().lock() {
+                {
+                    let prev_ctx = previous.execution_stack();
+                    let prev_ctx = prev_ctx.lock();
+                    prev_ctx
+                        .active()
+                        .exec_state
+                        .save(&self.ctx.expect("Missing IRQ context past initial dispatch"));
+                }
+                previous
+                    .unbind()
+                    .expect("Active references to previous thread preventing unbinding!");
+                // At this point, any other core may come in and execute the previous thread which is fine as it was saved above and it won't be used further
+            };
+        }
+        Thread::replace_current(self.next);
+        if let Some(out_reg) = self.out_reg {
+            exec_state.set_out_reg(out_reg);
+        }
+        exec_state.dispatch();
     }
 
-    fn set_out_reg(&self, value: usize) {
-        self.0.set_out_reg(value);
+    pub fn set_out_reg(&mut self, value: usize) {
+        self.out_reg.replace(value);
+    }
+}
+
+#[must_use]
+#[derive(Debug)]
+pub struct SameThreadDispatchToken<S: System> {
+    exec_state: S::ExecState,
+    out_reg: Option<usize>,
+}
+
+impl<S: System> SameThreadDispatchToken<S> {
+    pub fn new(exec_state: S::ExecState) -> Self {
+        Self {
+            exec_state,
+            out_reg: None,
+        }
+    }
+}
+impl SameThreadDispatchToken<ArchSystem> {
+    pub fn dispatch(self) -> ! {
+        if let Some(out_reg) = self.out_reg {
+            self.exec_state.set_out_reg(out_reg);
+        }
+        self.exec_state.dispatch();
+    }
+
+    pub fn set_out_reg(&mut self, value: usize) {
+        self.out_reg.replace(value);
     }
 }
 
