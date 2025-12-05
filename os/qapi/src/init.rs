@@ -11,7 +11,7 @@ use crate::caps::vmtable::VMTableCap;
 use crate::caps::{CapId, SysSlot};
 use crate::types::CSlice;
 
-pub const EXCEPTION_HANDLER_ID: LoadedMagic = LoadedMagic::new([
+pub const EXCEPTION_HANDLER_MAGIC: LoadedMagic = LoadedMagic::new([
     0x2e5d95e08702dd36,
     0x4207b064f9f00f9c,
     0xd0ad5a8dd5418e44,

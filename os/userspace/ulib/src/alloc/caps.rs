@@ -51,3 +51,13 @@ impl<A: Allocator> CapabilityMan<A> {
         todo!();
     }
 }
+
+impl<A: Allocator> CapAlloc for CapabilityMan<A> {
+    fn alloc_cap(&mut self) -> Result<CapNode, CAllocError> {
+        todo!()
+    }
+
+    fn cap_free(&mut self, cap: CapNode) {
+        todo!()
+    }
+}

@@ -22,7 +22,7 @@ mod gdt;
 mod idt;
 mod mem_impl;
 
-use super::mem::PageFlags;
+use super::mem::{Frame, PageFlags};
 use crate::PMO;
 use crate::arch::System;
 use crate::arch::mem::VirtAddr;
@@ -102,7 +102,7 @@ pub enum ArchCaps {
 #[allow(unreachable_patterns)]
 impl super::ArchCaps<X64Sys> for ArchCaps {
     fn new_vmtable(args: VMTableCons) -> Result<Self, CapError> {
-        let table = KPtr::new(args.frame.into(), AnyPageTable::new())?;
+        let table = KPtr::new(args.frame.try_into()?, AnyPageTable::new())?;
         let cap = match args.level {
             1 => Self::VMTableL1(table),
             2 => Self::VMTableL2(table),
@@ -231,6 +231,39 @@ impl super::ArchCaps<X64Sys> for ArchCaps {
         IRQ_CTRL_TABLE
             .set(irq, notification)
             .map_err(|_| CapError::IrqTableBindInvalid)?;
+        Ok(PositiveIsize::zero())
+    }
+
+    fn vm_map(
+        table: &Self,
+        slot: PaddedPageTableOffset,
+        frame: Frame,
+        flags: PageFlags,
+    ) -> SyscallResp {
+        let ArchCaps::VMTableL1(table) = table else {
+            return Err(CapError::InvalidCapType);
+        };
+
+        let slot: usize = slot.into();
+        let slot = slot.try_into()?;
+
+        // SAFETY: This can't be kernel memory since it comes from a userspace capability
+        unsafe {
+            table.get(slot).set(frame, flags.into());
+        }
+        Ok(PositiveIsize::zero())
+    }
+
+    fn vm_unmap(table: &Self, slot: PaddedPageTableOffset) -> SyscallResp {
+        let ArchCaps::VMTableL1(table) = table else {
+            return Err(CapError::InvalidCapType);
+        };
+        let slot: usize = slot.into();
+        let slot = slot.try_into()?;
+        // SAFETY: This can't be kernel memory since it comes from a userspace capability
+        unsafe {
+            table.get(slot).reset();
+        }
         Ok(PositiveIsize::zero())
     }
 }

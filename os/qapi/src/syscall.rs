@@ -144,6 +144,8 @@ pub enum SyscallOp {
     ThreadDispatch,
     VMLink,
     VMUnlink,
+    VMMap,
+    VMUnmap,
     VMSetAttr,
     SyncInvoke,
     SyncRet,

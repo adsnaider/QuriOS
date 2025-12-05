@@ -1,6 +1,8 @@
 use derive_more::{Debug, Display, Error};
 use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout};
 
+use crate::caps::CapError;
+
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, PartialEq, KnownLayout, Immutable, IntoBytes, FromBytes)]
 #[debug("Frame({:#X})", self.base)]
@@ -38,5 +40,11 @@ impl Frame {
 
     pub const fn index(&self) -> usize {
         (self.base / (Self::SIZE as u64)) as usize
+    }
+}
+
+impl From<InvalidFrame> for CapError {
+    fn from(_: InvalidFrame) -> Self {
+        Self::FrameNotCanonical
     }
 }

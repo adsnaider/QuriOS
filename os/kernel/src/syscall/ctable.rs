@@ -45,7 +45,7 @@ pub fn cap_table_cons(opts: ConsOp) -> SyscallResp {
                 priority,
                 Some(parent.clone()),
             );
-            let thread = KPtr::new(frame.into(), thread)?;
+            let thread = KPtr::new(frame.try_into()?, thread)?;
             CapBlock::at(ctable, opts.slot_id)
                 .try_set(TrieSlotPayload::Data(Capability::Thread(thread)))?;
             Ok(PositiveIsize::zero())
@@ -53,7 +53,7 @@ pub fn cap_table_cons(opts: ConsOp) -> SyscallResp {
         ConsKind::CTable => {
             let CTableCons { frame } = opts.cons_args.cast::<CTableCons>().verify()?.safe_read()?;
             let new_ctable = CapBlock::empty();
-            let new_ctable = KPtr::new(frame.into(), new_ctable)?;
+            let new_ctable = KPtr::new(frame.try_into()?, new_ctable)?;
             CapBlock::at(ctable, opts.slot_id)
                 .try_set(TrieSlotPayload::Data(Capability::CapBlock(new_ctable)))?;
             Ok(PositiveIsize::zero())

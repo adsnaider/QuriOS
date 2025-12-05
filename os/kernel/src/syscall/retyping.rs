@@ -1,12 +1,12 @@
 use qapi::caps::{CapError, PositiveIsize};
 use qapi::syscall::ops::retype::{RetypeKind, RetypeOp};
 
-use crate::arch::mem::phys::UnalignedAddress;
-use crate::arch::mem::{Frame, PhysAddr};
+use crate::arch::mem::Frame;
 use crate::retyping::{FrameExt, OutOfBounds, RetypeError, State};
 
 pub fn retype(RetypeOp { frame, to }: RetypeOp) -> Result<PositiveIsize, CapError> {
-    let frame = Frame::try_from_start_address(PhysAddr::try_new(frame)?)?;
+    // TODO: Verify that frame is in component's capability set
+    let frame = Frame::try_from(frame)?;
     match to {
         RetypeKind::IntoUntyped => frame.try_to_untyped()?,
         RetypeKind::IntoKernel => frame.try_to_kernel()?,
@@ -26,11 +26,5 @@ impl From<RetypeError> for CapError {
             RetypeError::RefsExist(_) => CapError::FrameRefsExist,
             RetypeError::OutOfBounds(OutOfBounds) => CapError::FrameOffAvailableMemoryRange,
         }
-    }
-}
-
-impl From<UnalignedAddress> for CapError {
-    fn from(_: UnalignedAddress) -> Self {
-        CapError::InvalidArg
     }
 }

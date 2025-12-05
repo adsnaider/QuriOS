@@ -20,7 +20,9 @@ use qapi::syscall::ops::irq::{IrqSet, IrqUnset};
 use qapi::syscall::ops::retype::{RetypeKind, RetypeOp};
 use qapi::syscall::ops::sync_ipc::{SYNC_CALL_ARGS, SyncInvokeOp};
 use qapi::syscall::ops::thread::DispatchOp;
-use qapi::syscall::ops::vmtable::{PaddedPageTableOffset, VMLinkOp, VMSetAttr, VMUnlinkOp};
+use qapi::syscall::ops::vmtable::{
+    PaddedPageTableOffset, VMLinkOp, VMMapOp, VMSetAttr, VMUnlinkOp, VMUnmapOp,
+};
 use qapi::syscall::{SyscallArgs, SyscallOp, SyscallRequest};
 use qapi::types::{UserPtr, UserPtrMut};
 use zerocopy::IntoBytes as _;
@@ -31,11 +33,7 @@ use crate::syscall::syscall;
 pub impl Frame {
     fn retype(&self, to: RetypeKind) -> Result<(), CapError> {
         let op = SyscallOp::Retype;
-        let args = RetypeOp {
-            frame: self.base(),
-            to,
-        }
-        .into_args();
+        let args = RetypeOp { frame: *self, to }.into_args();
         syscall(SyscallArgs::new_with_args(op, args)).map(|_| ())
     }
 }
@@ -253,6 +251,33 @@ pub impl VMTableCap {
         };
         syscall(SyscallArgs::new_with_args(
             SyscallOp::VMUnlink,
+            op.into_args(),
+        ))
+        .map(|_| ())
+    }
+
+    fn map_at(
+        &self,
+        offset: PaddedPageTableOffset,
+        frame: Frame,
+        flags: PageFlags,
+    ) -> Result<(), CapError> {
+        let op = VMMapOp {
+            table: *self,
+            offset,
+            frame,
+            flags,
+        };
+        syscall(SyscallArgs::new_with_args(SyscallOp::VMMap, op.into_args())).map(|_| ())
+    }
+
+    fn unmap_at(&self, offset: PaddedPageTableOffset) -> Result<(), CapError> {
+        let op = VMUnmapOp {
+            table: *self,
+            offset,
+        };
+        syscall(SyscallArgs::new_with_args(
+            SyscallOp::VMUnmap,
             op.into_args(),
         ))
         .map(|_| ())

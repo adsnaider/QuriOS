@@ -1,13 +1,16 @@
 #![allow(unused)]
 use core::alloc::{GlobalAlloc, Layout};
 use core::marker::PhantomPinned;
+use core::ops::Deref;
 use core::ptr::NonNull;
 
 use allocator_api2::alloc::{AllocError, Allocator};
 use derive_more::{Deref, DerefMut, Display, Error};
 use linked_list_allocator::{Heap, LockedHeap};
+use qapi::caps::slotid::PAGE_SIZE;
+use qapi::mem::{Page, PageFlags};
 
-use super::caps::{CAllocError, CapNode, CapabilityMan};
+use super::caps::{CAllocError, CapAlloc, CapNode, CapabilityMan};
 use super::phys::FrameAllocator;
 use super::virt::Addrspace;
 
@@ -33,13 +36,54 @@ impl<F: FrameAllocator> ALockedMan<F> {
 
 pub struct ReservedHeap(LockedHeap);
 
+fn extend_heap<A: Allocator, F: FrameAllocator>(
+    heap: &mut Heap,
+    f: &F,
+    addrspace: &mut Addrspace<A>,
+    cap_allocator: &mut impl CapAlloc,
+    mut frames: usize,
+) -> Result<(), HeapError> {
+    while frames > 0 {
+        let frame = f.alloc().ok_or(HeapError::OutOfMemory)?;
+        let top = heap.top();
+        assert!(top.align_offset(PAGE_SIZE) == 0);
+        unsafe {
+            addrspace
+                .map_to(
+                    Page::try_new(top as usize).map_err(|_| HeapError::OutOfMemory)?,
+                    frame,
+                    PageFlags::READABLE | PageFlags::WRITABLE | PageFlags::PRESENT,
+                    PageFlags::READABLE | PageFlags::WRITABLE | PageFlags::PRESENT,
+                    f,
+                    cap_allocator,
+                )
+                .map_err(|_| HeapError::OutOfMemory)
+        }?;
+        unsafe { heap.extend(PAGE_SIZE) };
+        frames -= 1;
+    }
+    Ok(())
+}
+
 impl ReservedHeap {
     pub const fn empty() -> Self {
         Self(LockedHeap::empty())
     }
 
-    pub fn hydrate_reserves<F: FrameAllocator>(&self, f: &F) -> Result<(), HeapError> {
-        todo!();
+    pub fn hydrate_reserves<A: Allocator, F: FrameAllocator>(
+        &self,
+        f: &F,
+        addrspace: &mut Addrspace<A>,
+        cap_allocator: &mut impl CapAlloc,
+    ) -> Result<(), HeapError> {
+        let mut heap = self.0.lock();
+        let free_frames = heap.free() / PAGE_SIZE;
+        if free_frames >= 10 {
+            return Ok(());
+        }
+        let frames = 10 - free_frames;
+        extend_heap(&mut *heap, f, addrspace, cap_allocator, frames)?;
+        Ok(())
     }
 }
 
@@ -99,8 +143,16 @@ impl<F: FrameAllocator> Allocman<F> {
     }
 
     fn hydrate_reserves(&mut self) -> Result<(), HeapError> {
-        self.addrspace.allocator().hydrate_reserves(&self.falloc)?;
-        self.caps.allocator().hydrate_reserves(&self.falloc)?;
+        self.addrspace.allocator().hydrate_reserves(
+            &self.falloc,
+            &mut self.addrspace,
+            &mut self.caps,
+        )?;
+        self.caps.allocator().hydrate_reserves(
+            &self.falloc,
+            &mut self.addrspace,
+            &mut self.caps,
+        )?;
         Ok(())
     }
 

@@ -31,7 +31,7 @@ use limine::BaseRevision;
 use limine::request::{HhdmRequest, MemoryMapRequest, ModuleRequest, StackSizeRequest};
 use loader::Program;
 use qapi::caps::SysSlot;
-use qapi::init::EXCEPTION_HANDLER_ID;
+use qapi::init::EXCEPTION_HANDLER_MAGIC;
 use sync::cell::AtomicLazyCell;
 use sync::singleton::Singleton;
 use tap::TapFallible;
@@ -120,7 +120,7 @@ pub fn uinit() -> DispatchToken<ArchSystem> {
     // SAFETY: The data will be valid for any `usize` type
     let exception_entry = unsafe {
         *prog
-            .get_magic::<usize>(EXCEPTION_HANDLER_ID)
+            .get_magic::<usize>(EXCEPTION_HANDLER_MAGIC)
             .expect("Booter program does not have an exception handler set up")
     };
     log::info!("Got init exception endpoint @ ({exception_entry:#X})");

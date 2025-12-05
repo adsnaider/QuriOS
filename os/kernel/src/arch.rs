@@ -8,7 +8,7 @@ pub mod mem;
 use core::borrow::Borrow;
 use core::fmt::Debug;
 
-use mem::{Addrspace, PageFlags, VirtAddr};
+use mem::{Addrspace, Frame, PageFlags, VirtAddr};
 use qapi::caps::CapError;
 use qapi::caps::sync_ipc::SyncAbi;
 use qapi::init::{BootArgs, EntryFn};
@@ -88,6 +88,13 @@ pub trait ArchCaps<S: System>: Sized {
         page_flags: PageFlags,
     ) -> SyscallResp;
     fn vm_unlink(table: &Self, slot: PaddedPageTableOffset) -> SyscallResp;
+    fn vm_map(
+        table: &Self,
+        slot: PaddedPageTableOffset,
+        frame: Frame,
+        flags: PageFlags,
+    ) -> SyscallResp;
+    fn vm_unmap(table: &Self, slot: PaddedPageTableOffset) -> SyscallResp;
     fn vm_set_attributes(
         table: &Self,
         slot: PaddedPageTableOffset,

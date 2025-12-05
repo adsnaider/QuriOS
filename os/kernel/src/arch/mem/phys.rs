@@ -1,3 +1,4 @@
+use qapi::caps::CapError;
 use x86_64::structures::paging::PhysFrame;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -91,8 +92,18 @@ impl From<Frame> for PhysFrame {
     }
 }
 
-impl From<qapi::mem::Frame> for Frame {
-    fn from(value: qapi::mem::Frame) -> Self {
-        Self::from_start_address(PhysAddr::new(value.base()))
+impl TryFrom<qapi::mem::Frame> for Frame {
+    type Error = CapError;
+
+    fn try_from(value: qapi::mem::Frame) -> Result<Self, Self::Error> {
+        Ok(Self::try_from_start_address(PhysAddr::try_new(
+            value.base(),
+        )?)?)
+    }
+}
+
+impl From<UnalignedAddress> for CapError {
+    fn from(_: UnalignedAddress) -> Self {
+        CapError::InvalidArg
     }
 }

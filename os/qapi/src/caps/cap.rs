@@ -109,6 +109,8 @@ pub enum CapError {
     SigWaitNoParent = -25,
     #[display("The blocking thread's parent is already bound to some other core")]
     ThreadParentAlreadyBound = -26,
+    #[display("The provided frame does not name a canonical frame for this architecture")]
+    FrameNotCanonical = -27,
 }
 
 impl CapError {

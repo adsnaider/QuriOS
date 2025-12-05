@@ -10,12 +10,12 @@ use qapi::syscall::ops::notify::NotifyOp;
 use qapi::syscall::ops::retype::RetypeOp;
 use qapi::syscall::ops::sync_ipc::{SyncInvokeOp, SyncRetOp};
 use qapi::syscall::ops::thread::DispatchOp;
-use qapi::syscall::ops::vmtable::{VMLinkOp, VMSetAttr, VMUnlinkOp};
+use qapi::syscall::ops::vmtable::{VMLinkOp, VMMapOp, VMSetAttr, VMUnlinkOp, VMUnmapOp};
 use qapi::syscall::{SyscallArgs, SyscallArgsInit, SyscallOp, SyscallRequest};
 use retyping::retype;
 use sync_ipc::{sync_invoke, sync_ret};
 use thread::{dispatch, thread_sig_wait};
-use vmtable::{vm_link, vm_set_attr, vm_unlink};
+use vmtable::{vm_link, vm_map, vm_set_attr, vm_unlink, vm_unmap};
 
 use crate::arch::{ArchSystem, InvokeAbi, System};
 use crate::caps::ExceptionHandler;
@@ -51,6 +51,8 @@ pub fn syscall_handler(
         SyscallOp::ThreadDispatch => dispatch(DispatchOp::try_from_args(args.args())?, ctx),
         SyscallOp::VMLink => vm_link(VMLinkOp::try_from_args(args.args())?),
         SyscallOp::VMUnlink => vm_unlink(VMUnlinkOp::try_from_args(args.args())?),
+        SyscallOp::VMMap => vm_map(VMMapOp::try_from_args(args.args())?),
+        SyscallOp::VMUnmap => vm_unmap(VMUnmapOp::try_from_args(args.args())?),
         SyscallOp::VMSetAttr => vm_set_attr(VMSetAttr::try_from_args(args.args())?),
         SyscallOp::SyncInvoke => sync_invoke(SyncInvokeOp::try_from_args(args.args())?, ctx),
         SyscallOp::SyncRet => sync_ret(SyncRetOp::try_from_args(args.args())?, ctx),
