@@ -3,7 +3,7 @@ use qapi::init::{RetypeEntry, RetypeState};
 use qapi::mem::Frame;
 use qapi::syscall::ops::retype::RetypeKind;
 
-use super::FrameAllocator;
+use super::PMSpace;
 use crate::sysops::FrameExt as _;
 
 pub struct BitmapAllocator {
@@ -87,28 +87,27 @@ impl<'a> Iterator for MMapIter<'a> {
     }
 }
 
-impl FrameAllocator for BitmapAllocator {
-    fn alloc(&self) -> Option<Frame> {
+impl BitmapAllocator {
+    pub fn alloc(&self) -> Option<Frame> {
         let frame = self
             .memory_map
             .iter()
             .find(|(_, e)| e.state() == RetypeState::Untyped)
             .map(|(frame, _)| frame)?;
-        frame.retype(RetypeKind::IntoUser).ok()?;
         Some(frame)
     }
 
-    fn dealloc(&self, frame: Frame) {
-        frame.retype(RetypeKind::IntoUntyped).unwrap();
+    pub fn dealloc(&self, frame: Frame) {
+        // frame.retype(RetypeKind::IntoUntyped).unwrap();
     }
 }
 
-impl<F: FrameAllocator> FrameAllocator for &F {
-    fn alloc(&self) -> Option<Frame> {
-        (*self).alloc()
+impl PMSpace for BitmapAllocator {
+    fn alloc_frame(&mut self) -> Result<Frame, super::FrameAllocError> {
+        todo!()
     }
 
-    fn dealloc(&self, frame: Frame) {
-        (*self).dealloc(frame)
+    fn dealloc(&mut self, frame: Frame) {
+        todo!()
     }
 }

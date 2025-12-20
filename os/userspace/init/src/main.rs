@@ -1,8 +1,12 @@
 #![no_std]
 #![no_main]
 
+use core::alloc::GlobalAlloc;
 use core::mem::MaybeUninit;
+use core::ptr::NonNull;
 
+use allocator_api2::boxed::Box;
+use bitvec::ptr::replace;
 use entry::entry;
 use loader::MagicInfo;
 use qapi::caps::notify::NotificationCap;
@@ -11,19 +15,46 @@ use qapi::caps::sync_ipc::{ExceptionAbi, StandardAbi, SyncInvokeCap};
 use qapi::caps::thread::ThreadCap;
 use qapi::caps::{CapId, PositiveIsize};
 use qapi::exception::ExceptionInfo;
-use qapi::init::{BootArgs, BootCaps, EXCEPTION_HANDLER_MAGIC, RetypeState};
-use qapi::mem::Frame;
+use qapi::init::{BootArgs, BootCaps, EXCEPTION_HANDLER_MAGIC};
 use qapi::syscall::ops::retype::RetypeKind;
 use serial::sprint;
 use stack_list::StackNode;
-use ulib::alloc::allocman::ALockedMan;
-use ulib::alloc::phys::bitmap_allocator::BitmapAllocator;
+use ulib::alloc::allocman::Allocman;
+use ulib::alloc::cspace::CapabilityMan;
+use ulib::alloc::pmspace::bitmap_allocator::BitmapAllocator;
+use ulib::alloc::vmspace::Addrspace;
 use ulib::sysops::sync_endpoint::{IPC_STACKS, SyncEndpoint};
 use ulib::sysops::{CTableCapExt, FrameExt, IrqCtrlCapExt, SyncInvokeCapExt, ThreadCapExt};
 use x86_64::instructions::port::Port;
 
+static ALLOCATOR: spin::Mutex<Option<Allocman>> = spin::Mutex::new(None);
+
+struct AllocmanGAlloc;
 #[global_allocator]
-static ALLOCATOR: ALockedMan<BitmapAllocator> = ALockedMan::uninit();
+static GALLOC: AllocmanGAlloc = AllocmanGAlloc;
+
+unsafe impl GlobalAlloc for AllocmanGAlloc {
+    unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
+        ALLOCATOR
+            .lock()
+            .as_mut()
+            .unwrap()
+            .mem_alloc(layout)
+            .unwrap()
+            .as_ptr() as *mut u8
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: core::alloc::Layout) {
+        // SAFETY: Precondition and ptr must have been allocated with this allocator so it can't be null
+        unsafe {
+            ALLOCATOR
+                .lock()
+                .as_mut()
+                .unwrap()
+                .mem_dealloc(NonNull::new_unchecked(ptr as _), layout)
+        }
+    }
+}
 
 #[used]
 static EXCEPTION_HANDLER: MagicInfo<extern "C" fn()> = const {
@@ -49,6 +80,8 @@ fn main(args: &'static BootArgs) -> ! {
     serial::init();
     log::info!("Landed on userspace init");
     let bootcaps = BootCaps::new();
+
+    let falloc = BitmapAllocator::new(args.memory_map.as_slice());
     bootcaps
         .self_caps
         .make_sync_call(
@@ -70,14 +103,7 @@ fn main(args: &'static BootArgs) -> ! {
         .unwrap();
     log::info!("Sync response: {result}");
 
-    let free_frame = args
-        .memory_map
-        .as_slice()
-        .iter()
-        .enumerate()
-        .find(|(_, r)| r.state() == RetypeState::Untyped)
-        .map(|(i, _)| Frame::from_index(i))
-        .unwrap();
+    let free_frame = serial::sdbg!(falloc.alloc().unwrap());
     free_frame.retype(RetypeKind::IntoKernel).unwrap();
     let mut irq_stack: [u128; 128] = [0; 128];
     bootcaps
@@ -109,32 +135,25 @@ fn main(args: &'static BootArgs) -> ! {
         bootcaps.irq_ctrl.irq_set(irq_notification, i).unwrap();
     }
     irq_thread.dispatch().unwrap();
-    #[allow(clippy::empty_loop)]
-    loop {}
 
-    /*
-    let cspace = CapabilityMan::new_starting_at(bootcaps.self_caps, BootCaps::next_free());
-
-    for i in 0..BootCaps::next_free().as_usize() {
-        log::info!(
-            "Introspecting capability ({i}): {:#?}",
-            CapId::new(i as u32).introspect()
-        )
+    {
+        static mut FIXED_POOL: [MaybeUninit<u8>; 4096] = [const { MaybeUninit::uninit() }; 4096];
+        let allocman = Allocman::new(
+            CapabilityMan::new(bootcaps.self_caps),
+            falloc,
+            Addrspace::new(bootcaps.self_addrspace),
+            #[allow(static_mut_refs)]
+            unsafe {
+                &mut FIXED_POOL
+            },
+            args.free_space_start as *mut u8,
+        );
+        assert!(ALLOCATOR.lock().replace(allocman).is_none());
     }
-
-
-
-    let falloc = BitmapAllocator::new(
-        // bootcaps.self_addrspace,
-        args.memory_map.as_slice(),
-        // args.free_space_start,
-    );
-    let vspace = Addrspace::new(bootcaps.self_addrspace, ReservedHeap::empty());
-    ALLOCATOR.set(Allocman::new(falloc, vspace, cspace));
-
     let foo = Box::new(10);
     assert_eq!(*foo, 10);
-    */
+    #[allow(clippy::empty_loop)]
+    loop {}
 }
 
 fn sync_invoke(a: usize, b: usize, c: usize, d: usize) -> PositiveIsize {

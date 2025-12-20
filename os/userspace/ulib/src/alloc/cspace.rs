@@ -6,32 +6,35 @@ use derive_more::{Display, Error};
 use qapi::caps::SysSlot;
 use qapi::caps::ctable::CTableCap;
 
+use super::allocman::Resources;
+
 pub struct CapNode;
 
 #[derive(Debug, Error, Display, Clone)]
-pub enum CAllocError {}
+pub enum CAllocError {
+    #[display("Capability tree is full and can't allocate in the current execution stack")]
+    CapTreeFull,
+}
 
-pub trait CapAlloc {
-    fn alloc_cap(&mut self) -> Result<CapNode, CAllocError>;
+pub(super) trait CSpace {
+    fn alloc_cap(&mut self, resources: &mut Resources) -> Result<CapNode, CAllocError>;
     fn cap_free(&mut self, cap: CapNode);
 }
 
-pub struct CapabilityMan<A: Allocator> {
+pub struct CapabilityMan {
     next_cap: SysSlot,
     root: CTableCap,
-    _alloc: PhantomData<A>,
 }
 
-impl<A: Allocator> CapabilityMan<A> {
-    pub fn new(caps: CTableCap, allocator: A) -> Self {
+impl CapabilityMan {
+    pub fn new(caps: CTableCap) -> Self {
         Self {
             root: caps,
             next_cap: SysSlot::new(0).unwrap(),
-            _alloc: PhantomData,
         }
     }
 
-    pub fn alloc_cap(&mut self) -> Result<CapNode, CAllocError> {
+    pub fn alloc_cap(&mut self, resources: &mut Resources) -> Result<CapNode, CAllocError> {
         todo!();
     }
 
@@ -43,21 +46,16 @@ impl<A: Allocator> CapabilityMan<A> {
         Self {
             next_cap: first_free,
             root: caps,
-            _alloc: PhantomData,
         }
-    }
-
-    pub fn allocator(&self) -> &A {
-        todo!();
     }
 }
 
-impl<A: Allocator> CapAlloc for CapabilityMan<A> {
-    fn alloc_cap(&mut self) -> Result<CapNode, CAllocError> {
-        todo!()
+impl CSpace for CapabilityMan {
+    fn alloc_cap(&mut self, resources: &mut Resources) -> Result<CapNode, CAllocError> {
+        self.alloc_cap(resources)
     }
 
     fn cap_free(&mut self, cap: CapNode) {
-        todo!()
+        self.cap_free(cap)
     }
 }

@@ -6,6 +6,7 @@ use crate::retyping::{FrameExt, OutOfBounds, RetypeError, State};
 
 pub fn retype(RetypeOp { frame, to }: RetypeOp) -> Result<PositiveIsize, CapError> {
     // TODO: Verify that frame is in component's capability set
+    log::debug!("Retyping {frame:?} into {to:?}");
     let frame = Frame::try_from(frame)?;
     match to {
         RetypeKind::IntoUntyped => frame.try_to_untyped()?,

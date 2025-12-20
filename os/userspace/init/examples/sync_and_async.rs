@@ -11,13 +11,13 @@ use qapi::caps::sync_ipc::{ExceptionAbi, StandardAbi, SyncInvokeCap};
 use qapi::caps::thread::ThreadCap;
 use qapi::caps::{CapId, PositiveIsize};
 use qapi::exception::ExceptionInfo;
-use qapi::init::{BootArgs, BootCaps, EXCEPTION_HANDLER_ID, RetypeState};
+use qapi::init::{BootArgs, BootCaps, EXCEPTION_HANDLER_MAGIC, RetypeState};
 use qapi::mem::Frame;
 use qapi::syscall::ops::retype::RetypeKind;
 use serial::sprint;
 use stack_list::StackNode;
 use ulib::alloc::allocman::ALockedMan;
-use ulib::alloc::phys::bitmap_allocator::BitmapAllocator;
+use ulib::alloc::pmspace::bitmap_allocator::BitmapAllocator;
 use ulib::sysops::sync_endpoint::{IPC_STACKS, SyncEndpoint};
 use ulib::sysops::{CTableCapExt, FrameExt, IrqCtrlCapExt, SyncInvokeCapExt, ThreadCapExt};
 use x86_64::instructions::port::Port;
@@ -30,7 +30,7 @@ static EXCEPTION_HANDLER: MagicInfo<extern "C" fn()> = const {
     let endpoint = SyncEndpoint::<1, _, _>::create(ExceptionAbi, |args| {
         exception_handler(args.try_into().unwrap())
     });
-    MagicInfo::new(EXCEPTION_HANDLER_ID, endpoint.stackfull_endpoint())
+    MagicInfo::new(EXCEPTION_HANDLER_MAGIC, endpoint.stackfull_endpoint())
 };
 
 #[entry]

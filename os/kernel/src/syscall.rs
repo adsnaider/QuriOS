@@ -41,7 +41,7 @@ pub fn syscall_handler(
     log::trace!("Syscall ctx: {ctx:#?}");
 
     let op = args.op()?;
-    log::debug!("Sys Op: {op:?}");
+    log::debug!("Syscall: {op:?}");
     match op {
         SyscallOp::CapCons => cap_table_cons(ConsOp::try_from_args(args.args())?),
         SyscallOp::CapDrop => cap_table_drop(DropOp::try_from_args(args.args())?),

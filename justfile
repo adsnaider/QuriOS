@@ -55,7 +55,7 @@ init: setup
 	#!/usr/bin/env bash
 	set -euo pipefail
 	export RUSTFLAGS="-Crelocation-model=static -Cforce-frame-pointers=yes"
-	BIN=`cargo build -p init --profile {{profile}} --target {{target}} --message-format=json | {{extractor}}`
+	BIN=`cargo build -p init --profile {{profile}} --target {{target}} --bin init --message-format=json | {{extractor}}`
 	cp -f "$BIN" "{{build_dir}}/init"
 
 initrd: init

@@ -172,6 +172,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "heapless"
+version = "0.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2af2455f757db2b292a9b1768c4b70186d443bcb3b316252d6b540aec1cd89ed"
+dependencies = [
+ "hash32",
+ "stable_deref_trait",
+]
+
+[[package]]
 name = "init"
 version = "0.1.0"
 dependencies = [
@@ -202,7 +212,7 @@ dependencies = [
  "derive_more",
  "extend",
  "ghost-cell",
- "heapless",
+ "heapless 0.8.0",
  "limine",
  "loader",
  "log",
@@ -501,6 +511,7 @@ dependencies = [
  "derive_more",
  "extend",
  "hashbrown",
+ "heapless 0.9.2",
  "linked_list_allocator",
  "log",
  "paste",

@@ -3,13 +3,12 @@ use core::mem::MaybeUninit;
 use derive_more::{Display, Error, Into};
 use qapi_macros::SyscallRequest;
 
+use super::{u64_to_usize_array, usize_array_to_u64};
 use crate::caps::CapError;
 use crate::caps::vmtable::VMTableCap;
 use crate::mem::virt::{PageTableOffset, PageTableOffsetError};
 use crate::mem::{Frame, PageFlags};
 use crate::syscall::{SYSCALL_ARGS, SyscallRequest};
-
-use super::{u64_to_usize_array, usize_array_to_u64};
 
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Into)]

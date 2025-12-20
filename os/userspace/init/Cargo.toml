@@ -2,12 +2,14 @@
 name = "init"
 version = "0.1.0"
 edition = "2024"
+default-run = "init"
 
 [[bin]]
 path = "src/main.rs"
 name = "init"
 test = false
 bench = false
+
 
 [dependencies]
 allocator-api2 = { version = "0.2.21", default-features = false, features = [

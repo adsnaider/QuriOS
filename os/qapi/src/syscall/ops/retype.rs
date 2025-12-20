@@ -26,6 +26,7 @@ impl SyscallRequest for RetypeOp {
     fn into_args(self) -> UninitSyscallParams {
         let mut args = [MaybeUninit::uninit(); SYSCALL_ARGS];
         let frame = u64_to_usize_array(self.frame.base());
+        log::debug!("Frame: {frame:?}");
         let mut next_idx = 0;
         for piece in frame {
             args[next_idx] = MaybeUninit::new(piece);

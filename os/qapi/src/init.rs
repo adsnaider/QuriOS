@@ -1,5 +1,6 @@
 use core::sync::atomic::AtomicU16;
 
+use derive_more::Debug;
 use loader::LoadedMagic;
 use zerocopy::{Immutable, IntoBytes, KnownLayout};
 
@@ -76,8 +77,9 @@ impl BootCaps {
     }
 }
 
-#[derive(Debug)]
 #[repr(transparent)]
+#[derive(Debug)]
+#[debug("{:?}", self.state())]
 pub struct RetypeEntry(pub AtomicU16);
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]

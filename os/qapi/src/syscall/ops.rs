@@ -12,7 +12,7 @@ const fn u64_to_usize_array(mut value: u64) -> [usize; USIZE_IN_U64] {
     let mut out = [0; USIZE_IN_U64];
     let mut i = 0;
     while i < USIZE_IN_U64 {
-        let piece = (value & usize::BITS as u64) as usize;
+        let piece = (value & usize::MAX as u64) as usize;
         out[i] = piece;
         i += 1;
         value = value.unbounded_shl(usize::BITS);

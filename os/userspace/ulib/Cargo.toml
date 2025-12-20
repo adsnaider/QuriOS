@@ -16,6 +16,7 @@ extend = "1.2.0"
 zerocopy.workspace = true
 stack_list.workspace = true
 paste = "1.0.15"
+heapless.workspace = true
 
 [lints]
 workspace = true
