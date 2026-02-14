@@ -52,7 +52,7 @@ fn main(args: &'static BootArgs) -> ! {
     bootcaps
         .self_caps
         .make_sync_call(
-            SlotId::new(10).unwrap(),
+            SlotId::try_new(10).unwrap(),
             SyncEndpoint::<0, _, _>::create(StandardAbi, |(a, b, c, d)| sync_invoke(a, b, c, d))
                 .stackfull_endpoint(),
             bootcaps.self_resources,
@@ -83,7 +83,7 @@ fn main(args: &'static BootArgs) -> ! {
     bootcaps
         .self_caps
         .make_thread(
-            SlotId::new(11).unwrap(),
+            SlotId::try_new(11).unwrap(),
             irq_handler,
             irq_stack.as_mut_ptr() as *mut (),
             bootcaps.self_resources,
@@ -100,7 +100,7 @@ fn main(args: &'static BootArgs) -> ! {
         bootcaps
             .self_caps
             .make_notification(
-                SlotId::new(i + 12).unwrap(),
+                SlotId::try_new(i + 12).unwrap(),
                 ThreadCap::new(CapId::new(11)),
                 1 << i,
             )

@@ -506,7 +506,6 @@ dependencies = [
 name = "ulib"
 version = "0.1.0"
 dependencies = [
- "allocator-api2",
  "bitvec",
  "derive_more",
  "extend",

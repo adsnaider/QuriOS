@@ -1,5 +1,10 @@
 #![no_std]
+#![feature(allocator_api)]
 
-pub mod alloc;
+extern crate alloc;
+
+pub mod allocation;
+pub mod caps;
+pub mod shadow;
 pub mod syscall;
 pub mod sysops;

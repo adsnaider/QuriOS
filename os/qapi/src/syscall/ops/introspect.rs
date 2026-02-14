@@ -18,44 +18,66 @@ pub struct IntrospectOp {
 #[derive(Debug, Clone, Copy)]
 pub enum IntrospectResult {
     Empty,
-    CLink {
-        kobj: Frame,
-    },
-    Thread {
-        kobj: Frame,
-        thread: Thread,
-    },
-    CBlock {
-        kobj: Frame,
-        cblock: CBlock,
-    },
-    SyncCall,
-    Resources,
-    Notification {
-        waiter: Frame,
-    },
+    CLink(KObj<CBlockInspect>),
+    Thread(KObj<ThreadInspect>),
+    CBlock(KObj<CBlockInspect>),
+    SyncCall(SyncCallInspect),
+    Resources(ResourcesInspect),
+    Notification(NotificationInspect),
     #[cfg(target_arch = "x86_64")]
-    VMTable(VMTable),
+    VMTable(KObj<VMTableInspect>),
     #[cfg(target_arch = "x86_64")]
-    IrqCtrl,
+    IrqCtrl(IrqCtrlInspect),
 }
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
-pub struct Thread;
+pub struct KObj<T> {
+    pub kobj: Frame,
+    pub data: T,
+}
+
+impl<T> KObj<T> {
+    pub const fn new(frame: Frame, data: T) -> Self {
+        Self { kobj: frame, data }
+    }
+}
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
-pub struct CBlock;
+pub struct IrqCtrlInspect;
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct CLinkInspect;
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct SyncCallInspect;
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct ResourcesInspect;
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct NotificationInspect;
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct ThreadInspect;
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct CBlockInspect;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct VMTable {
-    pub kobj: Frame,
+pub struct VMTableInspect {
     pub level: u8,
     pub entries: [VMTableEntry; 512],
 }
 
-impl core::fmt::Debug for VMTable {
+impl core::fmt::Debug for VMTableInspect {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         struct FilteredEntries<'a>(&'a [VMTableEntry]);
         impl core::fmt::Debug for FilteredEntries<'_> {
@@ -73,7 +95,6 @@ impl core::fmt::Debug for VMTable {
             }
         }
         f.debug_struct("VMTable")
-            .field("kobj", &self.kobj)
             .field("level", &self.level)
             .field("entries", &FilteredEntries(&self.entries))
             .finish()

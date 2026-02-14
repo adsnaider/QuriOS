@@ -11,5 +11,5 @@ pub enum FrameAllocError {
 
 pub(super) trait PMSpace {
     fn alloc_frame(&mut self) -> Result<Frame, FrameAllocError>;
-    fn dealloc(&mut self, frame: Frame);
+    unsafe fn dealloc(&mut self, frame: Frame);
 }

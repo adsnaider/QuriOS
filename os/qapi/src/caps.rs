@@ -11,5 +11,5 @@ pub mod vmtable;
 pub mod slotid;
 pub use slotid::SysSlot;
 
-mod cap;
+pub mod cap;
 pub use cap::{CapError, CapId, CapResult, PositiveIsize};

@@ -10,7 +10,7 @@ linked_list_allocator = "0.10.5"
 log.workspace = true
 qapi.workspace = true
 spin = { version = "0.10.0", features = ["mutex"] }
-allocator-api2.workspace = true
+# allocator-api2.workspace = true
 hashbrown.workspace = true
 extend = "1.2.0"
 zerocopy.workspace = true

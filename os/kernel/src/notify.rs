@@ -1,5 +1,6 @@
 use derive_where::derive_where;
 use qapi::caps::CapError;
+use qapi::syscall::ops::introspect::NotificationInspect;
 
 use crate::arch::{ArchSystem, System};
 use crate::kmem::KPtr;
@@ -18,6 +19,10 @@ impl<S: System> Notification<S> {
 
     pub const fn waiter(&self) -> &KPtr<Thread<S>> {
         &self.waiter
+    }
+
+    pub fn introspect(&self) -> NotificationInspect {
+        NotificationInspect
     }
 }
 

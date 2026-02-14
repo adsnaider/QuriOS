@@ -1,18 +1,19 @@
-use core::alloc::Layout;
+use core::alloc::{AllocError, Allocator, Layout};
 use core::mem::MaybeUninit;
 use core::ops::{BitOr, BitOrAssign};
 use core::ptr::NonNull;
 
-use allocator_api2::alloc::{AllocError, Allocator};
 use derive_more::{Deref, DerefMut, Display, Error};
 use heapless::Vec;
 use linked_list_allocator::Heap;
+use qapi::caps::CapId;
 use qapi::mem::{Frame, Page, PageFlags};
 
-use super::cspace::{CAllocError, CSpace, CapNode, CapabilityMan};
+use super::cspace::{CAllocError, CSpace, CapabilityMan};
 use super::pmspace::bitmap_allocator::BitmapAllocator;
 use super::pmspace::{FrameAllocError, PMSpace};
 use super::vmspace::{Addrspace, VMSpace};
+use crate::allocation::cspace::CapSlot;
 
 pub struct Allocman<C = CapabilityMan, P = BitmapAllocator, V = Addrspace> {
     cspace: C,
@@ -29,7 +30,7 @@ unsafe impl Send for Resources {}
 pub struct Mutex<T: ?Sized>(spin::Mutex<T>);
 
 pub(super) struct Resources {
-    cspace: heapless::Vec<CapNode, 16>,
+    cspace: heapless::Vec<CapSlot, 16>,
     pmspace: heapless::Vec<Frame, 16>,
     fixed_heap: Heap,
     main_heap: Heap,
@@ -37,11 +38,11 @@ pub(super) struct Resources {
 }
 
 impl Resources {
-    fn steal_cap(&mut self) -> Result<CapNode, CAllocError> {
+    pub fn steal_cap(&mut self) -> Result<CapSlot, CAllocError> {
         self.cspace.pop().ok_or(CAllocError::CapTreeFull)
     }
 
-    fn steal_frame(&mut self) -> Result<Frame, FrameAllocError> {
+    pub fn steal_frame(&mut self) -> Result<Frame, FrameAllocError> {
         self.pmspace.pop().ok_or(FrameAllocError::OutOfFrames)
     }
 
@@ -97,7 +98,7 @@ impl Resources {
                     | PageFlags::PRESENT,
                 self,
             ) else {
-                pmspace.dealloc(frame);
+                unsafe { pmspace.dealloc(frame) };
                 return progress;
             };
             if self.main_heap.bottom().is_null() {
@@ -210,10 +211,8 @@ impl<C: CSpace, PM: PMSpace, VM: VMSpace> Allocman<C, PM, VM> {
         const MIN_HEAP_FREE: usize = 10 * Page::SIZE;
         if self.resources.main_heap.free() < MIN_HEAP_FREE {
             let pages = (MIN_HEAP_FREE - self.resources.main_heap.free()) / Page::SIZE;
-            let progress = self
-                .resources
-                .extend_heap(&mut self.mspace, &mut self.pmspace, pages);
-            progress
+            self.resources
+                .extend_heap(&mut self.mspace, &mut self.pmspace, pages)
         } else {
             Progress::NoProgress
         }
@@ -233,7 +232,7 @@ impl<C: CSpace, PM: PMSpace, VM: VMSpace> Allocman<C, PM, VM> {
                 .cspace
                 .push(cnode)
                 .unwrap_or_else(|_| panic!("cspace isn't full so this must always succeed"));
-            progress = progress | Progress::Progress;
+            progress |= Progress::Progress;
         }
         progress
     }
@@ -252,16 +251,41 @@ impl<C: CSpace, PM: PMSpace, VM: VMSpace> Allocman<C, PM, VM> {
                 .pmspace
                 .push(frame)
                 .unwrap_or_else(|_| panic!("cspace isn't full so this must always succeed"));
-            progress = progress | Progress::Progress;
+            progress |= Progress::Progress;
         }
         progress
     }
 
     pub fn mem_alloc(&mut self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
-        todo!();
+        self.refill_resources();
+        self.resources.alloc_mem(layout)
     }
 
-    pub unsafe fn mem_dealloc(&mut self, ptr: NonNull<u8>, layout: Layout) {
-        todo!();
+    pub unsafe fn mem_free(&mut self, ptr: NonNull<u8>, layout: Layout) {
+        self.refill_resources();
+        // SAFETY: Precondition
+        unsafe { self.resources.dealloc_mem(ptr, layout) }
+    }
+
+    pub fn cap_alloc(&mut self) -> Result<CapSlot, CAllocError> {
+        self.refill_resources();
+        self.cspace.alloc_cap(&mut self.resources)
+    }
+
+    pub unsafe fn cap_free(&mut self, node: CapId) {
+        self.refill_resources();
+        // SAFETY: Precondition
+        unsafe { self.cspace.cap_free(node, &mut self.resources) }
+    }
+
+    pub fn frame_alloc(&mut self) -> Result<Frame, FrameAllocError> {
+        self.refill_resources();
+        self.pmspace.alloc_frame()
+    }
+
+    pub unsafe fn frame_dealloc(&mut self, frame: Frame) {
+        self.refill_resources();
+        // SAFETY: Precondition
+        unsafe { self.pmspace.dealloc(frame) }
     }
 }

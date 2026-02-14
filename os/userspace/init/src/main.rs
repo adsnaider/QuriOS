@@ -19,10 +19,10 @@ use qapi::init::{BootArgs, BootCaps, EXCEPTION_HANDLER_MAGIC};
 use qapi::syscall::ops::retype::RetypeKind;
 use serial::sprint;
 use stack_list::StackNode;
-use ulib::alloc::allocman::Allocman;
-use ulib::alloc::cspace::CapabilityMan;
-use ulib::alloc::pmspace::bitmap_allocator::BitmapAllocator;
-use ulib::alloc::vmspace::Addrspace;
+use ulib::allocation::allocman::Allocman;
+use ulib::allocation::cspace::CapabilityMan;
+use ulib::allocation::pmspace::bitmap_allocator::BitmapAllocator;
+use ulib::allocation::vmspace::Addrspace;
 use ulib::sysops::sync_endpoint::{IPC_STACKS, SyncEndpoint};
 use ulib::sysops::{CTableCapExt, FrameExt, IrqCtrlCapExt, SyncInvokeCapExt, ThreadCapExt};
 use x86_64::instructions::port::Port;
@@ -51,7 +51,7 @@ unsafe impl GlobalAlloc for AllocmanGAlloc {
                 .lock()
                 .as_mut()
                 .unwrap()
-                .mem_dealloc(NonNull::new_unchecked(ptr as _), layout)
+                .mem_free(NonNull::new_unchecked(ptr as _), layout)
         }
     }
 }
@@ -81,11 +81,11 @@ fn main(args: &'static BootArgs) -> ! {
     log::info!("Landed on userspace init");
     let bootcaps = BootCaps::new();
 
-    let falloc = BitmapAllocator::new(args.memory_map.as_slice());
+    let mut falloc = BitmapAllocator::new(args.memory_map.as_slice());
     bootcaps
         .self_caps
         .make_sync_call(
-            SlotId::new(10).unwrap(),
+            SlotId::try_new(10).unwrap(),
             SyncEndpoint::<0, _, _>::create(StandardAbi, |(a, b, c, d)| sync_invoke(a, b, c, d))
                 .stackfull_endpoint(),
             bootcaps.self_resources,
@@ -109,7 +109,7 @@ fn main(args: &'static BootArgs) -> ! {
     bootcaps
         .self_caps
         .make_thread(
-            SlotId::new(11).unwrap(),
+            SlotId::try_new(11).unwrap(),
             irq_handler,
             irq_stack.as_mut_ptr() as *mut (),
             bootcaps.self_resources,
@@ -126,7 +126,7 @@ fn main(args: &'static BootArgs) -> ! {
         bootcaps
             .self_caps
             .make_notification(
-                SlotId::new(i + 12).unwrap(),
+                SlotId::try_new(i + 12).unwrap(),
                 ThreadCap::new(CapId::new(11)),
                 1 << i,
             )
@@ -139,7 +139,7 @@ fn main(args: &'static BootArgs) -> ! {
     {
         static mut FIXED_POOL: [MaybeUninit<u8>; 4096] = [const { MaybeUninit::uninit() }; 4096];
         let allocman = Allocman::new(
-            CapabilityMan::new(bootcaps.self_caps),
+            CapabilityMan::new_starting_at(bootcaps.self_caps, BootCaps::next_free()),
             falloc,
             Addrspace::new(bootcaps.self_addrspace),
             #[allow(static_mut_refs)]

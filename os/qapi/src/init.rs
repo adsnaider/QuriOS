@@ -70,7 +70,7 @@ impl BootCaps {
     }
 
     pub const fn next_free() -> SysSlot {
-        match SysSlot::new(3) {
+        match SysSlot::try_new(3) {
             Ok(s) => s,
             Err(_) => unreachable!(),
         }

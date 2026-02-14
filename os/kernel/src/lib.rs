@@ -166,27 +166,27 @@ pub fn uinit() -> DispatchToken<ArchSystem> {
         let croot = thread.execution_stack();
         let croot = croot.lock();
         let croot = croot.active().ctable().cast_ref();
-        CapBlock::at(croot, SysSlot::new(0).unwrap())
+        CapBlock::at(croot, SysSlot::try_new(0).unwrap())
             .try_set(TrieSlotPayload::Data(
                 Capability::<ArchSystem>::CompResource(resources),
             ))
             .expect("Unable to set boot capabilities");
-        CapBlock::at(croot, SysSlot::new(1).unwrap())
+        CapBlock::at(croot, SysSlot::try_new(1).unwrap())
             .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::CapBlock(
                 cap_table.cast(),
             )))
             .expect("Unable to set boot capabilities");
-        CapBlock::at(croot, SysSlot::new(2).unwrap())
+        CapBlock::at(croot, SysSlot::try_new(2).unwrap())
             .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::Arch(
                 <ArchSystem as System>::ArchCaps::new_addrspace(&addrspace),
             )))
             .expect("Unable to set boot capabilities");
-        CapBlock::at(croot, SysSlot::new(3).unwrap())
+        CapBlock::at(croot, SysSlot::try_new(3).unwrap())
             .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::Thread(
                 KPtr::clone(&thread),
             )))
             .expect("Unable to set boot capabilities");
-        CapBlock::at(croot, SysSlot::new(4).unwrap())
+        CapBlock::at(croot, SysSlot::try_new(4).unwrap())
             .try_set(TrieSlotPayload::Data(Capability::<ArchSystem>::Arch(
                 <ArchSystem as System>::ArchCaps::irq_ctrl().unwrap(),
             )))

@@ -9,7 +9,7 @@ use derive_where::derive_where;
 use extend::ext;
 use qapi::caps::CapError;
 use qapi::caps::slotid::{NUM_SLOTS, SLOT_SIZE};
-use qapi::syscall::ops::introspect::{self, IntrospectResult};
+use qapi::syscall::ops::introspect::{self, IntrospectResult, ResourcesInspect};
 use qapi::types::{UserPtr, UserPtrMut};
 use trie::{Trie, TrieBlock, TrieRef, TrieSetError};
 use zerocopy::{FromBytes, Immutable, KnownLayout};
@@ -105,8 +105,8 @@ impl<S: System> CapRef<S> {
 }
 
 impl<S: System> CapBlock<S> {
-    pub fn introspect(_this: &KPtr<Self>) -> introspect::CBlock {
-        introspect::CBlock
+    pub fn introspect(_this: &KPtr<Self>) -> introspect::CBlockInspect {
+        introspect::CBlockInspect
     }
 }
 
@@ -179,8 +179,8 @@ impl<S: System> Resources<S> {
         &self.capabilities
     }
 
-    pub fn introspect(&self) -> IntrospectResult {
-        IntrospectResult::Resources
+    pub fn introspect(&self) -> ResourcesInspect {
+        ResourcesInspect
     }
 
     pub fn exception_handler(&self) -> &ExceptionHandler {

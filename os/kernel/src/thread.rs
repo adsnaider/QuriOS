@@ -282,8 +282,8 @@ impl<S: System> Thread<S> {
         }
     }
 
-    pub fn introspect(&self) -> introspect::Thread {
-        introspect::Thread
+    pub fn introspect(&self) -> introspect::ThreadInspect {
+        introspect::ThreadInspect
     }
 
     pub fn bind(&self) -> Result<(), BindError> {

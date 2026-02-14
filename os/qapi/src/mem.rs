@@ -8,6 +8,7 @@ pub use phys::Frame;
 pub use virt::Page;
 
 use crate::caps::CapError;
+use crate::mem::vmtable::VMEntryFlags;
 
 bitflags! {
     #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -40,5 +41,24 @@ impl TryFrom<usize> for PageFlags {
 impl From<PageFlags> for usize {
     fn from(value: PageFlags) -> Self {
         value.bits()
+    }
+}
+
+impl From<VMEntryFlags> for PageFlags {
+    fn from(value: VMEntryFlags) -> Self {
+        let mut flags = Self::empty();
+        if value.contains(VMEntryFlags::PRESENT) {
+            flags |= PageFlags::PRESENT;
+        }
+        if value.contains(VMEntryFlags::USER_ACCESSIBLE) {
+            flags |= PageFlags::READABLE;
+        }
+        if value.contains(VMEntryFlags::WRITABLE) {
+            flags |= PageFlags::WRITABLE;
+        }
+        if !value.contains(VMEntryFlags::NO_EXECUTE) {
+            flags |= PageFlags::EXECUTABLE;
+        }
+        flags
     }
 }

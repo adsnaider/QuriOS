@@ -137,7 +137,7 @@ impl<const COUNT: usize, T> TrieBlock<COUNT, T> {
             assert!(COUNT.is_power_of_two());
         };
         let idx = id % COUNT;
-        let idx = SlotId::new(idx).unwrap();
+        let idx = SlotId::try_new(idx).unwrap();
         let id = id / COUNT;
         let slot = Self::at(&this, idx).try_get()?;
         if id == 0 {

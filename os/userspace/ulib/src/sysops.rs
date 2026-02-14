@@ -15,7 +15,10 @@ use qapi::syscall::ops::ctable::{
     CTableCons, ConsArgs, ConsKind, ConsOp, CopyOp, DropOp, LinkOp, NotificationCons, SyncCallCons,
     ThreadCons,
 };
-use qapi::syscall::ops::introspect::{IntrospectOp, IntrospectResult};
+use qapi::syscall::ops::introspect::{
+    CBlockInspect, IntrospectOp, IntrospectResult, IrqCtrlInspect, KObj, NotificationInspect,
+    ResourcesInspect, SyncCallInspect, ThreadInspect, VMTableInspect,
+};
 use qapi::syscall::ops::irq::{IrqSet, IrqUnset};
 use qapi::syscall::ops::retype::{RetypeKind, RetypeOp};
 use qapi::syscall::ops::sync_ipc::{SYNC_CALL_ARGS, SyncInvokeOp};
@@ -28,6 +31,106 @@ use qapi::types::{UserPtr, UserPtrMut};
 use zerocopy::IntoBytes as _;
 
 use crate::syscall::syscall;
+
+pub trait Introspect {
+    type Output;
+
+    fn introspect(&self) -> Result<Self::Output, CapError>;
+}
+
+impl Introspect for CapId {
+    type Output = IntrospectResult;
+
+    fn introspect(&self) -> Result<IntrospectResult, CapError> {
+        let mut out = MaybeUninit::uninit();
+        let op = IntrospectOp {
+            cap: *self,
+            write_buf: UserPtrMut::new(&mut out as *mut MaybeUninit<IntrospectResult>),
+        };
+        syscall(SyscallArgs::new_with_args(
+            SyscallOp::Introspect,
+            op.into_args(),
+        ))
+        // SAFETY: If the syscall is successful, the kernel can be trusted to set reasonable bytes
+        .map(|_| unsafe { out.assume_init() })
+    }
+}
+
+impl Introspect for CTableCap {
+    type Output = KObj<CBlockInspect>;
+
+    fn introspect(&self) -> Result<Self::Output, CapError> {
+        let IntrospectResult::CBlock(block) = self.cap().introspect()? else {
+            return Err(CapError::InvalidCapType);
+        };
+        Ok(block)
+    }
+}
+
+impl Introspect for ThreadCap {
+    type Output = KObj<ThreadInspect>;
+
+    fn introspect(&self) -> Result<Self::Output, CapError> {
+        let IntrospectResult::Thread(thread) = self.cap().introspect()? else {
+            return Err(CapError::InvalidCapType);
+        };
+        Ok(thread)
+    }
+}
+
+impl Introspect for SyncInvokeCap {
+    type Output = SyncCallInspect;
+
+    fn introspect(&self) -> Result<Self::Output, CapError> {
+        let IntrospectResult::SyncCall(sync_call) = self.cap().introspect()? else {
+            return Err(CapError::InvalidCapType);
+        };
+        Ok(sync_call)
+    }
+}
+impl Introspect for NotificationCap {
+    type Output = NotificationInspect;
+
+    fn introspect(&self) -> Result<Self::Output, CapError> {
+        let IntrospectResult::Notification(notification) = self.cap().introspect()? else {
+            return Err(CapError::InvalidCapType);
+        };
+        Ok(notification)
+    }
+}
+
+impl Introspect for ResourcesCap {
+    type Output = ResourcesInspect;
+
+    fn introspect(&self) -> Result<Self::Output, CapError> {
+        let IntrospectResult::Resources(resources) = self.cap().introspect()? else {
+            return Err(CapError::InvalidCapType);
+        };
+        Ok(resources)
+    }
+}
+
+impl Introspect for VMTableCap {
+    type Output = KObj<VMTableInspect>;
+
+    fn introspect(&self) -> Result<Self::Output, CapError> {
+        let IntrospectResult::VMTable(vmtable) = self.cap().introspect()? else {
+            return Err(CapError::InvalidCapType);
+        };
+        Ok(vmtable)
+    }
+}
+
+impl Introspect for IrqCtrlCap {
+    type Output = IrqCtrlInspect;
+
+    fn introspect(&self) -> Result<Self::Output, CapError> {
+        let IntrospectResult::IrqCtrl(irq_ctrl) = self.cap().introspect()? else {
+            return Err(CapError::InvalidCapType);
+        };
+        Ok(irq_ctrl)
+    }
+}
 
 #[ext]
 pub impl Frame {
@@ -195,20 +298,6 @@ pub impl SyncInvokeCap {
 
 #[ext]
 pub impl CapId {
-    fn introspect(&self) -> Result<IntrospectResult, CapError> {
-        let mut out = MaybeUninit::uninit();
-        let op = IntrospectOp {
-            cap: *self,
-            write_buf: UserPtrMut::new(&mut out as *mut MaybeUninit<IntrospectResult>),
-        };
-        syscall(SyscallArgs::new_with_args(
-            SyscallOp::Introspect,
-            op.into_args(),
-        ))
-        // SAFETY: If the syscall is successful, the kernel can be trusted to set reasonable bytes
-        .map(|_| unsafe { out.assume_init() })
-    }
-
     fn copy_into(&self, to_table: CTableCap, to_slot: SysSlot) -> Result<(), CapError> {
         let args = CopyOp {
             from_cap: *self,

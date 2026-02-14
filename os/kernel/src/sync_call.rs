@@ -2,7 +2,7 @@ use derive_more::From;
 use derive_where::derive_where;
 use qapi::caps::CapError;
 use qapi::caps::sync_ipc::{ExceptionAbi, StandardAbi};
-use qapi::syscall::ops::introspect::IntrospectResult;
+use qapi::syscall::ops::introspect::{IntrospectResult, SyncCallInspect};
 
 use crate::arch::{InvokeAbi, System};
 use crate::caps::Resources;
@@ -53,8 +53,8 @@ impl<S: System, Abi> SyncCall<S, Abi> {
         Self { comp, entry, abi }
     }
 
-    pub fn introspect(&self) -> IntrospectResult {
-        IntrospectResult::SyncCall
+    pub fn introspect(&self) -> SyncCallInspect {
+        SyncCallInspect
     }
 
     pub const fn resources(&self) -> &KPtr<Resources<S>> {

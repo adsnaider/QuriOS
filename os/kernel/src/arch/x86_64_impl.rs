@@ -8,7 +8,7 @@ use qapi::caps::sync_ipc::ExceptionAbi;
 use qapi::caps::{CapError, PositiveIsize};
 use qapi::mem::vmtable::VMTableEntry;
 use qapi::syscall::ops::ctable::VMTableCons;
-use qapi::syscall::ops::introspect::{IntrospectResult, VMTable};
+use qapi::syscall::ops::introspect::{IntrospectResult, IrqCtrlInspect, KObj, VMTableInspect};
 use qapi::syscall::ops::vmtable::PaddedPageTableOffset;
 use x86_64::instructions::interrupts;
 use x86_64::registers::model_specific::GsBase;
@@ -215,7 +215,7 @@ impl super::ArchCaps<X64Sys> for ArchCaps {
             ArchCaps::VMTableL3(kptr) => Self::introspect_vmtable(3, kptr),
             ArchCaps::VMTableL2(kptr) => Self::introspect_vmtable(2, kptr),
             ArchCaps::VMTableL1(kptr) => Self::introspect_vmtable(1, kptr),
-            ArchCaps::IrqCtrl => IntrospectResult::IrqCtrl,
+            ArchCaps::IrqCtrl => IntrospectResult::IrqCtrl(IrqCtrlInspect),
         }
     }
 
@@ -278,10 +278,9 @@ impl ArchCaps {
                 .into();
         }
 
-        IntrospectResult::VMTable(VMTable {
-            kobj: table.frame().into(),
-            level,
-            entries,
-        })
+        IntrospectResult::VMTable(KObj::new(
+            table.frame().into(),
+            VMTableInspect { level, entries },
+        ))
     }
 }

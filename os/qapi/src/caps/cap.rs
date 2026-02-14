@@ -4,6 +4,8 @@ use core::num::{NonZeroU32, TryFromIntError};
 use derive_more::{Display, Error, Into, TryFrom, TryFromReprError};
 use zerocopy::{FromBytes, Immutable, IntoBytes};
 
+use crate::caps::SysSlot;
+
 #[derive(
     Debug,
     Display,

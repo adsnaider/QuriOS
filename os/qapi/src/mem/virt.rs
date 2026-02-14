@@ -75,7 +75,7 @@ mod x86_64 {
         /// Returns the 9-bit level page table index.
         #[inline]
         pub fn page_table_index(self, level: PageTableLevel) -> PageTableOffset {
-            PageTableOffset::new_truncate((self.base >> 12 >> ((level.level() - 1) * 9)) as u16)
+            PageTableOffset::new_truncate((self.base >> 12 >> ((level.as_u8() - 1) * 9)) as u16)
         }
     }
 
@@ -103,7 +103,7 @@ mod x86_64 {
             Ok(Self(level))
         }
 
-        pub const fn level(&self) -> u8 {
+        pub const fn as_u8(&self) -> u8 {
             self.0
         }
 
@@ -112,11 +112,11 @@ mod x86_64 {
         }
 
         pub const fn is_bottom(&self) -> bool {
-            self.level() == 1
+            self.as_u8() == 1
         }
 
         pub const fn lower(self) -> Option<Self> {
-            match Self::try_new(self.level() - 1) {
+            match Self::try_new(self.as_u8() - 1) {
                 Ok(l) => Some(l),
                 Err(_) => None,
             }
