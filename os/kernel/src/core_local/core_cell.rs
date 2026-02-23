@@ -145,7 +145,7 @@ impl<T> CoreCell<T> {
         }
     }
 
-    pub fn try_get(&self) -> Result<CoreGuard<T>, GetError> {
+    pub fn try_get(&self) -> Result<CoreGuard<'_, T>, GetError> {
         CoreGuard::new(self)
     }
 

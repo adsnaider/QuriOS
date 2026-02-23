@@ -259,8 +259,9 @@ fn page_fault_handler(mut ctx: ExceptionCtx<Exception>) {
         PrivilegeLevel::Ring0 => match VirtAddr::new(addr).memory_segment() {
             MemorySegment::User => {
                 if *CORE_LOCAL_SAFE_BUFFER_LOCK.get() {
-                    isr_stack.instruction_pointer =
-                        VirtAddrImpl::new(user_buffer_read_page_fault_call_gate as usize as u64);
+                    isr_stack.instruction_pointer = VirtAddrImpl::new(
+                        user_buffer_read_page_fault_call_gate as *const () as usize as u64,
+                    );
                 } else {
                     panic!(
                         "PAGE FAULT (attempted user read without safeguard) @ {addr:#X?} - ({code:?}) {ctx:#?}"

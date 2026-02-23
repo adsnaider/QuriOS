@@ -1,9 +1,7 @@
 use core::mem::MaybeUninit;
 
 use qapi::caps::PositiveIsize;
-use qapi::syscall::ops::introspect::{
-    CBlockInspect, CLinkInspect, IntrospectOp, IntrospectResult, KObj, ThreadInspect,
-};
+use qapi::syscall::ops::introspect::{IntrospectOp, IntrospectResult, KObj};
 
 use super::SyscallResp;
 use crate::arch::ArchCaps as _;

@@ -6,7 +6,6 @@ use core::mem::MaybeUninit;
 use core::ptr::NonNull;
 
 use allocator_api2::boxed::Box;
-use bitvec::ptr::replace;
 use entry::entry;
 use loader::MagicInfo;
 use qapi::caps::notify::NotificationCap;

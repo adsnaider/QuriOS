@@ -2,7 +2,7 @@ use derive_more::From;
 use derive_where::derive_where;
 use qapi::caps::CapError;
 use qapi::caps::sync_ipc::{ExceptionAbi, StandardAbi};
-use qapi::syscall::ops::introspect::{IntrospectResult, SyncCallInspect};
+use qapi::syscall::ops::introspect::SyncCallInspect;
 
 use crate::arch::{InvokeAbi, System};
 use crate::caps::Resources;

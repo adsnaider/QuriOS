@@ -9,7 +9,7 @@ use derive_where::derive_where;
 use extend::ext;
 use qapi::caps::CapError;
 use qapi::caps::slotid::{NUM_SLOTS, SLOT_SIZE};
-use qapi::syscall::ops::introspect::{self, IntrospectResult, ResourcesInspect};
+use qapi::syscall::ops::introspect::{self, ResourcesInspect};
 use qapi::types::{UserPtr, UserPtrMut};
 use trie::{Trie, TrieBlock, TrieRef, TrieSetError};
 use zerocopy::{FromBytes, Immutable, KnownLayout};

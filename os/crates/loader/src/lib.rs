@@ -160,7 +160,7 @@ impl<'a> Program<'a> {
         let mut magics = self
             .program_headers
             .iter()
-            .flat_map(|hdr| (hdr.p_offset..(hdr.p_offset + hdr.p_filesz)))
+            .flat_map(|hdr| hdr.p_offset..(hdr.p_offset + hdr.p_filesz))
             .filter_map(|off| {
                 let off = off as usize;
                 let magic_end = off + size_of::<u64>() * 4;

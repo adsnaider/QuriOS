@@ -67,7 +67,7 @@ impl<T> AtomicRefCell<T> {
         }
     }
 
-    pub fn borrow(&self) -> Result<Ref<T>, BorrowError> {
+    pub fn borrow(&self) -> Result<Ref<'_, T>, BorrowError> {
         self.state.try_borrow()?;
         Ok(Ref {
             // SAFETY: Unsafe cell will always give a non-null ptr.
@@ -76,7 +76,7 @@ impl<T> AtomicRefCell<T> {
         })
     }
 
-    pub fn borrow_mut(&self) -> Result<RefMut<T>, BorrowError> {
+    pub fn borrow_mut(&self) -> Result<RefMut<'_, T>, BorrowError> {
         self.state.try_borrow()?;
         Ok(RefMut {
             // SAFETY: Unsafe cell will always give a non-null ptr.
