@@ -125,7 +125,7 @@ pub fn uinit() -> DispatchToken<ArchSystem> {
     };
     log::info!("Got init exception endpoint @ ({exception_entry:#X})");
 
-    let init = Process::<ArchSystem>::load(system(), prog, 10, initrd, &mut fallocator)
+    let init = Process::<ArchSystem>::load(system(), prog, 50, initrd, &mut fallocator)
         .expect("Error loading init process");
 
     let frame = fallocator

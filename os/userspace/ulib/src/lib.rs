@@ -1,5 +1,7 @@
 #![no_std]
+// #![feature(layout_for_ptr)]
 #![feature(allocator_api)]
+#![feature(btreemap_alloc)]
 
 extern crate alloc;
 

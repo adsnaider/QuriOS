@@ -36,6 +36,10 @@ impl<'a> MemoryMap<'a> {
             map: self.inner,
         }
     }
+
+    pub const fn len(&self) -> usize {
+        self.inner.len()
+    }
 }
 
 struct MMapIter<'a> {
@@ -66,11 +70,7 @@ impl BitmapAllocator {
 
 impl PMSpace for BitmapAllocator {
     fn alloc_frame(&mut self) -> Result<Frame, super::FrameAllocError> {
-        self.memory_map
-            .iter()
-            .find(|(_, e)| e.state() == RetypeState::Untyped)
-            .map(|(frame, _)| frame)
-            .ok_or(FrameAllocError::OutOfFrames)
+        self.alloc()
     }
 
     unsafe fn dealloc(&mut self, frame: Frame) {

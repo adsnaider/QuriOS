@@ -18,7 +18,9 @@ use qapi::init::{BootArgs, BootCaps, EXCEPTION_HANDLER_MAGIC};
 use qapi::syscall::ops::retype::RetypeKind;
 use serial::sprint;
 use stack_list::StackNode;
-use ulib::allocation::allocman::Allocman;
+use static_cell::{ConstStaticCell, StaticCell};
+use sync::cell::AtomicOnceCell;
+use ulib::allocation::allocman::{Allocman, Resources, SharedResources};
 use ulib::allocation::cspace::CapabilityMan;
 use ulib::allocation::pmspace::bitmap_allocator::BitmapAllocator;
 use ulib::allocation::vmspace::Addrspace;
@@ -79,8 +81,8 @@ fn main(args: &'static BootArgs) -> ! {
     serial::init();
     log::info!("Landed on userspace init");
     let bootcaps = BootCaps::new();
-
     let mut falloc = BitmapAllocator::new(args.memory_map.as_slice());
+
     bootcaps
         .self_caps
         .make_sync_call(
@@ -119,8 +121,9 @@ fn main(args: &'static BootArgs) -> ! {
         )
         .unwrap();
 
-    let irq_thread = ThreadCap::new(CapId::new(11));
+    // let irq_thread = ThreadCap::new(CapId::new(11));
 
+    /*
     for i in 0..15 {
         bootcaps
             .self_caps
@@ -133,22 +136,29 @@ fn main(args: &'static BootArgs) -> ! {
         let irq_notification = NotificationCap::new(CapId::new(12 + i as u32));
         bootcaps.irq_ctrl.irq_set(irq_notification, i).unwrap();
     }
-    irq_thread.dispatch().unwrap();
+    */
+    // irq_thread.dispatch().unwrap();
 
     {
-        static mut FIXED_POOL: [MaybeUninit<u8>; 4096] = [const { MaybeUninit::uninit() }; 4096];
+        static FIXED_POOL: ConstStaticCell<[MaybeUninit<u8>; 4096]> =
+            ConstStaticCell::new([const { MaybeUninit::uninit() }; 4096]);
+        static RESOURCES: StaticCell<SharedResources> = StaticCell::new();
+        let resources = &*RESOURCES.init(SharedResources::new(Resources::new(
+            FIXED_POOL.take(),
+            serial::sdbg!(
+                args.free_space_start
+                    .next_multiple_of(1 << 12 << 9 << 9 << 9) as *mut u8
+            ),
+        )));
         let allocman = Allocman::new(
-            CapabilityMan::new_starting_at(bootcaps.self_caps, BootCaps::next_free()),
+            CapabilityMan::new_starting_at(bootcaps.self_caps, SlotId::new(30), resources),
             falloc,
-            Addrspace::new(bootcaps.self_addrspace),
-            #[allow(static_mut_refs)]
-            unsafe {
-                &mut FIXED_POOL
-            },
-            args.free_space_start as *mut u8,
+            Addrspace::new(bootcaps.self_addrspace, resources),
+            resources,
         );
         assert!(ALLOCATOR.lock().replace(allocman).is_none());
     }
+    log::info!("Attempting to allocate");
     let foo = Box::new(10);
     assert_eq!(*foo, 10);
     #[allow(clippy::empty_loop)]

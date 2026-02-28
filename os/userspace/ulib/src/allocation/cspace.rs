@@ -16,6 +16,7 @@ use qapi::mem::Frame;
 use qapi::syscall::ops::ctable::ConsArgs;
 
 use super::allocman::Resources;
+use crate::allocation::allocman::SharedResources;
 use crate::caps::CPath;
 use crate::sysops::CTableCapExt;
 
@@ -26,8 +27,8 @@ pub enum CAllocError {
 }
 
 pub(super) trait CSpace {
-    fn alloc_cap(&mut self, resources: &mut Resources) -> Result<CapSlot, CAllocError>;
-    unsafe fn cap_free(&mut self, cap: CapId, resources: &mut Resources);
+    fn alloc_cap(&mut self) -> Result<CapSlot, CAllocError>;
+    unsafe fn cap_free(&mut self, cap: CapId);
 }
 
 pub struct CapSlot {
@@ -110,25 +111,31 @@ impl CapSlot {
 pub struct CapabilityMan {
     table_path: CPath,
     next_slot: SysSlot,
-    table_caps: BTreeMap<CPath, CTableCap>,
+    table_caps: BTreeMap<CPath, CTableCap, &'static SharedResources>,
     root_table_cap: CTableCap,
+    resources: &'static SharedResources,
 }
 
 impl CapabilityMan {
-    pub fn new(caps: CTableCap) -> Self {
-        Self::new_starting_at(caps, SysSlot::try_new(1).unwrap())
+    pub fn new(caps: CTableCap, resources: &'static SharedResources) -> Self {
+        Self::new_starting_at(caps, SysSlot::try_new(1).unwrap(), resources)
     }
 
-    pub const fn new_starting_at(caps: CTableCap, first_free: SysSlot) -> Self {
+    pub const fn new_starting_at(
+        caps: CTableCap,
+        first_free: SysSlot,
+        resources: &'static SharedResources,
+    ) -> Self {
         let last_slot = match first_free.checked_add(-1) {
             Some(val) => val,
             None => SysSlot::zero(),
         };
         Self {
-            table_caps: BTreeMap::new(),
+            table_caps: BTreeMap::new_in(resources),
             table_path: CPath::empty(),
             next_slot: last_slot,
             root_table_cap: caps,
+            resources,
         }
     }
 
@@ -138,20 +145,24 @@ impl CapabilityMan {
         }
     }
 
-    pub fn alloc_cap(&mut self, resources: &mut Resources) -> Result<CapSlot, CAllocError> {
+    pub fn alloc_cap(&mut self) -> Result<CapSlot, CAllocError> {
         self.maybe_init();
         match self.next_slot.checked_add(1) {
             Some(next_slot) => self.next_slot = next_slot,
             None => {
-                let next_table_cap = resources.steal_cap()?;
-                let frame = resources
+                let next_table_cap = self.resources.borrow_mut().steal_cap()?;
+                let frame = self
+                    .resources
+                    .borrow_mut()
                     .steal_frame()
                     .expect("Out of memory while allocating capability");
                 let next_table_cap = next_table_cap
                     .make_ctable(frame)
                     .expect("Error allocating capability table");
 
-                let next_table_slot = resources
+                let next_table_slot = self
+                    .resources
+                    .borrow_mut()
                     .steal_cap()?
                     .link_to(next_table_cap)
                     .expect("Error linking CTables for capability extension");
@@ -171,17 +182,17 @@ impl CapabilityMan {
         })
     }
 
-    pub fn cap_free(&mut self, cap: CapId, resources: &mut Resources) {
+    pub fn cap_free(&mut self, cap: CapId) {
         // TODO: Linked list of freed-up caps?
     }
 }
 
 impl CSpace for CapabilityMan {
-    fn alloc_cap(&mut self, resources: &mut Resources) -> Result<CapSlot, CAllocError> {
-        self.alloc_cap(resources)
+    fn alloc_cap(&mut self) -> Result<CapSlot, CAllocError> {
+        self.alloc_cap()
     }
 
-    unsafe fn cap_free(&mut self, cap: CapId, resources: &mut Resources) {
-        self.cap_free(cap, resources)
+    unsafe fn cap_free(&mut self, cap: CapId) {
+        self.cap_free(cap)
     }
 }

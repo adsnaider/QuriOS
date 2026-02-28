@@ -40,7 +40,7 @@ impl OverAlignedU8 {
     }
 }
 
-const INTERRUPT_STACK_SIZE: usize = Page::SIZE * 4;
+const INTERRUPT_STACK_SIZE: usize = Page::SIZE * 10;
 
 #[unsafe(link_section = ".interrupt_stack")]
 static mut INTERRUPT_STACK: [OverAlignedU8; INTERRUPT_STACK_SIZE] = OverAlignedU8::uninit_array();

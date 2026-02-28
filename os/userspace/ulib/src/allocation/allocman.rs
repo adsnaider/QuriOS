@@ -1,6 +1,7 @@
 use core::alloc::{AllocError, Allocator, Layout};
+use core::cell::RefCell;
 use core::mem::MaybeUninit;
-use core::ops::{BitOr, BitOrAssign};
+use core::ops::{BitOr, BitOrAssign, Deref, DerefMut};
 use core::ptr::NonNull;
 
 use derive_more::{Deref, DerefMut, Display, Error};
@@ -8,6 +9,7 @@ use heapless::Vec;
 use linked_list_allocator::Heap;
 use qapi::caps::CapId;
 use qapi::mem::{Frame, Page, PageFlags};
+use spin::Mutex;
 
 use super::cspace::{CAllocError, CSpace, CapabilityMan};
 use super::pmspace::bitmap_allocator::BitmapAllocator;
@@ -20,16 +22,35 @@ pub struct Allocman<C = CapabilityMan, P = BitmapAllocator, V = Addrspace> {
     pmspace: P,
     mspace: V,
 
-    resources: Resources,
+    resources: &'static SharedResources,
+}
+
+pub struct SharedResources(Mutex<Resources>);
+
+impl SharedResources {
+    pub fn borrow_mut(&self) -> impl DerefMut<Target = Resources> + '_ {
+        self.0.try_lock().unwrap()
+    }
+
+    pub fn borrow(&self) -> impl Deref<Target = Resources> + '_ {
+        self.0.try_lock().unwrap()
+    }
+}
+
+unsafe impl Allocator for SharedResources {
+    fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+        self.borrow_mut().alloc_mem(layout)
+    }
+
+    unsafe fn deallocate(&self, ptr: core::ptr::NonNull<u8>, layout: Layout) {
+        unsafe { self.borrow_mut().dealloc_mem(ptr, layout) }
+    }
 }
 
 // SAFETY: The *mut u8 heap_start has no ownership semantics. Is effectively a const
 unsafe impl Send for Resources {}
 
-#[derive(Debug, Deref, DerefMut)]
-pub struct Mutex<T: ?Sized>(spin::Mutex<T>);
-
-pub(super) struct Resources {
+pub struct Resources {
     cspace: heapless::Vec<CapSlot, 16>,
     pmspace: heapless::Vec<Frame, 16>,
     fixed_heap: Heap,
@@ -38,6 +59,16 @@ pub(super) struct Resources {
 }
 
 impl Resources {
+    pub fn new(fixed_pool: &'static mut [MaybeUninit<u8>], heap_start: *mut u8) -> Self {
+        let heap = Heap::from_slice(fixed_pool);
+        Self {
+            cspace: Vec::new(),
+            pmspace: Vec::new(),
+            fixed_heap: heap,
+            heap_start,
+            main_heap: Heap::empty(),
+        }
+    }
     pub fn steal_cap(&mut self) -> Result<CapSlot, CAllocError> {
         self.cspace.pop().ok_or(CAllocError::CapTreeFull)
     }
@@ -65,9 +96,15 @@ impl Resources {
             unsafe { self.fixed_heap.deallocate(ptr, layout) };
         }
     }
+}
+
+impl SharedResources {
+    pub const fn new(resources: Resources) -> Self {
+        Self(Mutex::new(resources))
+    }
 
     pub fn extend_heap<V: VMSpace, P: PMSpace>(
-        &mut self,
+        &self,
         vmspace: &mut V,
         pmspace: &mut P,
         pages: usize,
@@ -82,10 +119,10 @@ impl Resources {
             };
 
             // Gotta create the heap instead
-            let top = if self.main_heap.bottom().is_null() {
-                self.heap_start
+            let top = if self.borrow().main_heap.bottom().is_null() {
+                self.borrow().heap_start
             } else {
-                self.main_heap.top()
+                self.borrow().main_heap.top()
             };
             let page = Page::try_new(top as usize).unwrap();
             let Ok(()) = vmspace.map_to(
@@ -96,33 +133,22 @@ impl Resources {
                     | PageFlags::WRITABLE
                     | PageFlags::EXECUTABLE
                     | PageFlags::PRESENT,
-                self,
             ) else {
                 unsafe { pmspace.dealloc(frame) };
                 return progress;
             };
-            if self.main_heap.bottom().is_null() {
+            if self.borrow().main_heap.bottom().is_null() {
                 // SAFETY: Properly allocated above
-                self.main_heap = unsafe { Heap::new(self.heap_start, Page::SIZE) };
+                self.borrow_mut().main_heap =
+                    unsafe { Heap::new(self.borrow().heap_start, Page::SIZE) };
             } else {
                 // SAFETY: Properly allocated above
-                unsafe { self.main_heap.extend(Page::SIZE) };
+                unsafe { self.borrow_mut().main_heap.extend(Page::SIZE) };
             }
             progress |= Progress::Progress;
             log::debug!("Extended heap by {i} of {pages} pages");
         }
         progress
-    }
-}
-
-unsafe impl Allocator for &'static Mutex<Resources> {
-    fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
-        self.lock().alloc_mem(layout)
-    }
-
-    unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
-        // SAFETY: Precondition
-        unsafe { self.0.lock().dealloc_mem(ptr, layout) }
     }
 }
 
@@ -168,26 +194,12 @@ impl BitOrAssign for Progress {
 }
 
 impl<C: CSpace, PM: PMSpace, VM: VMSpace> Allocman<C, PM, VM> {
-    pub fn new(
-        cspace: C,
-        utspace: PM,
-        mspace: VM,
-        fixed_pool: &'static mut [MaybeUninit<u8>],
-        heap_start: *mut u8,
-    ) -> Self {
-        let heap = Heap::from_slice(fixed_pool);
-
+    pub fn new(cspace: C, utspace: PM, mspace: VM, resources: &'static SharedResources) -> Self {
         let mut this = Self {
             cspace,
             pmspace: utspace,
             mspace,
-            resources: Resources {
-                cspace: Vec::new(),
-                pmspace: Vec::new(),
-                fixed_heap: heap,
-                heap_start,
-                main_heap: Heap::empty(),
-            },
+            resources,
         };
 
         this.refill_resources();
@@ -208,9 +220,14 @@ impl<C: CSpace, PM: PMSpace, VM: VMSpace> Allocman<C, PM, VM> {
     }
 
     fn refill_heap(&mut self) -> Progress {
+        log::debug!("Refilling the heap");
         const MIN_HEAP_FREE: usize = 10 * Page::SIZE;
-        if self.resources.main_heap.free() < MIN_HEAP_FREE {
-            let pages = (MIN_HEAP_FREE - self.resources.main_heap.free()) / Page::SIZE;
+        if self.resources.borrow().main_heap.free() < MIN_HEAP_FREE {
+            log::debug!(
+                "Available free space: {}",
+                self.resources.borrow_mut().main_heap.free()
+            );
+            let pages = (MIN_HEAP_FREE - self.resources.borrow().main_heap.free()) / Page::SIZE;
             self.resources
                 .extend_heap(&mut self.mspace, &mut self.pmspace, pages)
         } else {
@@ -219,9 +236,17 @@ impl<C: CSpace, PM: PMSpace, VM: VMSpace> Allocman<C, PM, VM> {
     }
 
     fn refill_cspace(&mut self) -> Progress {
+        log::debug!("Refilling capability space");
         let mut progress = Progress::NoProgress;
-        while !self.resources.cspace.is_full() {
-            let cnode = match self.cspace.alloc_cap(&mut self.resources) {
+        let mut i = 0;
+        let iters = {
+            let resources = self.resources.borrow();
+            resources.cspace.capacity() - resources.cspace.len()
+        };
+        while !self.resources.borrow().cspace.is_full() {
+            i += 1;
+            log::debug!("Refilling capability space: {i}/{}", iters);
+            let cnode = match self.cspace.alloc_cap() {
                 Ok(cnode) => cnode,
                 Err(e) => {
                     log::warn!("Couldn't allocate cnode: {e}");
@@ -229,6 +254,7 @@ impl<C: CSpace, PM: PMSpace, VM: VMSpace> Allocman<C, PM, VM> {
                 }
             };
             self.resources
+                .borrow_mut()
                 .cspace
                 .push(cnode)
                 .unwrap_or_else(|_| panic!("cspace isn't full so this must always succeed"));
@@ -239,43 +265,55 @@ impl<C: CSpace, PM: PMSpace, VM: VMSpace> Allocman<C, PM, VM> {
 
     fn refill_utspace(&mut self) -> Progress {
         let mut progress = Progress::NoProgress;
-        while !self.resources.pmspace.is_full() {
+        log::debug!("Refilling physical memory");
+        let iters = {
+            let resources = self.resources.borrow();
+            resources.pmspace.capacity() - resources.pmspace.len()
+        };
+        let mut i = 0;
+        while !self.resources.borrow().pmspace.is_full() {
+            i += 1;
+            log::debug!("Refilling physical memory: {i}/{}", iters,);
             let frame = match self.pmspace.alloc_frame() {
-                Ok(cnode) => cnode,
+                Ok(frame) => frame,
                 Err(e) => {
-                    log::warn!("Couldn't allocate cnode: {e}");
+                    log::warn!("Couldn't allocate frame: {e}");
                     return progress;
                 }
             };
+            log::debug!("B");
             self.resources
+                .borrow_mut()
                 .pmspace
                 .push(frame)
                 .unwrap_or_else(|_| panic!("cspace isn't full so this must always succeed"));
+            log::debug!("C");
             progress |= Progress::Progress;
+            log::debug!("D");
         }
         progress
     }
 
     pub fn mem_alloc(&mut self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
         self.refill_resources();
-        self.resources.alloc_mem(layout)
+        self.resources.borrow_mut().alloc_mem(layout)
     }
 
     pub unsafe fn mem_free(&mut self, ptr: NonNull<u8>, layout: Layout) {
         self.refill_resources();
         // SAFETY: Precondition
-        unsafe { self.resources.dealloc_mem(ptr, layout) }
+        unsafe { self.resources.borrow_mut().dealloc_mem(ptr, layout) }
     }
 
     pub fn cap_alloc(&mut self) -> Result<CapSlot, CAllocError> {
         self.refill_resources();
-        self.cspace.alloc_cap(&mut self.resources)
+        self.cspace.alloc_cap()
     }
 
     pub unsafe fn cap_free(&mut self, node: CapId) {
         self.refill_resources();
         // SAFETY: Precondition
-        unsafe { self.cspace.cap_free(node, &mut self.resources) }
+        unsafe { self.cspace.cap_free(node) }
     }
 
     pub fn frame_alloc(&mut self) -> Result<Frame, FrameAllocError> {

@@ -1,4 +1,4 @@
-use core::mem::ManuallyDrop;
+use core::mem::{ManuallyDrop, forget};
 use core::ops::Deref;
 use core::sync::atomic::{AtomicU32, Ordering, fence};
 
@@ -178,6 +178,7 @@ impl Thread<ArchSystem> {
                     match state {
                         RunState::Runnable => {
                             // Thread isn't actually waiting for signals, so let the scheduler decide if it should be run
+                            core::mem::forget(token);
                             Ok(None)
                         }
                         RunState::SigBlocked => {

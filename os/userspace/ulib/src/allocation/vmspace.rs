@@ -15,6 +15,7 @@ use qapi::syscall::ops::introspect::IntrospectResult;
 use super::allocman::Resources;
 use super::cspace::CSpace;
 use super::pmspace::PMSpace;
+use crate::allocation::allocman::SharedResources;
 use crate::allocation::cspace::CAllocError;
 use crate::allocation::pmspace::FrameAllocError;
 use crate::sysops::CapIdExt;
@@ -33,7 +34,7 @@ enum ShadowTable {
     #[default]
     Unsynced,
     Shadowed {
-        entries: Box<[PageTableEntry; ENTRIES]>,
+        entries: Box<[PageTableEntry; ENTRIES], &'static SharedResources>,
         level: PageTableLevel,
     },
 }
@@ -46,6 +47,7 @@ pub struct PageTable {
 
 pub struct Addrspace {
     root: PageTable,
+    resources: &'static SharedResources,
 }
 
 #[derive(Debug, Display, Error, From)]
@@ -63,46 +65,6 @@ impl PageTable {
             entries: ShadowTable::Unsynced,
             cap,
         }
-    }
-
-    pub fn sync(&mut self) {
-        /*
-        let IntrospectResult::VMTable(table) = self
-            .cap
-            .cap()
-            .introspect()
-            .expect("Couldn't inspect page table")
-        else {
-            panic!("Unexpected introspect result");
-        };
-
-        let level = PageTableLevel::new(table.level);
-        match self.entries {
-            ShadowTable::Unsynced => {
-                let entries = Box::new_uninit();
-                for entry in table.entries {
-                    let shadow_entry = match entry.get() {
-                        Some((frame, flags)) if level.is_bottom() => {
-                            PageTableEntry::Page((frame, PageFlags::from(flags)))
-                        }
-                        Some((frame, flags)) if flags.contains(VMEntryFlags::HUGE_PAGE) => {
-                            panic!("Huge pages not supported");
-                        }
-                        Some((frame, flags)) => todo!(),
-                        None => PageTableEntry::Nil,
-                    };
-                }
-                self.entries = ShadowTable::Shadowed {
-                    entries: unsafe { entries.assume_init() },
-                    level: PageTableLevel::new(table.level),
-                }
-            }
-            ShadowTable::Shadowed {
-                ref mut entries,
-                level,
-            } => todo!(),
-        }
-        */
     }
 
     pub fn entry(&self, at: PageTableOffset) -> &PageTableEntry {
@@ -123,9 +85,10 @@ impl PageTable {
 }
 
 impl Addrspace {
-    pub const fn new(root: VMTableCap) -> Self {
+    pub const fn new(root: VMTableCap, resources: &'static SharedResources) -> Self {
         Self {
             root: PageTable::new(root),
+            resources,
         }
     }
 }
@@ -149,7 +112,6 @@ pub(super) trait VMSpace {
         frame: Frame,
         flags: PageFlags,
         parent_flags: PageFlags,
-        resources: &mut Resources,
     ) -> Result<(), MapToError>;
 
     fn unmap(&mut self, page: Page, flags: PageFlags) -> Result<Frame, UnmapError>;
@@ -169,15 +131,16 @@ impl Addrspace {
         table: &'a PageTable,
         offset: PageTableOffset,
         flags: PageFlags,
-        resources: &mut Resources,
+        resources: &SharedResources,
     ) -> Result<&'a PageTable, GetTableError> {
         match table.entry(offset) {
             PageTableEntry::Link(page_table) => Ok(page_table),
             PageTableEntry::Page(_) => Err(GetTableError::FoundPage),
             PageTableEntry::Nil => {
                 let new_table: PageTable = {
-                    let table_frame = resources.steal_frame()?;
+                    let table_frame = resources.borrow_mut().steal_frame()?;
                     let vmtable = resources
+                        .borrow_mut()
                         .steal_cap()?
                         .make_vmtable(table_frame, table.level().as_u8() - 1)
                         .expect("Error creating VM Table");
@@ -199,7 +162,6 @@ impl Addrspace {
         offset: PageTableOffset,
         frame: Frame,
         flags: PageFlags,
-        resources: &mut Resources,
     ) -> Result<(), MapToError> {
         assert!(table.level().is_bottom());
         match table.entry(offset) {
@@ -239,15 +201,18 @@ impl VMSpace for Addrspace {
         frame: Frame,
         flags: PageFlags,
         parent_flags: PageFlags,
-        resources: &mut Resources,
     ) -> Result<(), MapToError> {
+        let table = Self::get_or_create_page_table(
+            &self.root,
+            page.p4_index(),
+            parent_flags,
+            &self.resources,
+        )?;
         let table =
-            Self::get_or_create_page_table(&self.root, page.p4_index(), parent_flags, resources)?;
+            Self::get_or_create_page_table(table, page.p3_index(), parent_flags, &self.resources)?;
         let table =
-            Self::get_or_create_page_table(table, page.p3_index(), parent_flags, resources)?;
-        let table =
-            Self::get_or_create_page_table(table, page.p2_index(), parent_flags, resources)?;
-        Self::map_to_frame(table, page.p1_index(), frame, flags, resources)?;
+            Self::get_or_create_page_table(table, page.p2_index(), parent_flags, &self.resources)?;
+        Self::map_to_frame(table, page.p1_index(), frame, flags)?;
         Ok(())
     }
 
