@@ -1,0 +1,9 @@
+rust_library(
+    name = "rust_build_test",
+    srcs = glob(["rust/src/**"]),
+)
+
+rust_test(
+    name = "rust_build_test_test",
+    srcs = glob(["rust/src/**"]),
+)
