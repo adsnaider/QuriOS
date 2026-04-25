@@ -3,6 +3,7 @@
   prelude = prelude
   toolchains = toolchains
   none = none
+  rust = rust
 
 [cell_aliases]
   config = prelude
@@ -16,6 +17,7 @@
 # section and vendor a copy of the prelude to the `prelude` directory of your project.
 [external_cells]
   prelude = bundled
+  rust = git
 
 [parser]
   target_platform_detector_spec = target:root//...->prelude//platforms:default \
@@ -24,3 +26,7 @@
 
 [build]
   execution_platforms = prelude//platforms:default
+
+[external_cell_rust]
+  git_origin = https://github.com/JonasKruckenberg/buck2_rust_toolchain.git
+  commit_hash = 039451884a154f0dafb00c77f0b41b3c74d5977f
