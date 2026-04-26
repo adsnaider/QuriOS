@@ -1,0 +1,18 @@
+http_archive(
+    name = "xorriso-source",
+    urls = [
+        "https://www.gnu.org/software/xorriso/xorriso-1.5.8.pl01.tar.gz",
+    ],
+    sha256 = "0381798b7bb4f162578b4f31fe30bfe53608b5077075967f8df2facfab4c90f9",
+    strip_prefix = "xorriso-1.5.8"
+)
+
+genrule(
+    name = "xorriso",
+    srcs = [":xorriso-source"],
+    bash = "pushd $SRCDIR/xorriso-source/ && ./configure --prefix=${TMP}/install && \
+        make && make install && popd && cp ${TMP}/install/bin/xorriso ${OUT}",
+    executable = True,
+    out = "xorriso",
+    visibility = ["//os:iso"],
+)

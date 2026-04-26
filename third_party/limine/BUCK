@@ -5,15 +5,16 @@ http_archive(
     ],
     sha256 = 'a60886cdcbef759677149e8e80c1c8298d3cf0630b24a475d99bb7f36871a385',
     strip_prefix = "limine-binary-12.0.1",
-    sub_targets = {
-        "limine-boot": [
-            "limine-bios.sys",
-            "limine-bios-cd.bin",
-            "limine-uefi-cd.bin",
-        ],
-        "limine-efi": [
-            "limine/BOOTX64.EFI",
-            "limine/BOOTIA32.EFI",
-        ],
-    }
+    sub_targets = [
+        "limine-bios.sys",
+        "limine-bios-cd.bin",
+        "limine-uefi-cd.bin",
+        "BOOTX64.EFI",
+        "BOOTIA32.EFI",
+    ],
+    visibility = ["//os:iso-files"],
+)
+
+filegroup(
+    name = "limine-boot",
 )
