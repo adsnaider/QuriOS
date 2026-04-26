@@ -1,0 +1,33 @@
+filegroup(
+    name = "iso-files",
+    srcs = {
+        "boot/kernel": "//os/kernel:kernel",
+        "boot/limine/limine.conf": "limine.conf",
+        "boot/limine/limine-bios.sys": "//third_party/limine:limine-bins[limine-bios.sys]",
+        "boot/limine/limine-bios-cd.bin": "//third_party/limine:limine-bins[limine-bios-cd.bin]",
+        "boot/limine/limine-uefi-cd.bin": "//third_party/limine:limine-bins[limine-uefi-cd.bin]",
+        "EFI/BOOT/BOOTX64.EFI": "//third_party/limine:limine-bins[BOOTX64.EFI]",
+        "EFI/BOOT/BOOTIA32.EFI": "//third_party/limine:limine-bins[BOOTIA32.EFI]",
+    },
+)
+
+genrule(
+    name = "iso",
+    srcs = [
+        ":iso-files",
+        "//third_party/xorriso:xorriso",
+    ],
+    cmd = "$(exe //third_party/xorriso:xorriso) \
+        -as mkisofs \
+        -b boot/limine/limine-bios-cd.bin \
+        -no-emul-boot \
+        -boot-load-size 4 \
+        -boot-info-table \
+        --efi-boot boot/limine/limine-uefi-cd.bin \
+        -efi-boot-part \
+        --efi-boot-image \
+        --protective-msdos-label \
+        \$(readlink $SRCDIR/iso-files)  \
+        -o $OUT",
+    out = "qurios.iso"
+)

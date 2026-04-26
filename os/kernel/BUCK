@@ -1,0 +1,15 @@
+export_file(
+    name = "linker.ld",
+)
+
+rust_binary(
+    name = "kernel",
+    srcs = glob(["src/**"]),
+    linker_flags = [
+        "-T$(location :linker.ld)",
+    ],
+    rustc_flags = [
+        "-Cpanic=abort",
+    ],
+    visibility = ["//os:iso-files"],
+)
