@@ -18,3 +18,15 @@ jobs:
         run: buck2 build //...
       - name: Test the code
         run: buck2 test //...
+  os-output:
+    strategy:
+      matrix:
+        platform: ["x86_64", "riscv64"]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - name: Setup buck2
+        uses: dtolnay/install-buck2@latest
+      - name: Build the ISO image
+        run: buck2 build //qurios:iso --target-platforms=//platforms:${{ matrix.platform }}
