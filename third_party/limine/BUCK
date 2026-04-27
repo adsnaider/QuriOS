@@ -12,7 +12,7 @@ http_archive(
         "BOOTX64.EFI",
         "BOOTIA32.EFI",
     ],
-    visibility = ["//os:iso-files"],
+    visibility = ["//qurios:iso-files"],
 )
 
 filegroup(

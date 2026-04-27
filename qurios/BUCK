@@ -1,7 +1,9 @@
+load(":transitions.bzl", "transition_to_baremetal", "transition_to_qurios")
+
 filegroup(
     name = "iso-files",
     srcs = {
-        "boot/kernel": "//os/kernel:kernel",
+        "boot/kernel": "//qurios/kernel:kernel",
         "boot/limine/limine.conf": "limine.conf",
         "boot/limine/limine-bios.sys": "//third_party/limine:limine-bins[limine-bios.sys]",
         "boot/limine/limine-bios-cd.bin": "//third_party/limine:limine-bins[limine-bios-cd.bin]",
@@ -15,7 +17,6 @@ genrule(
     name = "iso",
     srcs = [
         ":iso-files",
-        "//third_party/xorriso:xorriso",
     ],
     cmd = "$(exe //third_party/xorriso:xorriso) \
         -as mkisofs \
@@ -29,5 +30,16 @@ genrule(
         --protective-msdos-label \
         \$(readlink $SRCDIR/iso-files)  \
         -o $OUT",
-    out = "qurios.iso"
+    out = "qurios.iso",
+)
+
+
+transition_to_baremetal(
+    name = "baremetal_transition",
+    visibility = [":__subpackages__"],
+)
+
+transition_to_qurios(
+    name = "qurios_transition",
+    visibility = [":__subpackages__"],
 )
