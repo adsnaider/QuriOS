@@ -45,13 +45,57 @@ system_genrule_toolchain(
     visibility = ["PUBLIC"],
 )
 
+config_setting(
+    name = "baremetal_x86_64",
+    constraint_values = [
+        "prelude//os/constraints:none",
+        "prelude//cpu/constraints:x86_64",
+    ],
+)
+
+config_setting(
+    name = "baremetal_riscv64",
+    constraint_values = [
+        "prelude//os/constraints:none",
+        "prelude//cpu/constraints:riscv64",
+    ],
+)
+
+_DEFAULT_TRIPLE = select({
+    "prelude//os:linux": select({
+        "prelude//cpu:arm64": "aarch64-unknown-linux-gnu",
+        "prelude//cpu:riscv64": "riscv64gc-unknown-linux-gnu",
+        "prelude//cpu:x86_64": "x86_64-unknown-linux-gnu",
+    }),
+    "prelude//os:macos": select({
+        "prelude//cpu:arm64": "aarch64-apple-darwin",
+        "prelude//cpu:x86_64": "x86_64-apple-darwin",
+    }),
+    "prelude//os:windows": select({
+        "prelude//cpu:arm64": select({
+            # Rustup's default ABI for the host on Windows is MSVC, not GNU.
+            # When you do `rustup install stable` that's the one you get. It
+            # makes you opt in to GNU by `rustup install stable-gnu`.
+            "DEFAULT": "aarch64-pc-windows-msvc",
+            "prelude//abi:gnu": "aarch64-pc-windows-gnu",
+            "prelude//abi:msvc": "aarch64-pc-windows-msvc",
+        }),
+        "prelude//cpu:x86_64": select({
+            "DEFAULT": "x86_64-pc-windows-msvc",
+            "prelude//abi:gnu": "x86_64-pc-windows-gnu",
+            "prelude//abi:msvc": "x86_64-pc-windows-msvc",
+        }),
+    }),
+    "prelude//os:none": select({
+        "prelude//cpu:x86_64": "x86_64-unknown-none",
+        "prelude//cpu:riscv64": "riscv64gc-unknown-none-elf",
+    })
+})
+
 rust_toolchain.stable.version("1.95.0").default(
     name = "rust",
     default_edition = "2024",
     rustc_exec_triple = "x86_64-unknown-linux-gnu",
-    rustc_target_triple = select({
-        "prelude//os/constraints:none": "x86_64-unknown-none",
-        "DEFAULT": "x86_64-unknown-linux-gnu",
-    }),
+    rustc_target_triple = _DEFAULT_TRIPLE,
     visibility = ["PUBLIC"],
 )
