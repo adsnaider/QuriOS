@@ -25,5 +25,5 @@
 
 [build]
   execution_platforms = prelude//platforms:default
-  target_platforms = //platforms:qurios_x86_64
+  target_platforms = prelude//platforms:default
 
