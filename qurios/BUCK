@@ -1,0 +1,68 @@
+load(":transitions.bzl", "transition_to_baremetal", "transition_to_qurios")
+load("//third_party/qemu:qemu.bzl", "qemu_runner")
+
+filegroup(
+    name = "iso-files",
+    srcs = {
+        "boot/kernel": "//qurios/kernel:kernel",
+        "boot/limine/limine.conf": "limine.conf",
+        "boot/limine/limine-bios.sys": "//third_party/limine:limine-bins[limine-bios.sys]",
+        "boot/limine/limine-bios-cd.bin": "//third_party/limine:limine-bins[limine-bios-cd.bin]",
+        "boot/limine/limine-uefi-cd.bin": "//third_party/limine:limine-bins[limine-uefi-cd.bin]",
+        } +
+        select({
+            "prelude//cpu:riscv64": {
+                "EFI/BOOT/BOOTRISCV64.EFI": "//third_party/limine:limine-bins[BOOTRISCV64.EFI]",
+            },
+            "prelude//cpu:x86_64": {
+                "EFI/BOOT/BOOTX64.EFI": "//third_party/limine:limine-bins[BOOTX64.EFI]",
+            },
+        })
+)
+
+genrule(
+    name = "iso",
+    srcs = [
+        ":iso-files",
+    ],
+    cmd = "$(exe //third_party/xorriso:xorriso) \
+        -as mkisofs \
+        -b boot/limine/limine-bios-cd.bin \
+        -no-emul-boot \
+        -boot-load-size 4 \
+        -boot-info-table \
+        --efi-boot boot/limine/limine-uefi-cd.bin \
+        -efi-boot-part \
+        --efi-boot-image \
+        --protective-msdos-label \
+        \$(readlink $SRCDIR/iso-files)  \
+        -o $OUT",
+    out = "qurios.iso",
+)
+
+qemu_runner(
+    name = "emulator",
+    iso = "//qurios:iso",
+    args = select({
+        "prelude//cpu:riscv64": [
+            "-device", "virtio-gpu-pci",
+            "-device", "qemu-xhci",
+            "-device", "usb-kbd",
+            "-device", "usb-tablet",
+        ],
+        "DEFAULT": [],
+    }) + [
+        "-chardev", "file,id=char0,path=/tmp/serial.log",
+        "-serial", "chardev:char0",
+    ],
+)
+
+transition_to_baremetal(
+    name = "baremetal_transition",
+    visibility = [":__subpackages__"],
+)
+
+transition_to_qurios(
+    name = "qurios_transition",
+    visibility = [":__subpackages__"],
+)

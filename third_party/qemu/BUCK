@@ -1,0 +1,35 @@
+http_file(
+    name = "qemu-x86_64",
+    urls = [
+        select({
+            "//configs:linux_x86_64": "https://github.com/adsnaider/QuriOS-prebuilts/releases/download/2026-04-26/qemu-system-x86_64.host-linux-x86_64",
+        })
+    ],
+    sha256 = select({
+        "//configs:linux_x86_64": "c96fb363630f812713b652cb1747cbff59e7105a398451c1997712da1de6c864",
+    }),
+    executable = True,
+    visibility = ["PUBLIC"],
+)
+
+http_file(
+    name = "qemu-riscv64",
+    urls = [
+        select({
+            "//configs:linux_x86_64": "https://github.com/adsnaider/QuriOS-prebuilts/releases/download/2026-04-26/qemu-system-riscv64.host-linux-x86_64",
+        })
+    ],
+    sha256 = select({
+        "//configs:linux_x86_64": "b065ccd3cc807cfe4fdb0ee89778822f0d393530c7cf7d06e20b163a585d55e8",
+    }),
+    executable = True,
+    visibility = ["PUBLIC"],
+)
+
+http_archive(
+    name = "pc-bios",
+    urls = ["https://github.com/adsnaider/QuriOS-prebuilts/releases/download/2026-04-26/qemu-pc-bios.tar.gz"],
+    sha256 = "9e04c7b6cd59cbee70eb280ae3d805da2c7bdf2ed1106f7b0737ae62610e1581",
+    strip_prefix = "pc-bios",
+    visibility = ["PUBLIC"],
+)

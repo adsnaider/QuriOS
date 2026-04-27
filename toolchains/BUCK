@@ -1,5 +1,3 @@
-load("@prelude//toolchains:demo.bzl", "system_demo_toolchains")
-
 load("@rust//:toolchain.bzl", "rust_toolchain")
 load("@prelude//toolchains:cxx.bzl", "system_cxx_toolchain")
 load("@prelude//toolchains:python.bzl", "remote_python_toolchain", "system_python_wheel_toolchain")
@@ -18,9 +16,17 @@ noop_test_toolchain(
     name = "test",
     visibility = ["PUBLIC"],
 )
+python_binary(
+    name = "linker",
+    main = "linker.py",
+    visibility = ["PUBLIC"],
+)
 
 system_cxx_toolchain(
     name = "cxx",
+    linker = "toolchains/linker.py",
+    compiler = "clang",
+    cxx_compiler = "clang++",
     visibility = ["PUBLIC"],
 )
 
@@ -39,9 +45,57 @@ system_genrule_toolchain(
     visibility = ["PUBLIC"],
 )
 
-# Latest stable rust, default profile.
-rust_toolchain.stable.latest.default(
+config_setting(
+    name = "baremetal_x86_64",
+    constraint_values = [
+        "prelude//os/constraints:none",
+        "prelude//cpu/constraints:x86_64",
+    ],
+)
+
+config_setting(
+    name = "baremetal_riscv64",
+    constraint_values = [
+        "prelude//os/constraints:none",
+        "prelude//cpu/constraints:riscv64",
+    ],
+)
+
+_DEFAULT_TRIPLE = select({
+    "prelude//os:linux": select({
+        "prelude//cpu:arm64": "aarch64-unknown-linux-gnu",
+        "prelude//cpu:riscv64": "riscv64gc-unknown-linux-gnu",
+        "prelude//cpu:x86_64": "x86_64-unknown-linux-gnu",
+    }),
+    "prelude//os:macos": select({
+        "prelude//cpu:arm64": "aarch64-apple-darwin",
+        "prelude//cpu:x86_64": "x86_64-apple-darwin",
+    }),
+    "prelude//os:windows": select({
+        "prelude//cpu:arm64": select({
+            # Rustup's default ABI for the host on Windows is MSVC, not GNU.
+            # When you do `rustup install stable` that's the one you get. It
+            # makes you opt in to GNU by `rustup install stable-gnu`.
+            "DEFAULT": "aarch64-pc-windows-msvc",
+            "prelude//abi:gnu": "aarch64-pc-windows-gnu",
+            "prelude//abi:msvc": "aarch64-pc-windows-msvc",
+        }),
+        "prelude//cpu:x86_64": select({
+            "DEFAULT": "x86_64-pc-windows-msvc",
+            "prelude//abi:gnu": "x86_64-pc-windows-gnu",
+            "prelude//abi:msvc": "x86_64-pc-windows-msvc",
+        }),
+    }),
+    "prelude//os:none": select({
+        "prelude//cpu:x86_64": "x86_64-unknown-none",
+        "prelude//cpu:riscv64": "riscv64gc-unknown-none-elf",
+    })
+})
+
+rust_toolchain.stable.version("1.95.0").default(
     name = "rust",
-    visibility = ["PUBLIC"],
     default_edition = "2024",
+    rustc_exec_triple = "x86_64-unknown-linux-gnu",
+    rustc_target_triple = _DEFAULT_TRIPLE,
+    visibility = ["PUBLIC"],
 )

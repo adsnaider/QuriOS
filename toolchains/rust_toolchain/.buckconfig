@@ -1,9 +1,8 @@
 [cells]
   root = .
   prelude = prelude
-  toolchains = toolchains
   none = none
-  rust = toolchains/rust_toolchain
+  rust = .
 
 [cell_aliases]
   config = prelude
@@ -25,5 +24,11 @@
 
 [build]
   execution_platforms = prelude//platforms:default
-  target_platforms = //platforms:qurios_x86_64
 
+[alias]
+
+[project]
+  ignore = .git, examples, tmp
+
+[buck2]
+  materializations = deferred

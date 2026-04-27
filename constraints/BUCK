@@ -1,0 +1,5 @@
+constraint_value(
+    name = "qurios",
+    constraint_setting = "prelude//os/constraints:os",
+    visibility = ["PUBLIC"],
+)

@@ -8,8 +8,6 @@ rust_binary(
     linker_flags = [
         "-T$(location :linker.ld)",
     ],
-    rustc_flags = [
-        "-Cpanic=abort",
-    ],
-    visibility = ["//os:iso-files"],
+    visibility = ["//qurios:iso-files"],
+    incoming_transition = "//qurios:baremetal_transition",
 )

@@ -1,18 +1,14 @@
-http_archive(
-    name = "xorriso-source",
+http_file(
+    name = "xorriso",
     urls = [
-        "https://www.gnu.org/software/xorriso/xorriso-1.5.8.pl01.tar.gz",
+        select({
+            "//configs:linux_x86_64": "https://github.com/adsnaider/QuriOS-prebuilts/releases/download/2026-04-26/xorriso.host-linux-x86_64",
+        })
     ],
-    sha256 = "0381798b7bb4f162578b4f31fe30bfe53608b5077075967f8df2facfab4c90f9",
-    strip_prefix = "xorriso-1.5.8"
+    sha256 = select({
+        "//configs:linux_x86_64": "f006c37590b3ed64795de27ecbef107d09f52f2aa63ca98b2747afb3b7de610e",
+    }),
+    executable = True,
+    visibility = ["//qurios:iso"],
 )
 
-genrule(
-    name = "xorriso",
-    srcs = [":xorriso-source"],
-    bash = "pushd $SRCDIR/xorriso-source/ && ./configure --prefix=${TMP}/install && \
-        make && make install && popd && cp ${TMP}/install/bin/xorriso ${OUT}",
-    executable = True,
-    out = "xorriso",
-    visibility = ["//os:iso"],
-)
