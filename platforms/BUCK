@@ -1,0 +1,15 @@
+platform(
+    name = "qurios_x86_64",
+    constraint_values = [
+        "prelude//cpu/constraints:x86_64",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+platform(
+    name = "qurios_riscv64",
+    constraint_values = [
+        "prelude//cpu/constraints:riscv64",
+    ],
+    visibility = ["PUBLIC"],
+)
