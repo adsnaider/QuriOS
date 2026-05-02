@@ -1,8 +1,6 @@
-#![no_std]
-#![no_main]
+#![cfg(target_arch = "aarch64")]
 
-#[unsafe(no_mangle)]
-pub extern "C" fn kmain() -> ! {
+pub fn main() -> ! {
     loop {}
 }
 

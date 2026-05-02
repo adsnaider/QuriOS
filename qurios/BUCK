@@ -4,7 +4,7 @@ load("//third_party/qemu:qemu.bzl", "qemu_runner")
 filegroup(
     name = "iso-files",
     srcs = {
-        "boot/kernel": "//qurios/kernel:kernel",
+        "boot/kernel": "//qurios/qurios-kernel:kernel",
         "boot/limine/limine.conf": "limine.conf",
         "boot/limine/limine-bios.sys": "//third_party/limine:limine-bins[limine-bios.sys]",
         "boot/limine/limine-bios-cd.bin": "//third_party/limine:limine-bins[limine-bios-cd.bin]",
