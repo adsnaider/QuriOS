@@ -4,3 +4,27 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+limine = "0.5.0"
+zerocopy = "0.8.48"
+tap = "1.0.1"
+bitflags = "2.11.1"
+heapless = "0.9.3"
+log = "0.4.22"
+uart_16550 = "0.6.0"
+
+[dependencies.derive_more]
+version = "2.0.1"
+default-features = false
+features = [
+  "display",
+  "error",
+  "from",
+  "debug",
+  "deref",
+  "deref_mut",
+  "into",
+  "try_from",
+]
+
+[target.'cfg(target_arch = "x86_64")'.dependencies]
+x86 = "0.52.0"
