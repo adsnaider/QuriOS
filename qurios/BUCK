@@ -45,7 +45,7 @@ qemu_runner(
     iso = "//qurios:iso",
     args = select({
         "prelude//cpu:riscv64": [
-            "-device", "virtio-gpu-pci",
+            "-device", "ramfb",
             "-device", "qemu-xhci",
             "-device", "usb-kbd",
             "-device", "usb-tablet",
