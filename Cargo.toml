@@ -1,0 +1,5 @@
+[workspace]
+members = [
+    "qurios/qurios-kernel"
+]
+resolver = "3"
