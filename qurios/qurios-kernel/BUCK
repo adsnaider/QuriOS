@@ -10,4 +10,7 @@ rust_binary(
     ],
     visibility = ["//qurios:iso-files"],
     incoming_transition = "//qurios:baremetal_transition",
+    deps = [
+        "//third_party/rust:limine",
+    ],
 )
