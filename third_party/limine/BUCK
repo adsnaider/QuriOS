@@ -1,9 +1,6 @@
 http_archive(
     name = "limine-bins",
-    urls = [
-        "https://github.com/Limine-Bootloader/Limine/releases/download/v12.0.1/limine-binary-12.0.1.tar.gz"
-    ],
-    sha256 = 'a60886cdcbef759677149e8e80c1c8298d3cf0630b24a475d99bb7f36871a385',
+    sha256 = "a60886cdcbef759677149e8e80c1c8298d3cf0630b24a475d99bb7f36871a385",
     strip_prefix = "limine-binary-12.0.1",
     sub_targets = [
         "limine-bios.sys",
@@ -12,7 +9,13 @@ http_archive(
         "BOOTX64.EFI",
         "BOOTRISCV64.EFI",
     ],
-    visibility = ["//qurios:iso-files"],
+    urls = [
+        "https://github.com/Limine-Bootloader/Limine/releases/download/v12.0.1/limine-binary-12.0.1.tar.gz",
+    ],
+    visibility = [
+        "//qurios:iso-files",
+        "//qurios:iso-test-files",
+    ],
 )
 
 filegroup(

@@ -1,0 +1,13 @@
+rust_library(
+    name = "qurios-qemu",
+    srcs = glob(["src/**"]),
+    visibility = ["PUBLIC"],
+    deps = [
+        "//third_party/rust:uart_16550",
+        "//third_party/rust:log",
+        "//third_party/rust:spin",
+    ],
+    target_compatible_with = [
+        "//constraints:emulator[qemu]",
+    ]
+)

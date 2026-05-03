@@ -105,5 +105,6 @@ rust_toolchain.stable.version("1.95.0").default(
         "root//constraints:build_mode[release]": ["-Copt-level=3"], 
         "root//constraints:build_mode[debug]": ["-Copt-level=0"],
     }),
+    nightly_features = False,
     visibility = ["PUBLIC"],
 )

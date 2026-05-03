@@ -1,0 +1,14 @@
+[package]
+name = "qurios-qemu"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+uart_16550 = "0.6.0"
+log = "0.4.22"
+spin = "0.10.0"
+
+[dependencies.once_cell]
+version = "1.21.4"
+default-features = false
+features = ["race", "portable-atomic"]

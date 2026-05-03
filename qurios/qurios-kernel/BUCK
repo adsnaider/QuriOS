@@ -2,15 +2,50 @@ export_file(
     name = "linker.ld",
 )
 
-rust_binary(
+rust_library(
     name = "kernel",
     srcs = glob(["src/**"]),
+    deps = [
+        "//third_party/rust:limine",
+        "//third_party/rust:log",
+    ],
+)
+
+rust_binary(
+    name = "kernel-bin",
+    srcs = ["bins/kernel.rs"],
+    crate_root = "bins/kernel.rs",
+    features = select({
+        "root//constraints:emulator[qemu]": ["qemu"],
+        "DEFAULT": [],
+    }),
+    incoming_transition = "//qurios:baremetal_transition",
     linker_flags = [
         "-T$(location :linker.ld)",
     ],
     visibility = ["//qurios:iso-files"],
-    incoming_transition = "//qurios:baremetal_transition",
     deps = [
-        "//third_party/rust:limine",
+        ":kernel",
+    ] + select({
+        "root//constraints:emulator[qemu]": ["//qurios/qurios-qemu:qurios-qemu"],
+        "DEFAULT": [],
+    }),
+)
+
+rust_binary(
+    name = "kernel-test",
+    srcs = ["bins/kernel-test.rs"],
+    crate_root = "bins/kernel-test.rs",
+    incoming_transition = "//qurios:baremetal_transition",
+    linker_flags = [
+        "-T$(location :linker.ld)",
+    ],
+    target_compatible_with = [
+        "//constraints:emulator[qemu]",
+    ],
+    visibility = ["//qurios:iso-files"],
+    deps = [
+        ":kernel",
+        "//qurios/qurios-qemu:qurios-qemu",
     ],
 )
