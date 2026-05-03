@@ -1,24 +1,18 @@
 def _baremetal_transition_impl(ctx: AnalysisContext) -> list[Provider]:
-    # Extract the dependencies passed into the rule
     os_setting = ctx.attrs.os_setting
     none_os = ctx.attrs.none_os
 
-    # The actual function that modifies the platform
     def _transition_impl_with_refs(platform: PlatformInfo) -> PlatformInfo:
         os_info = os_setting[ConstraintSettingInfo]
         none_info = none_os[ConstraintValueInfo]
-
-        # 1. Remove the existing OS constraint
+        
         constraints = {
             setting: value
             for (setting, value) in platform.configuration.constraints.items()
             if setting != os_info.label
         }
-
-        # 2. Add the baremetal constraint
         constraints[none_info.setting.label] = none_info
 
-        # 3. Return the new configuration
         return PlatformInfo(
             label = "transitioned-to-baremetal",
             configuration = ConfigurationInfo(
@@ -32,7 +26,6 @@ def _baremetal_transition_impl(ctx: AnalysisContext) -> list[Provider]:
         TransitionInfo(impl = _transition_impl_with_refs),
     ]
 
-# Define the actual configuration rule
 transition_to_baremetal = rule(
     impl = _baremetal_transition_impl,
     attrs = {
@@ -51,7 +44,7 @@ def _qurios_transition_impl(ctx: AnalysisContext) -> list[Provider]:
     def _tr(platform: PlatformInfo) -> PlatformInfo:
         os_info = os_setting[ConstraintSettingInfo]
         qurios_info = qurios_os[ConstraintValueInfo]
-
+        
         constraints = {
             s: v for s, v in platform.configuration.constraints.items()
             if s != os_info.label
