@@ -3,3 +3,13 @@ constraint_value(
     constraint_setting = "prelude//os/constraints:os",
     visibility = ["PUBLIC"],
 )
+
+constraint(
+    name = "build_mode",
+    values = [
+        "debug",
+        "release",
+    ],
+    visibility = ["PUBLIC"],
+    default = "debug",
+)

@@ -26,6 +26,9 @@ A few notworthy targets are:
 > **Note:** You can omit the `--target-platforms` argument if you are targetting
 > your host's architecture.
 
+You can control build optimizations with `-m [release|debug]` added to the above
+commands. The default build at the moment is `debug`.
+
 # 3rd Party
 
 ## Tools

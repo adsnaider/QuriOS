@@ -27,6 +27,10 @@ system_cxx_toolchain(
     linker = "toolchains/linker.py",
     compiler = "clang",
     cxx_compiler = "clang++",
+    cxx_flags = select({
+        "root//constraints:build_mode[release]": ["-O3"], 
+        "root//constraints:build_mode[debug]": ["-O0"],
+    }),
     visibility = ["PUBLIC"],
 )
 
@@ -97,5 +101,9 @@ rust_toolchain.stable.version("1.95.0").default(
     default_edition = "2024",
     rustc_exec_triple = "x86_64-unknown-linux-gnu",
     rustc_target_triple = _DEFAULT_TRIPLE,
+    rustc_flags = select({
+        "root//constraints:build_mode[release]": ["-Copt-level=3"], 
+        "root//constraints:build_mode[debug]": ["-Copt-level=0"],
+    }),
     visibility = ["PUBLIC"],
 )

@@ -8,6 +8,9 @@ on:
 
 jobs:
   ci:
+    strategy:
+      matrix:
+        opt: ["debug", "release"]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -15,13 +18,14 @@ jobs:
       - name: Setup buck2
         uses: dtolnay/install-buck2@latest
       - name: Build code
-        run: buck2 build //...
+        run: buck2 build //... -m ${{ matrix.opt }}
       - name: Test the code
-        run: buck2 test //...
+        run: buck2 test //... -m ${{ matrix.opt }}
   os-output:
     strategy:
       matrix:
         platform: ["x86_64", "riscv64"]
+        opt: ["debug", "release"]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -29,4 +33,4 @@ jobs:
       - name: Setup buck2
         uses: dtolnay/install-buck2@latest
       - name: Build the ISO image
-        run: buck2 build //qurios:iso --target-platforms=//platforms:${{ matrix.platform }}
+        run: buck2 build //qurios:iso --target-platforms=//platforms:${{ matrix.platform }} -m ${{ matrix.opt }}
