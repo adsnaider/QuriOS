@@ -27,6 +27,7 @@ static MODULES_REQUEST: ModuleRequest = ModuleRequest::new();
 static mut FRAMEBUFFER: FramebufferRequest = FramebufferRequest::new();
 
 pub fn main() -> ! {
+    log::info!("Hello world forom the kernel!");
     let framebuffer = unsafe { FRAMEBUFFER.get_response_mut().unwrap() };
     let fb = framebuffer.framebuffers().next().unwrap();
     for row in 0..fb.height() as usize {

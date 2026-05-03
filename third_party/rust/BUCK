@@ -405,6 +405,45 @@ http_archive(
     visibility = [],
 )
 
+cargo.rust_library(
+    name = "lock_api-0.4",
+    srcs = [":lock_api-0.4.14.crate"],
+    crate = "lock_api",
+    crate_root = "lock_api-0.4.14.crate/src/lib.rs",
+    edition = "2021",
+    env = {
+        "CARGO_BIN_NAME": "lock_api",
+        "CARGO_CRATE_NAME": "lock_api",
+        "CARGO_MANIFEST_DIR": "lock_api-0.4.14.crate",
+        "CARGO_PKG_AUTHORS": "Amanieu d'Antras <amanieu@gmail.com>",
+        "CARGO_PKG_DESCRIPTION": "Wrappers to create fully-featured Mutex and RwLock types. Compatible with no_std.",
+        "CARGO_PKG_HOMEPAGE": "",
+        "CARGO_PKG_NAME": "lock_api",
+        "CARGO_PKG_README": "",
+        "CARGO_PKG_REPOSITORY": "https://github.com/Amanieu/parking_lot",
+        "CARGO_PKG_RUST_VERSION": "1.71.0",
+        "CARGO_PKG_VERSION": "0.4.14",
+        "CARGO_PKG_VERSION_MAJOR": "0",
+        "CARGO_PKG_VERSION_MINOR": "4",
+        "CARGO_PKG_VERSION_PATCH": "14",
+        "CARGO_PKG_VERSION_PRE": "",
+    },
+    features = [
+        "atomic_usize",
+        "default",
+    ],
+    visibility = [],
+    deps = [":scopeguard-1"],
+)
+
+http_archive(
+    name = "lock_api-0.4.14.crate",
+    sha256 = "224399e74b87b5f3557511d98dff8b14089b3dadafcab6bb93eab67d3aace965",
+    strip_prefix = "lock_api-0.4.14",
+    urls = ["https://static.crates.io/crates/lock_api/0.4.14/download"],
+    visibility = [],
+)
+
 alias(
     name = "log",
     actual = ":log-0.4",
@@ -442,6 +481,132 @@ http_archive(
     sha256 = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897",
     strip_prefix = "log-0.4.29",
     urls = ["https://static.crates.io/crates/log/0.4.29/download"],
+    visibility = [],
+)
+
+alias(
+    name = "once_cell",
+    actual = ":once_cell-1",
+    visibility = ["PUBLIC"],
+)
+
+cargo.rust_library(
+    name = "once_cell-1",
+    srcs = [":once_cell-1.21.4.crate"],
+    crate = "once_cell",
+    crate_root = "once_cell-1.21.4.crate/src/lib.rs",
+    edition = "2021",
+    env = {
+        "CARGO_BIN_NAME": "once_cell",
+        "CARGO_CRATE_NAME": "once_cell",
+        "CARGO_MANIFEST_DIR": "once_cell-1.21.4.crate",
+        "CARGO_PKG_AUTHORS": "Aleksey Kladov <aleksey.kladov@gmail.com>",
+        "CARGO_PKG_DESCRIPTION": "Single assignment cells and lazy values.",
+        "CARGO_PKG_HOMEPAGE": "",
+        "CARGO_PKG_NAME": "once_cell",
+        "CARGO_PKG_README": "README.md",
+        "CARGO_PKG_REPOSITORY": "https://github.com/matklad/once_cell",
+        "CARGO_PKG_RUST_VERSION": "1.65",
+        "CARGO_PKG_VERSION": "1.21.4",
+        "CARGO_PKG_VERSION_MAJOR": "1",
+        "CARGO_PKG_VERSION_MINOR": "21",
+        "CARGO_PKG_VERSION_PATCH": "4",
+        "CARGO_PKG_VERSION_PRE": "",
+    },
+    features = [
+        "portable-atomic",
+        "race",
+    ],
+    visibility = [],
+    deps = [":portable-atomic-1"],
+)
+
+http_archive(
+    name = "once_cell-1.21.4.crate",
+    sha256 = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50",
+    strip_prefix = "once_cell-1.21.4",
+    urls = ["https://static.crates.io/crates/once_cell/1.21.4/download"],
+    visibility = [],
+)
+
+cargo.rust_library(
+    name = "portable-atomic-1",
+    srcs = [":portable-atomic-1.13.1.crate"],
+    crate = "portable_atomic",
+    crate_root = "portable-atomic-1.13.1.crate/src/lib.rs",
+    edition = "2018",
+    env = {
+        "CARGO_BIN_NAME": "portable_atomic",
+        "CARGO_CRATE_NAME": "portable_atomic",
+        "CARGO_MANIFEST_DIR": "portable-atomic-1.13.1.crate",
+        "CARGO_PKG_AUTHORS": "",
+        "CARGO_PKG_DESCRIPTION": "Portable atomic types including support for 128-bit atomics, atomic float, etc.\n",
+        "CARGO_PKG_HOMEPAGE": "",
+        "CARGO_PKG_NAME": "portable-atomic",
+        "CARGO_PKG_README": "README.md",
+        "CARGO_PKG_REPOSITORY": "https://github.com/taiki-e/portable-atomic",
+        "CARGO_PKG_RUST_VERSION": "1.34",
+        "CARGO_PKG_VERSION": "1.13.1",
+        "CARGO_PKG_VERSION_MAJOR": "1",
+        "CARGO_PKG_VERSION_MINOR": "13",
+        "CARGO_PKG_VERSION_PATCH": "1",
+        "CARGO_PKG_VERSION_PRE": "",
+        "OUT_DIR": "$(location :portable-atomic-1-build-script-run[out_dir])",
+    },
+    rustc_flags = ["@$(location :portable-atomic-1-build-script-run[rustc_flags])"],
+    visibility = [],
+)
+
+cargo.rust_binary(
+    name = "portable-atomic-1-build-script-build",
+    srcs = [":portable-atomic-1.13.1.crate"],
+    crate = "build_script_build",
+    crate_root = "portable-atomic-1.13.1.crate/build.rs",
+    edition = "2018",
+    env = {
+        "CARGO_BIN_NAME": "build-script-build",
+        "CARGO_CRATE_NAME": "build_script_build",
+        "CARGO_MANIFEST_DIR": "portable-atomic-1.13.1.crate",
+        "CARGO_PKG_AUTHORS": "",
+        "CARGO_PKG_DESCRIPTION": "Portable atomic types including support for 128-bit atomics, atomic float, etc.\n",
+        "CARGO_PKG_HOMEPAGE": "",
+        "CARGO_PKG_NAME": "portable-atomic",
+        "CARGO_PKG_README": "README.md",
+        "CARGO_PKG_REPOSITORY": "https://github.com/taiki-e/portable-atomic",
+        "CARGO_PKG_RUST_VERSION": "1.34",
+        "CARGO_PKG_VERSION": "1.13.1",
+        "CARGO_PKG_VERSION_MAJOR": "1",
+        "CARGO_PKG_VERSION_MINOR": "13",
+        "CARGO_PKG_VERSION_PATCH": "1",
+        "CARGO_PKG_VERSION_PRE": "",
+    },
+    visibility = [],
+)
+
+buildscript_run(
+    name = "portable-atomic-1-build-script-run",
+    package_name = "portable-atomic",
+    buildscript_rule = ":portable-atomic-1-build-script-build",
+    env = {
+        "CARGO_PKG_AUTHORS": "",
+        "CARGO_PKG_DESCRIPTION": "Portable atomic types including support for 128-bit atomics, atomic float, etc.\n",
+        "CARGO_PKG_HOMEPAGE": "",
+        "CARGO_PKG_README": "README.md",
+        "CARGO_PKG_REPOSITORY": "https://github.com/taiki-e/portable-atomic",
+        "CARGO_PKG_RUST_VERSION": "1.34",
+        "CARGO_PKG_VERSION_MAJOR": "1",
+        "CARGO_PKG_VERSION_MINOR": "13",
+        "CARGO_PKG_VERSION_PATCH": "1",
+        "CARGO_PKG_VERSION_PRE": "",
+    },
+    version = "1.13.1",
+)
+
+http_archive(
+    name = "portable-atomic-1.13.1.crate",
+    sha256 = "c33a9471896f1c69cecef8d20cbe2f7accd12527ce60845ff44c153bb2a21b49",
+    strip_prefix = "portable-atomic-1.13.1",
+    urls = ["https://static.crates.io/crates/portable-atomic/1.13.1/download"],
     visibility = [],
 )
 
@@ -555,6 +720,93 @@ http_archive(
     sha256 = "6c297679cb867470fa8c9f67dbba74a78d78e3e98d7cf2b08d6d71540f797332",
     strip_prefix = "raw-cpuid-10.7.0",
     urls = ["https://static.crates.io/crates/raw-cpuid/10.7.0/download"],
+    visibility = [],
+)
+
+cargo.rust_library(
+    name = "scopeguard-1",
+    srcs = [":scopeguard-1.2.0.crate"],
+    crate = "scopeguard",
+    crate_root = "scopeguard-1.2.0.crate/src/lib.rs",
+    edition = "2015",
+    env = {
+        "CARGO_BIN_NAME": "scopeguard",
+        "CARGO_CRATE_NAME": "scopeguard",
+        "CARGO_MANIFEST_DIR": "scopeguard-1.2.0.crate",
+        "CARGO_PKG_AUTHORS": "bluss",
+        "CARGO_PKG_DESCRIPTION": "A RAII scope guard that will run a given closure when it goes out of scope,\neven if the code between panics (assuming unwinding panic).\n\nDefines the macros `defer!`, `defer_on_unwind!`, `defer_on_success!` as\nshorthands for guards with one of the implemented strategies.\n",
+        "CARGO_PKG_HOMEPAGE": "",
+        "CARGO_PKG_NAME": "scopeguard",
+        "CARGO_PKG_README": "README.md",
+        "CARGO_PKG_REPOSITORY": "https://github.com/bluss/scopeguard",
+        "CARGO_PKG_RUST_VERSION": "",
+        "CARGO_PKG_VERSION": "1.2.0",
+        "CARGO_PKG_VERSION_MAJOR": "1",
+        "CARGO_PKG_VERSION_MINOR": "2",
+        "CARGO_PKG_VERSION_PATCH": "0",
+        "CARGO_PKG_VERSION_PRE": "",
+    },
+    visibility = [],
+)
+
+http_archive(
+    name = "scopeguard-1.2.0.crate",
+    sha256 = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49",
+    strip_prefix = "scopeguard-1.2.0",
+    urls = ["https://static.crates.io/crates/scopeguard/1.2.0/download"],
+    visibility = [],
+)
+
+alias(
+    name = "spin",
+    actual = ":spin-0.10",
+    visibility = ["PUBLIC"],
+)
+
+cargo.rust_library(
+    name = "spin-0.10",
+    srcs = [":spin-0.10.0.crate"],
+    crate = "spin",
+    crate_root = "spin-0.10.0.crate/src/lib.rs",
+    edition = "2015",
+    env = {
+        "CARGO_BIN_NAME": "spin",
+        "CARGO_CRATE_NAME": "spin",
+        "CARGO_MANIFEST_DIR": "spin-0.10.0.crate",
+        "CARGO_PKG_AUTHORS": "Mathijs van de Nes <git@mathijs.vd-nes.nl>:John Ericson <git@JohnEricson.me>:Joshua Barretto <joshua.s.barretto@gmail.com>",
+        "CARGO_PKG_DESCRIPTION": "Spin-based synchronization primitives",
+        "CARGO_PKG_HOMEPAGE": "",
+        "CARGO_PKG_NAME": "spin",
+        "CARGO_PKG_README": "README.md",
+        "CARGO_PKG_REPOSITORY": "https://github.com/mvdnes/spin-rs.git",
+        "CARGO_PKG_RUST_VERSION": "1.60",
+        "CARGO_PKG_VERSION": "0.10.0",
+        "CARGO_PKG_VERSION_MAJOR": "0",
+        "CARGO_PKG_VERSION_MINOR": "10",
+        "CARGO_PKG_VERSION_PATCH": "0",
+        "CARGO_PKG_VERSION_PRE": "",
+    },
+    features = [
+        "barrier",
+        "default",
+        "lazy",
+        "lock_api",
+        "mutex",
+        "once",
+        "rwlock",
+        "spin_mutex",
+    ],
+    named_deps = {
+        "lock_api_crate": ":lock_api-0.4",
+    },
+    visibility = [],
+)
+
+http_archive(
+    name = "spin-0.10.0.crate",
+    sha256 = "d5fe4ccb98d9c292d56fec89a5e07da7fc4cf0dc11e156b41793132775d3e591",
+    strip_prefix = "spin-0.10.0",
+    urls = ["https://static.crates.io/crates/spin/0.10.0/download"],
     visibility = [],
 )
 

@@ -13,3 +13,13 @@ constraint(
     visibility = ["PUBLIC"],
     default = "debug",
 )
+
+constraint(
+    name = "emulator",
+    values = [
+        "none",
+        "qemu",
+    ],
+    visibility = ["PUBLIC"],
+    default = "none",
+)
