@@ -1,11 +1,30 @@
-load(":transitions.bzl", "transition_to_baremetal", "transition_to_qurios")
+load(":transitions.bzl", "generic_transition")
 load("//third_party/qemu:qemu.bzl", "qemu_runner")
 
 filegroup(
     name = "iso-files",
     srcs = {
-        "boot/kernel": "//qurios/qurios-kernel:kernel",
+        "boot/kernel": "//qurios/qurios-kernel:kernel-bin",
         "boot/limine/limine.conf": "limine.conf",
+        "boot/limine/limine-bios.sys": "//third_party/limine:limine-bins[limine-bios.sys]",
+        "boot/limine/limine-bios-cd.bin": "//third_party/limine:limine-bins[limine-bios-cd.bin]",
+        "boot/limine/limine-uefi-cd.bin": "//third_party/limine:limine-bins[limine-uefi-cd.bin]",
+        } +
+        select({
+            "prelude//cpu:riscv64": {
+                "EFI/BOOT/BOOTRISCV64.EFI": "//third_party/limine:limine-bins[BOOTRISCV64.EFI]",
+            },
+            "prelude//cpu:x86_64": {
+                "EFI/BOOT/BOOTX64.EFI": "//third_party/limine:limine-bins[BOOTX64.EFI]",
+            },
+        })
+)
+
+filegroup(
+    name = "iso-test-files",
+    srcs = {
+        "boot/kernel": "//qurios/qurios-kernel:kernel-test",
+        "boot/limine/limine.conf": "limine-test.conf",
         "boot/limine/limine-bios.sys": "//third_party/limine:limine-bins[limine-bios.sys]",
         "boot/limine/limine-bios-cd.bin": "//third_party/limine:limine-bins[limine-bios-cd.bin]",
         "boot/limine/limine-uefi-cd.bin": "//third_party/limine:limine-bins[limine-uefi-cd.bin]",
@@ -43,19 +62,28 @@ genrule(
 qemu_runner(
     name = "emulator",
     iso = "//qurios:iso",
-    peripherals = True,
-    args = [
-        "-chardev", "file,id=char0,path=/tmp/serial.log",
-        "-serial", "chardev:char0",
-    ],
 )
 
-transition_to_baremetal(
+generic_transition(
+    name = "qemu_platform",
+    new_constraints = {
+        "//constraints:emulator": "//constraints:emulator[qemu]",
+    },
+    visibility = ["PUBLIC"],
+)
+
+generic_transition(
     name = "baremetal_transition",
+    new_constraints = {
+        "prelude//os/constraints:os": "prelude//os/constraints:none"
+    },
     visibility = [":__subpackages__"],
 )
 
-transition_to_qurios(
+generic_transition(
     name = "qurios_transition",
+    new_constraints = {
+        "prelude//os/constraints:os": "prelude//os/constraints:none"
+    },
     visibility = [":__subpackages__"],
 )

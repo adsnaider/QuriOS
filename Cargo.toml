@@ -1,5 +1,3 @@
 [workspace]
-members = [
-    "qurios/qurios-kernel"
-]
+members = ["qurios/qurios-kernel", "qurios/qurios-qemu"]
 resolver = "3"

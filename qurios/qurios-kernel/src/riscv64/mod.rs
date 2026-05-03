@@ -3,30 +3,24 @@
 
 use limine::{
     BaseRevision,
-    request::{FramebufferRequest, ModuleRequest, StackSizeRequest},
+    request::{FramebufferRequest, HhdmRequest, ModuleRequest, StackSizeRequest},
 };
 
 #[used]
 static BASE_REVISION: BaseRevision = BaseRevision::new();
 #[used]
 static STACK_SIZE: StackSizeRequest = StackSizeRequest::new().with_size(0x32000);
-// static PMO: AtomicLazyCell<Pmo> = AtomicLazyCell::new(|| {
-//     static HHDM: HhdmRequest = HhdmRequest::new();
-//     let pmo = HHDM
-//         .get_response()
-//         .expect("Missing Higher-half direct mapping response from limine")
-//         .offset();
-//     // PMO must be on the higher half
-//     assert!(pmo >= 0xFFFF_8000_0000_0000);
-//     // SAFETY: PMO is provided by limine which can be trusted
-//     unsafe { Pmo::new(VirtAddr::new(pmo as usize)) }
-// });
+
+#[used]
+static HHDM: HhdmRequest = HhdmRequest::new();
+
 #[used]
 static MODULES_REQUEST: ModuleRequest = ModuleRequest::new();
 #[used]
 static mut FRAMEBUFFER: FramebufferRequest = FramebufferRequest::new();
 
 pub fn main() -> ! {
+    let pmo = HHDM.get_response().unwrap().offset() as usize;
     let framebuffer = unsafe { FRAMEBUFFER.get_response_mut().unwrap() };
     let fb = framebuffer.framebuffers().next().unwrap();
     for row in 0..fb.height() as usize {
@@ -40,6 +34,7 @@ pub fn main() -> ! {
             }
         }
     }
+    log::info!("Hello from RiscV kernel");
     loop {}
 }
 
