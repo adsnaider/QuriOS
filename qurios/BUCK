@@ -43,15 +43,8 @@ genrule(
 qemu_runner(
     name = "emulator",
     iso = "//qurios:iso",
-    args = select({
-        "prelude//cpu:riscv64": [
-            "-device", "ramfb",
-            "-device", "qemu-xhci",
-            "-device", "usb-kbd",
-            "-device", "usb-tablet",
-        ],
-        "DEFAULT": [],
-    }) + [
+    peripherals = True,
+    args = [
         "-chardev", "file,id=char0,path=/tmp/serial.log",
         "-serial", "chardev:char0",
     ],
