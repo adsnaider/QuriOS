@@ -1,0 +1,1 @@
+print(dir(host_info().arch))

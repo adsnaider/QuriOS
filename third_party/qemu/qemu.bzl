@@ -9,6 +9,20 @@ def _qemu_runner_impl(ctx):
     if not ctx.attrs.legacy_bios:
         cmd.add("-drive", cmd_args(ctx.attrs.pc_bios, format="if=pflash,format=raw,readonly=on,file={}/" + bios))
     cmd.add(*ctx.attrs.args)
+
+    if ctx.attrs.peripherals:
+        host_arch = host_info().arch
+        is_cross_arch = False
+        if ctx.attrs.arch == "riscv" and not host_arch.is_riscv64:
+            is_cross_arch = True
+        elif ctx.attrs.arch == "x86_64" and not host_arch.is_x86_64:
+            is_cross_arch = True
+            
+        if is_cross_arch:
+            cmd.add("-device", "ramfb")
+            cmd.add("-device", "qemu-xhci")
+            cmd.add("-device", "usb-kbd")
+            cmd.add("-device", "usb-tablet")
  
     return [
         DefaultInfo(),
@@ -31,5 +45,6 @@ qemu_runner = rule(
         "iso": attrs.source(),
         "legacy_bios": attrs.bool(default = False),
         "args": attrs.list(attrs.string(), default = []),
+        "peripherals": attrs.bool(default = False),
     },
 )
