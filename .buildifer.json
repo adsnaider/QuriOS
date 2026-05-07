@@ -1,0 +1,9 @@
+{
+  "mode": "fix",
+  "lint": "fix",
+  "warningsList": [
+    "+out-of-order-load",
+    "+unsorted-dict-items",
+    "-constant-glob"
+  ]
+}

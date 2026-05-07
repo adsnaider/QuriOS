@@ -24,11 +24,11 @@ rust_binary(
         ":kernel",
     ] + select({
         "root//constraints:emulator[qemu]": ["//qurios/qurios-qemu:qurios-qemu"],
-        "DEFAULT": [], 
+        "DEFAULT": [],
     }),
     features = select({
         "root//constraints:emulator[qemu]": ["qemu"],
-        "DEFAULT": [], 
+        "DEFAULT": [],
     }),
 )
 
