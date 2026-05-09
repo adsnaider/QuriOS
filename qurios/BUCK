@@ -1,42 +1,42 @@
-load(":transitions.bzl", "generic_transition")
 load("//third_party/qemu:qemu.bzl", "qemu_runner")
+load(":transitions.bzl", "generic_transition")
 
 filegroup(
     name = "iso-files",
     srcs = {
-        "boot/kernel": "//qurios/qurios-kernel:kernel-bin",
-        "boot/limine/limine.conf": "limine.conf",
-        "boot/limine/limine-bios.sys": "//third_party/limine:limine-bins[limine-bios.sys]",
-        "boot/limine/limine-bios-cd.bin": "//third_party/limine:limine-bins[limine-bios-cd.bin]",
-        "boot/limine/limine-uefi-cd.bin": "//third_party/limine:limine-bins[limine-uefi-cd.bin]",
-        } +
-        select({
-            "prelude//cpu:riscv64": {
-                "EFI/BOOT/BOOTRISCV64.EFI": "//third_party/limine:limine-bins[BOOTRISCV64.EFI]",
-            },
-            "prelude//cpu:x86_64": {
-                "EFI/BOOT/BOOTX64.EFI": "//third_party/limine:limine-bins[BOOTX64.EFI]",
-            },
-        })
+               "boot/kernel": "//qurios/qurios-kernel:kernel-bin",
+               "boot/limine/limine.conf": "limine.conf",
+               "boot/limine/limine-bios.sys": "//third_party/limine:limine-bins[limine-bios.sys]",
+               "boot/limine/limine-bios-cd.bin": "//third_party/limine:limine-bins[limine-bios-cd.bin]",
+               "boot/limine/limine-uefi-cd.bin": "//third_party/limine:limine-bins[limine-uefi-cd.bin]",
+           } +
+           select({
+               "prelude//cpu:riscv64": {
+                   "EFI/BOOT/BOOTRISCV64.EFI": "//third_party/limine:limine-bins[BOOTRISCV64.EFI]",
+               },
+               "prelude//cpu:x86_64": {
+                   "EFI/BOOT/BOOTX64.EFI": "//third_party/limine:limine-bins[BOOTX64.EFI]",
+               },
+           }),
 )
 
 filegroup(
     name = "iso-test-files",
     srcs = {
-        "boot/kernel": "//qurios/qurios-kernel:kernel-test",
-        "boot/limine/limine.conf": "limine-test.conf",
-        "boot/limine/limine-bios.sys": "//third_party/limine:limine-bins[limine-bios.sys]",
-        "boot/limine/limine-bios-cd.bin": "//third_party/limine:limine-bins[limine-bios-cd.bin]",
-        "boot/limine/limine-uefi-cd.bin": "//third_party/limine:limine-bins[limine-uefi-cd.bin]",
-        } +
-        select({
-            "prelude//cpu:riscv64": {
-                "EFI/BOOT/BOOTRISCV64.EFI": "//third_party/limine:limine-bins[BOOTRISCV64.EFI]",
-            },
-            "prelude//cpu:x86_64": {
-                "EFI/BOOT/BOOTX64.EFI": "//third_party/limine:limine-bins[BOOTX64.EFI]",
-            },
-        }),
+               "boot/kernel": "//qurios/qurios-kernel:kernel-test",
+               "boot/limine/limine.conf": "limine-test.conf",
+               "boot/limine/limine-bios.sys": "//third_party/limine:limine-bins[limine-bios.sys]",
+               "boot/limine/limine-bios-cd.bin": "//third_party/limine:limine-bins[limine-bios-cd.bin]",
+               "boot/limine/limine-uefi-cd.bin": "//third_party/limine:limine-bins[limine-uefi-cd.bin]",
+           } +
+           select({
+               "prelude//cpu:riscv64": {
+                   "EFI/BOOT/BOOTRISCV64.EFI": "//third_party/limine:limine-bins[BOOTRISCV64.EFI]",
+               },
+               "prelude//cpu:x86_64": {
+                   "EFI/BOOT/BOOTX64.EFI": "//third_party/limine:limine-bins[BOOTX64.EFI]",
+               },
+           }),
     target_compatible_with = [
         "//constraints:emulator[qemu]",
     ],
@@ -47,19 +47,19 @@ genrule(
     srcs = [
         ":iso-files",
     ],
-    cmd = "$(exe //third_party/xorriso:xorriso) \
-        -as mkisofs \
-        -b boot/limine/limine-bios-cd.bin \
-        -no-emul-boot \
-        -boot-load-size 4 \
-        -boot-info-table \
-        --efi-boot boot/limine/limine-uefi-cd.bin \
-        -efi-boot-part \
-        --efi-boot-image \
-        --protective-msdos-label \
-        \$(readlink $SRCDIR/iso-files)  \
-        -o $OUT",
     out = "qurios.iso",
+    cmd = """$(exe //third_party/xorriso:xorriso) \\
+        -as mkisofs \\
+        -b boot/limine/limine-bios-cd.bin \\
+        -no-emul-boot \\
+        -boot-load-size 4 \\
+        -boot-info-table \\
+        --efi-boot boot/limine/limine-uefi-cd.bin \\
+        -efi-boot-part \\
+        --efi-boot-image \\
+        --protective-msdos-label \\
+        \\$(readlink $SRCDIR/iso-files)  \\
+        -o $OUT""",
 )
 
 qemu_runner(
@@ -78,7 +78,7 @@ generic_transition(
 generic_transition(
     name = "baremetal_transition",
     new_constraints = {
-        "prelude//os/constraints:os": "prelude//os/constraints:none"
+        "prelude//os/constraints:os": "prelude//os/constraints:none",
     },
     visibility = [":__subpackages__"],
 )
@@ -86,7 +86,7 @@ generic_transition(
 generic_transition(
     name = "qurios_transition",
     new_constraints = {
-        "prelude//os/constraints:os": "prelude//os/constraints:none"
+        "prelude//os/constraints:os": "prelude//os/constraints:none",
     },
     visibility = [":__subpackages__"],
 )
