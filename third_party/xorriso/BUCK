@@ -3,7 +3,7 @@ http_file(
     urls = [
         select({
             "//configs:linux_x86_64": "https://github.com/adsnaider/QuriOS-prebuilts/releases/download/2026-04-26/xorriso.host-linux-x86_64",
-        })
+        }),
     ],
     sha256 = select({
         "//configs:linux_x86_64": "f006c37590b3ed64795de27ecbef107d09f52f2aa63ca98b2747afb3b7de610e",
@@ -11,4 +11,3 @@ http_file(
     executable = True,
     visibility = ["//qurios:iso"],
 )
-

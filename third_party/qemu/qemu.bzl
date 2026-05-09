@@ -1,5 +1,5 @@
 def _qemu_runner_impl(ctx):
-    # Construct the base command 
+    # Construct the base command
     cmd = cmd_args(ctx.attrs.qemu_binary[RunInfo])
     cmd.add("-L", ctx.attrs.pc_bios)
     bios = "uncompressed/edk2-{}-code.fd".format(ctx.attrs.arch)
@@ -7,7 +7,7 @@ def _qemu_runner_impl(ctx):
         cmd.add("-M", "virt")
     cmd.add("-cdrom", ctx.attrs.iso[DefaultInfo].default_outputs[0])
     if not ctx.attrs.legacy_bios:
-        cmd.add("-drive", cmd_args(ctx.attrs.pc_bios, format="if=pflash,format=raw,readonly=on,file={}/" + bios))
+        cmd.add("-drive", cmd_args(ctx.attrs.pc_bios, format = "if=pflash,format=raw,readonly=on,file={}/" + bios))
     cmd.add(*ctx.attrs.args)
 
     if ctx.attrs.peripherals:
@@ -17,7 +17,7 @@ def _qemu_runner_impl(ctx):
             is_cross_arch = True
         elif ctx.attrs.arch == "x86_64" and not host_arch.is_x86_64:
             is_cross_arch = True
-            
+
         if is_cross_arch:
             cmd.add("-device", "ramfb")
             cmd.add("-device", "qemu-xhci")
@@ -27,7 +27,7 @@ def _qemu_runner_impl(ctx):
         cmd.add("-display", "none")
 
     if ctx.attrs.serial_out:
-        cmd.add("-chardev", cmd_args(ctx.label.cell_root, format="stdio,id=char0,logfile={}/serial.out"))
+        cmd.add("-chardev", cmd_args(ctx.label.cell_root, format = "stdio,id=char0,logfile={}/serial.out"))
         cmd.add("-serial", "chardev:char0")
 
     return [
@@ -59,7 +59,7 @@ qemu_runner = rule(
 )
 
 def _qemu_test_runner_impl(ctx):
-    # Construct the base command 
+    # Construct the base command
     cmd = cmd_args(ctx.attrs.qemu_binary[RunInfo])
     cmd.add("-L", ctx.attrs.pc_bios)
     bios = "uncompressed/edk2-{}-code.fd".format(ctx.attrs.arch)
@@ -67,12 +67,13 @@ def _qemu_test_runner_impl(ctx):
         cmd.add("-M", "virt")
     cmd.add("-cdrom", ctx.attrs.iso[DefaultInfo].default_outputs[0])
     if not ctx.attrs.legacy_bios:
-        cmd.add("-drive", cmd_args(ctx.attrs.pc_bios, format="if=pflash,format=raw,readonly=on,file={}/" + bios))
+        cmd.add("-drive", cmd_args(ctx.attrs.pc_bios, format = "if=pflash,format=raw,readonly=on,file={}/" + bios))
     cmd.add(*ctx.attrs.args)
 
     log_out = ctx.actions.declare_output("serial.out")
     cmd.add("-display", "none")
     cmd.add("-serial", log_out.as_output())
+
     # TODO: Remove when we have proper ACPI shutdown
     if ctx.attrs.arch == "x86_64":
         cmd.add("-device", "isa-debug-exit,iobase=0xf4,iosize=0x04")

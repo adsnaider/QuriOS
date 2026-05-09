@@ -9,5 +9,5 @@ rust_library(
     ],
     target_compatible_with = [
         "//constraints:emulator[qemu]",
-    ]
+    ],
 )
